@@ -149,6 +149,15 @@
   }
   #pauseMenu h2 { margin-bottom:16px; }
   #pauseMenu .btn { margin:6px; font-size:15px; padding:10px 24px; }
+  #pauseOptions {
+    margin-top:14px; padding:14px 18px; background:rgba(255,255,255,0.06);
+    border-radius:8px; width:280px;
+  }
+  #pauseOptions h3 { margin:0 0 10px; font-size:14px; color:#ccc; font-weight:normal; text-align:left; }
+  #pauseOptions .sliderRow { display:flex; align-items:center; gap:10px; margin:8px 0; }
+  #pauseOptions .sliderRow label { font-size:13px; color:#ddd; width:110px; text-align:left; flex-shrink:0; }
+  #pauseOptions .sliderRow input[type="range"] { flex:1; }
+  #pauseOptions .sliderRow .val { font-size:12px; color:#999; width:32px; text-align:right; }
 
   #devPanel {
     position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -198,6 +207,13 @@
   }
   #respawnCountdown .big { font-size:48px; font-weight:bold; }
   #respawnCountdown .label { font-size:18px; margin-top:4px; }
+  #timeWarning {
+    position:fixed; top:20%; left:50%; transform:translate(-50%,-50%);
+    font-size:38px; font-weight:bold; color:#ffdd55; text-shadow:2px 2px 8px #000,0 0 20px rgba(255,200,50,0.5);
+    z-index:40; opacity:0; pointer-events:none; transition:opacity 0.5s ease-out;
+    text-align:center; white-space:nowrap;
+  }
+  #timeWarning.show { opacity:1; transition:opacity 0.2s ease-in; }
   #healthBar {
     position:fixed; bottom:82px; left:50%; transform:translateX(-50%);
     display:flex; gap:2px; z-index:10;
@@ -230,7 +246,8 @@
 <div id="hitMarker"></div>
 <div id="killFeed"></div>
 <div id="respawnCountdown"><div class="big"></div><div class="label">Respawning...</div></div>
-<div id="hint">WASD move · Space jump · Ctrl crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · ~ dev tools · T chat · Esc close/pause</div>
+<div id="timeWarning"></div>
+<div id="hint">WASD move · Space jump · C crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · ~ dev tools · T chat · Esc close/pause</div>
 <div id="message"></div>
 <div id="topButtons">
   <div class="btn" id="btnSaveTop">Save</div>
@@ -263,6 +280,19 @@
   <div class="btn" id="btnLoad">Load World</div>
   <div class="btn" id="btnNew">New World</div>
   <div class="btn" id="btnDisconnectMp" style="display:none;">Disconnect from Server</div>
+  <div id="pauseOptions">
+    <h3>Options</h3>
+    <div class="sliderRow">
+      <label for="musicVolumeSlider">Music Volume</label>
+      <input type="range" id="musicVolumeSlider" min="0" max="100" value="60">
+      <span class="val" id="musicVolumeVal">60%</span>
+    </div>
+    <div class="sliderRow">
+      <label for="sfxVolumeSlider">Game Sound Volume</label>
+      <input type="range" id="sfxVolumeSlider" min="0" max="100" value="80">
+      <span class="val" id="sfxVolumeVal">80%</span>
+    </div>
+  </div>
 </div>
 
 <div id="overlay">
@@ -302,6 +332,145 @@
    MOPLEPVP - a compact voxel building/PvP game
    ========================================================= */
 
+// ---------- Crash reporting ----------
+// Two layers here, because a hard crash (the browser/OS killing the tab
+// outright, e.g. for using too much memory) happens WITHOUT any JS ever
+// running - there's no error event to catch, the process is just
+// terminated externally. So alongside catching real in-page JS errors
+// immediately, this also leaves a periodic "heartbeat" in localStorage that
+// survives even that kind of crash, and checks on the next page load
+// whether the last session actually exited cleanly or just vanished.
+const CRASH_HEARTBEAT_KEY = 'moplepvp_heartbeat';
+const CRASH_CLEAN_EXIT_KEY = 'moplepvp_clean_exit';
+
+function gatherDiagnostics(){
+  let mem = null;
+  try{
+    if(performance.memory){
+      mem = {
+        usedJSHeapMB: Math.round(performance.memory.usedJSHeapSize/1048576),
+        totalJSHeapMB: Math.round(performance.memory.totalJSHeapSize/1048576),
+        heapLimitMB: Math.round(performance.memory.jsHeapSizeLimit/1048576)
+      };
+    }
+  }catch(e){}
+  let counts = {};
+  try{
+    counts = {
+      darts: typeof darts!=='undefined' ? darts.length : null,
+      grenades: typeof grenades!=='undefined' ? grenades.length : null,
+      rockets: typeof rockets!=='undefined' ? rockets.length : null,
+      remoteProjectiles: typeof remoteProjectiles!=='undefined' ? remoteProjectiles.length : null,
+      particleSystems: typeof particleSystems!=='undefined' ? particleSystems.length : null,
+      groundItems: typeof groundItems!=='undefined' ? groundItems.size : null,
+      enemies: typeof enemies!=='undefined' ? enemies.length : null,
+      remotePlayers: typeof remotePlayers!=='undefined' ? remotePlayers.size : null,
+      muzzleFlashes: typeof muzzleFlashes!=='undefined' ? muzzleFlashes.length : null,
+      sniperTracers: typeof sniperTracers!=='undefined' ? sniperTracers.length : null,
+      explosionFlashes: typeof explosionFlashes!=='undefined' ? explosionFlashes.length : null,
+      ambientNodes: typeof ambientNodes!=='undefined' ? ambientNodes.length : null
+    };
+  }catch(e){}
+  let state = {};
+  try{
+    state = {
+      started: typeof started!=='undefined' ? started : null,
+      multiplayer: typeof multiplayer!=='undefined' ? multiplayer : null,
+      biomeMode: typeof biomeMode!=='undefined' ? biomeMode : null
+    };
+  }catch(e){}
+  return {
+    timestamp: new Date().toISOString(),
+    memory: mem,
+    counts,
+    state
+  };
+}
+function saveHeartbeat(){
+  try{ localStorage.setItem(CRASH_HEARTBEAT_KEY, JSON.stringify(gatherDiagnostics())); }catch(e){}
+}
+setInterval(saveHeartbeat, 4000);
+
+function downloadCrashReport(report){
+  try{
+    const blob = new Blob([JSON.stringify(report, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'moplepvp-crash-report-'+Date.now()+'.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  }catch(e){}
+}
+function showCrashOverlay(report, isPriorSession){
+  let el = document.getElementById('crashOverlay');
+  if(el) el.remove();
+  el = document.createElement('div');
+  el.id = 'crashOverlay';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);color:#fff;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;padding:24px;text-align:center;';
+  const h = document.createElement('h2');
+  h.textContent = isPriorSession ? "Your last session ended unexpectedly" : "The game hit an error";
+  el.appendChild(h);
+  const p = document.createElement('p');
+  p.style.cssText = 'max-width:640px;line-height:1.4;';
+  p.textContent = isPriorSession
+    ? "The last session didn't shut down cleanly - no error was caught, so this was most likely the browser or OS killing the tab outright (for example, from memory use), which JavaScript can't catch or report on directly. Here's what things looked like the last time a heartbeat was recorded, shortly before it stopped:"
+    : "Something threw an uncaught error and the game had to stop. Details below:";
+  el.appendChild(p);
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'background:#111;padding:12px;border-radius:6px;max-width:720px;max-height:320px;overflow:auto;text-align:left;font-size:12px;margin-top:10px;';
+  pre.textContent = JSON.stringify(report, null, 2);
+  el.appendChild(pre);
+  const btnRow = document.createElement('div');
+  btnRow.style.marginTop = '14px';
+  const dlBtn = document.createElement('button');
+  dlBtn.textContent = 'Download Crash Report';
+  dlBtn.style.cssText = 'padding:9px 18px;margin:0 6px;cursor:pointer;font-size:14px;';
+  dlBtn.onclick = ()=>downloadCrashReport(report);
+  btnRow.appendChild(dlBtn);
+  const dismissBtn = document.createElement('button');
+  dismissBtn.textContent = 'Dismiss';
+  dismissBtn.style.cssText = 'padding:9px 18px;margin:0 6px;cursor:pointer;font-size:14px;';
+  dismissBtn.onclick = ()=>{ el.remove(); };
+  btnRow.appendChild(dismissBtn);
+  el.appendChild(btnRow);
+  document.body.appendChild(el);
+}
+window.addEventListener('error', function(event){
+  const report = Object.assign({
+    type:'error', message: event.message, source: event.filename,
+    line: event.lineno, col: event.colno,
+    stack: event.error && event.error.stack
+  }, gatherDiagnostics());
+  try{ localStorage.setItem(CRASH_HEARTBEAT_KEY, JSON.stringify(report)); }catch(e){}
+  showCrashOverlay(report, false);
+});
+window.addEventListener('unhandledrejection', function(event){
+  const report = Object.assign({
+    type:'unhandledrejection', message: String(event.reason)
+  }, gatherDiagnostics());
+  try{ localStorage.setItem(CRASH_HEARTBEAT_KEY, JSON.stringify(report)); }catch(e){}
+  showCrashOverlay(report, false);
+});
+// On load: was there a heartbeat left over from a session that never
+// exited cleanly? If so, the browser most likely killed the tab outright -
+// surface it as a "last session" report so it isn't just silently lost.
+(function checkForPriorCrash(){
+  try{
+    const cleanExit = localStorage.getItem(CRASH_CLEAN_EXIT_KEY);
+    const heartbeat = localStorage.getItem(CRASH_HEARTBEAT_KEY);
+    if(heartbeat && cleanExit!=='1'){
+      showCrashOverlay(JSON.parse(heartbeat), true);
+    }
+    localStorage.removeItem(CRASH_CLEAN_EXIT_KEY);
+  }catch(e){}
+})();
+window.addEventListener('beforeunload', function(){
+  try{ localStorage.setItem(CRASH_CLEAN_EXIT_KEY, '1'); }catch(e){}
+});
+
 // ---------- Block type constants ----------
 const AIR=0, GRASS=1, DIRT=2, STONE=3, SAND=4, WOOD=5, LEAVES=6, WATER=7, PLANKS=8;
 const STONE_PICKAXE=9; // tool item - not placeable, held in hand, speeds up mining
@@ -323,6 +492,7 @@ const PISTOL=24;        // weapon - light sidearm, quick, modest damage, no pene
 const CARBINE=25;       // weapon - faster-firing rifle variant, less damage per shot, no penetration
 const GLASS=26;         // transparent placeable block - also builds the spectator box's walls/roof
 const CLEAR_GLASS=27;   // near-invisible placeable block - the spectator box's floor, so it doesn't obscure the view down
+const SNIPER=28;        // weapon - instant hitscan, ignores terrain entirely, long cooldown to balance
 const SOLID_TYPES = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, PLANKS, REEDS, RUBBLE, SNOW, METAL, GLASS, CLEAR_GLASS];
 const WORLD_ONLY_TYPES = [LOOT_CRATE, POWERUP_CRATE]; // rendered in the world but never held/placed by the player
 const ALL_RENDER_TYPES = [...SOLID_TYPES, ...WORLD_ONLY_TYPES];
@@ -333,7 +503,7 @@ const BLOCK_COLORS = {
   [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [GRENADE]:0x3a4a3a,
   [POWERUP_CRATE]:0x2a6f8a, [ROCKET_LAUNCHER]:0x555555, [RUBBLE]:0x9c8570,
   [DOUBLE_BARREL]:0x4a3520, [PUMP_SHOTGUN]:0x333333, [RIFLE]:0xc9a227, [SNOW]:0xf0f5fa, [METAL]:0x5a6570,
-  [PISTOL]:0x707070, [CARBINE]:0x8a6a45, [GLASS]:0xbfe0f0, [CLEAR_GLASS]:0xeaf7fb
+  [PISTOL]:0x707070, [CARBINE]:0x8a6a45, [GLASS]:0xbfe0f0, [CLEAR_GLASS]:0xeaf7fb, [SNIPER]:0x2a3a2a
 };
 const BLOCK_NAMES = {
   [GRASS]:'Grass', [DIRT]:'Dirt', [STONE]:'Stone', [SAND]:'Sand',
@@ -342,19 +512,48 @@ const BLOCK_NAMES = {
   [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade',
   [POWERUP_CRATE]:'Power Crate', [ROCKET_LAUNCHER]:'Rocket Launcher', [RUBBLE]:'Rubble',
   [DOUBLE_BARREL]:'Double Barrel', [PUMP_SHOTGUN]:'Pump Shotgun', [RIFLE]:'Rifle', [SNOW]:'Snow', [METAL]:'Metal',
-  [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass'
+  [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass', [SNIPER]:'Sniper Rifle'
 };
 const ITEM_ICON = {
   [STONE_PICKAXE]:'\u26CF', [BLOW_PIPE]:'\u25CF', [STONE_SLING]:'\u25CF', [WAR_CLUB]:'\u2694',
   [GRENADE]:'\u2600', [ROCKET_LAUNCHER]:'\u2191', [DOUBLE_BARREL]:'\u25CF', [PUMP_SHOTGUN]:'\u25CF', [RIFLE]:'\u25CF',
-  [PISTOL]:'\u25CF', [CARBINE]:'\u25CF'
+  [PISTOL]:'\u25CF', [CARBINE]:'\u25CF', [SNIPER]:'\u25CF'
 };
-const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS];
-const WEAPON_LOOT_POOL = [BLOW_PIPE, STONE_SLING, WAR_CLUB, GRENADE, ROCKET_LAUNCHER, DOUBLE_BARREL, PUMP_SHOTGUN, RIFLE, PISTOL, CARBINE];
+const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER];
+
+// ---------- Loot table (crate drop rates) ----------
+// Each entry's "weight" controls how often it drops RELATIVE to the others -
+// these are not percentages, and don't need to add up to any particular
+// total. To make something drop more often, raise its weight; less often,
+// lower it. Setting a weight to 0 (or deleting the line) removes it from
+// crates entirely. This is the one place to edit for loot tuning - no code
+// logic elsewhere needs to change.
+const LOOT_TABLE = [
+  { type: BLOW_PIPE,       weight: 12 },
+  { type: STONE_SLING,     weight: 12 },
+  { type: WAR_CLUB,        weight: 10 },
+  { type: PISTOL,          weight: 10 },
+  { type: GRENADE,         weight: 8 },
+  { type: CARBINE,         weight: 7 },
+  { type: RIFLE,           weight: 6 },
+  { type: DOUBLE_BARREL,   weight: 6 },
+  { type: PUMP_SHOTGUN,    weight: 6 },
+  { type: ROCKET_LAUNCHER, weight: 4 },
+  { type: SNIPER,          weight: 2 }
+];
+function pickWeightedLoot(){
+  const totalWeight = LOOT_TABLE.reduce((sum,e)=>sum+e.weight, 0);
+  let roll = Math.random()*totalWeight;
+  for(const entry of LOOT_TABLE){
+    roll -= entry.weight;
+    if(roll<=0) return entry.type;
+  }
+  return LOOT_TABLE[LOOT_TABLE.length-1].type; // fallback, shouldn't normally be reached
+}
 // Weapons that count as "guns" for the round-reset inventory rule (see
 // resetInventoryForNewRound) - everything except the melee club, which
 // isn't really a "gun" and is craftable from basic materials anyway.
-const GUN_TYPES = [BLOW_PIPE, STONE_SLING, GRENADE, ROCKET_LAUNCHER, DOUBLE_BARREL, PUMP_SHOTGUN, RIFLE, PISTOL, CARBINE];
+const GUN_TYPES = [BLOW_PIPE, STONE_SLING, GRENADE, ROCKET_LAUNCHER, DOUBLE_BARREL, PUMP_SHOTGUN, RIFLE, PISTOL, CARBINE, SNIPER];
 
 // ---------- World config ----------
 let WORLD_X=64, WORLD_Y=40, WORLD_Z=64;
@@ -486,6 +685,7 @@ function teleportToSpectatorBox(){
 }
 
 function scatterLootAndPowerCrates(){
+  const changes = [];
   const rand3 = mulberry32(seed+321);
   let cratesPlaced=0, crateAttempts=0;
   while(cratesPlaced<12 && crateAttempts<500){
@@ -498,6 +698,7 @@ function scatterLootAndPowerCrates(){
     if(surfaceType!==GRASS && surfaceType!==SAND && surfaceType!==SNOW && surfaceType!==STONE && surfaceType!==METAL) continue;
     if(getBlock(x,h+1,z)!==AIR) continue; // don't bury one inside a tree or reeds
     setBlock(x,h+1,z,LOOT_CRATE);
+    changes.push({x, y:h+1, z, blockType:LOOT_CRATE});
     cratesPlaced++;
   }
   const rand4 = mulberry32(seed+654);
@@ -512,8 +713,10 @@ function scatterLootAndPowerCrates(){
     if(surfaceType!==GRASS && surfaceType!==SAND && surfaceType!==SNOW && surfaceType!==STONE && surfaceType!==METAL) continue;
     if(getBlock(x,h+1,z)!==AIR) continue;
     setBlock(x,h+1,z,POWERUP_CRATE);
+    changes.push({x, y:h+1, z, blockType:POWERUP_CRATE});
     powerCratesPlaced++;
   }
+  return changes;
 }
 function generateWorld(){
   if(biomeMode==='oasis'){ generateOasisWorld(); buildSpectatorBox(); return; }
@@ -807,26 +1010,78 @@ function findSurfaceY(x,z){
 
 // ---------- Audio (fully procedural - synthesized on the fly, no sound files) ----------
 let audioCtx = null;
-let masterGain = null;
+let masterGain = null;   // pure mute switch (0 or 1) - NOT a volume level
+let musicGain = null;    // "Music Volume" slider - the generative ambient melody only
+let sfxGain = null;      // "Game Sound Volume" slider - everything else (SFX + ambient wind/hum)
 let audioEnabled = true;
+let musicVolume = 0.6;
+let sfxVolume = 0.8;
 function initAudio(){
   if(audioCtx) return;
   try{
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     masterGain = audioCtx.createGain();
-    masterGain.gain.value = 0.4;
+    masterGain.gain.value = audioEnabled ? 1 : 0;
     masterGain.connect(audioCtx.destination);
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = musicVolume;
+    musicGain.connect(masterGain);
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = sfxVolume;
+    sfxGain.connect(masterGain);
   }catch(e){ audioEnabled=false; }
 }
 function resumeAudio(){
   initAudio();
   if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
 }
+function busGain(bus){
+  return bus==='music' ? musicGain : sfxGain;
+}
+// A sound source's position in the world, for 3D positional audio - only
+// used when a "pos" option is actually passed in (your own local sounds -
+// footsteps, your own gunshots, UI clicks - stay flat/centered on purpose,
+// only other players'/enemies' sounds get positioned). Uses Web Audio's
+// built-in PannerNode + AudioListener rather than hand-rolled distance/pan
+// math - it already handles distance falloff and stereo direction properly.
+function createPositionalPanner(pos){
+  const panner = audioCtx.createPanner();
+  panner.panningModel = 'HRTF';
+  panner.distanceModel = 'inverse';
+  panner.refDistance = 3;    // full volume within ~3 blocks
+  panner.maxDistance = 60;   // basically inaudible past ~60 blocks
+  panner.rolloffFactor = 1.3;
+  if(panner.positionX){
+    panner.positionX.value = pos.x;
+    panner.positionY.value = pos.y;
+    panner.positionZ.value = pos.z;
+  } else if(panner.setPosition){
+    panner.setPosition(pos.x, pos.y, pos.z); // older browsers
+  }
+  return panner;
+}
+function updateAudioListener(){
+  if(!audioCtx || !audioCtx.listener) return;
+  const listener = audioCtx.listener;
+  const fwd = new THREE.Vector3();
+  camera.getWorldDirection(fwd);
+  const up = camera.up;
+  if(listener.positionX){
+    listener.positionX.value = camera.position.x;
+    listener.positionY.value = camera.position.y;
+    listener.positionZ.value = camera.position.z;
+    listener.forwardX.value = fwd.x; listener.forwardY.value = fwd.y; listener.forwardZ.value = fwd.z;
+    listener.upX.value = up.x; listener.upY.value = up.y; listener.upZ.value = up.z;
+  } else if(listener.setPosition){
+    listener.setPosition(camera.position.x, camera.position.y, camera.position.z);
+    listener.setOrientation(fwd.x, fwd.y, fwd.z, up.x, up.y, up.z);
+  }
+}
 function playTone(opts){
   if(!audioEnabled) return;
   initAudio();
   if(!audioCtx) return;
-  const {freq=440, freqEnd=null, duration=0.15, type='sine', volume=0.3, attack=0.005, decay=null} = opts;
+  const {freq=440, freqEnd=null, duration=0.15, type='sine', volume=0.3, attack=0.005, decay=null, bus='sfx', pos=null} = opts;
   const ctx = audioCtx;
   const t0 = ctx.currentTime;
   const osc = ctx.createOscillator();
@@ -839,15 +1094,33 @@ function playTone(opts){
   gain.gain.linearRampToValueAtTime(volume, t0+attack);
   gain.gain.exponentialRampToValueAtTime(0.001, t0+attack+dec);
   osc.connect(gain);
-  gain.connect(masterGain);
+  let panner = null;
+  if(pos){
+    panner = createPositionalPanner(pos);
+    gain.connect(panner);
+    panner.connect(busGain(bus));
+  } else {
+    gain.connect(busGain(bus));
+  }
   osc.start(t0);
   osc.stop(t0+attack+dec+0.03);
+  // Explicitly tear down the node graph once the sound actually finishes,
+  // rather than just letting go of our JS references and hoping the browser
+  // garbage-collects the audio graph promptly - some browsers are slow to
+  // reclaim Web Audio nodes left connected, and at the rate this game fires
+  // off short sounds (footsteps, gunfire, ambient notes...), that adds up
+  // fast and was very likely why long play sessions were leaking memory.
+  osc.onended = () => {
+    osc.disconnect();
+    gain.disconnect();
+    if(panner) panner.disconnect();
+  };
 }
 function playNoise(opts){
   if(!audioEnabled) return;
   initAudio();
   if(!audioCtx) return;
-  const {duration=0.15, volume=0.3, filterType='lowpass', filterFreq=1200, attack=0.002} = opts;
+  const {duration=0.15, volume=0.3, filterType='lowpass', filterFreq=1200, attack=0.002, bus='sfx', pos=null} = opts;
   const ctx = audioCtx;
   const t0 = ctx.currentTime;
   const bufferSize = Math.max(1, Math.floor(ctx.sampleRate*duration));
@@ -865,15 +1138,36 @@ function playNoise(opts){
   gain.gain.exponentialRampToValueAtTime(0.001, t0+duration);
   noise.connect(filter);
   filter.connect(gain);
-  gain.connect(masterGain);
+  let panner = null;
+  if(pos){
+    panner = createPositionalPanner(pos);
+    gain.connect(panner);
+    panner.connect(busGain(bus));
+  } else {
+    gain.connect(busGain(bus));
+  }
   noise.start(t0);
   noise.stop(t0+duration+0.03);
+  noise.onended = () => {
+    noise.disconnect();
+    filter.disconnect();
+    gain.disconnect();
+    if(panner) panner.disconnect();
+  };
 }
 function toggleAudio(){
   audioEnabled = !audioEnabled;
-  if(masterGain) masterGain.gain.value = audioEnabled ? 0.4 : 0;
+  if(masterGain) masterGain.gain.value = audioEnabled ? 1 : 0;
   const btn = document.getElementById('btnMuteTop');
   if(btn) btn.textContent = audioEnabled ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+}
+function setMusicVolume(v){
+  musicVolume = Math.max(0, Math.min(1, v));
+  if(musicGain) musicGain.gain.value = musicVolume;
+}
+function setSfxVolume(v){
+  sfxVolume = Math.max(0, Math.min(1, v));
+  if(sfxGain) sfxGain.gain.value = sfxVolume;
 }
 
 // ---- Named sound effects, all built from the two primitives above ----
@@ -887,46 +1181,53 @@ function sfxPlace(){
   playNoise({duration:0.07, volume:0.2, filterType:'lowpass', filterFreq:500});
   playTone({freq:180, duration:0.08, type:'triangle', volume:0.13});
 }
-function sfxFootstep(){
-  playNoise({duration:0.05, volume:0.08, filterType:'lowpass', filterFreq:280});
+function sfxFootstep(volume, pos){
+  playNoise({duration:0.05, volume: volume!==undefined ? volume : 0.08, filterType:'lowpass', filterFreq:280, pos});
 }
 function sfxJump(){
-  playTone({freq:220, freqEnd:480, duration:0.12, type:'square', volume:0.14});
+  playTone({freq:220, freqEnd:480, duration:0.12, type:'square', volume:0.10});
 }
 function sfxLand(){
   playNoise({duration:0.08, volume:0.14, filterType:'lowpass', filterFreq:220});
 }
-function sfxShootLight(){
-  playNoise({duration:0.06, volume:0.16, filterType:'highpass', filterFreq:2000});
+function sfxShootLight(pos){
+  playNoise({duration:0.06, volume:0.19, filterType:'highpass', filterFreq:1700, pos});
 }
-function sfxShootSling(){
-  playNoise({duration:0.08, volume:0.18, filterType:'bandpass', filterFreq:1200});
-  playTone({freq:500, freqEnd:200, duration:0.08, type:'sawtooth', volume:0.1});
+function sfxShootSling(pos){
+  playNoise({duration:0.08, volume:0.21, filterType:'bandpass', filterFreq:1020, pos});
+  playTone({freq:425, freqEnd:170, duration:0.08, type:'sawtooth', volume:0.12, pos});
 }
-function sfxShootPistol(){
-  playNoise({duration:0.07, volume:0.22, filterType:'highpass', filterFreq:1200});
-  playTone({freq:700, freqEnd:250, duration:0.07, type:'square', volume:0.13});
+function sfxShootPistol(pos){
+  playNoise({duration:0.07, volume:0.26, filterType:'highpass', filterFreq:1020, pos});
+  playTone({freq:595, freqEnd:212, duration:0.07, type:'square', volume:0.16, pos});
 }
-function sfxShootRifle(){
-  playNoise({duration:0.09, volume:0.28, filterType:'highpass', filterFreq:1500});
-  playTone({freq:900, duration:0.05, type:'square', volume:0.14});
+function sfxShootRifle(pos){
+  playNoise({duration:0.09, volume:0.34, filterType:'highpass', filterFreq:1275, pos});
+  playTone({freq:765, duration:0.05, type:'square', volume:0.17, pos});
 }
-function sfxShotgunBlast(){
-  playNoise({duration:0.2, volume:0.35, filterType:'lowpass', filterFreq:1800});
-  playTone({freq:120, duration:0.13, type:'square', volume:0.22, attack:0.001});
+function sfxShootSniper(pos){
+  // heavier and bassier than the other guns on purpose - this one weapon
+  // should sound like it's actually punching through things
+  playNoise({duration:0.18, volume:0.4, filterType:'lowpass', filterFreq:550, pos});
+  playTone({freq:65, freqEnd:28, duration:0.28, type:'sine', volume:0.32, attack:0.002, pos});
+  playNoise({duration:0.05, volume:0.15, filterType:'highpass', filterFreq:2200, pos});
 }
-function sfxRocketLaunch(){
-  playNoise({duration:0.3, volume:0.22, filterType:'bandpass', filterFreq:800});
+function sfxShotgunBlast(pos){
+  playNoise({duration:0.2, volume:0.4, filterType:'lowpass', filterFreq:1530, pos});
+  playTone({freq:102, duration:0.13, type:'square', volume:0.26, attack:0.001, pos});
 }
-function sfxGrenadeThrow(){
-  playTone({freq:320, freqEnd:200, duration:0.15, type:'sine', volume:0.12});
+function sfxRocketLaunch(pos){
+  playNoise({duration:0.3, volume:0.22, filterType:'bandpass', filterFreq:800, pos});
+}
+function sfxGrenadeThrow(pos){
+  playTone({freq:320, freqEnd:200, duration:0.15, type:'sine', volume:0.12, pos});
 }
 function sfxSwing(){
   playNoise({duration:0.1, volume:0.14, filterType:'bandpass', filterFreq:1500});
 }
-function sfxExplosion(){
-  playNoise({duration:0.5, volume:0.38, filterType:'lowpass', filterFreq:900});
-  playTone({freq:90, freqEnd:30, duration:0.4, type:'sine', volume:0.28, attack:0.001});
+function sfxExplosion(pos){
+  playNoise({duration:0.5, volume:0.38, filterType:'lowpass', filterFreq:900, pos});
+  playTone({freq:90, freqEnd:30, duration:0.4, type:'sine', volume:0.28, attack:0.001, pos});
 }
 function sfxHit(){
   playTone({freq:180, freqEnd:80, duration:0.18, type:'sawtooth', volume:0.22});
@@ -967,6 +1268,10 @@ function sfxMatchEnd(){
   setTimeout(()=>playTone({freq:550, duration:0.12, type:'sine', volume:0.18}), 120);
   setTimeout(()=>playTone({freq:440, duration:0.25, type:'sine', volume:0.18}), 240);
 }
+function sfxTimeWarning(){
+  playTone({freq:700, duration:0.12, type:'sine', volume:0.22});
+  setTimeout(()=>playTone({freq:900, duration:0.16, type:'sine', volume:0.22}), 150);
+}
 function sfxSpeedBoost(){
   playTone({freq:300, freqEnd:900, duration:0.25, type:'sine', volume:0.18});
 }
@@ -987,15 +1292,18 @@ const AMBIENT_THEMES = {
                scale:[0,2,3,7,8],       root:196, noteInterval:4.5, noteDur:3,   noteType:'sine',     noteVol:0.04 },
   oasis:     { kind:'noise', filterType:'lowpass',  filterFreq:350, filterQ:0.5, lfoDepth:100, windVolume:0.04,
                scale:[0,1,4,5,7,8,11],  root:207, noteInterval:3.8, noteDur:2,   noteType:'triangle', noteVol:0.045 },
-  ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.05,
+  ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.04,
                scale:[0,1,3,6,7],       root:110, noteInterval:5,   noteDur:3.5, noteType:'sawtooth', noteVol:0.04 },
-  industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.07,
+  industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.056,
                scale:[0,3,5,7,10],      root:110, noteInterval:1.6, noteDur:0.4, noteType:'square',   noteVol:0.035 }
 };
 let ambientNodes = [];
 let ambientMelodyTimeoutId = null;
 function stopAmbience(){
-  for(const n of ambientNodes){ try{ n.stop(); }catch(e){} }
+  for(const n of ambientNodes){
+    try{ n.stop && n.stop(); }catch(e){}
+    try{ n.disconnect(); }catch(e){}
+  }
   ambientNodes = [];
   if(ambientMelodyTimeoutId){ clearTimeout(ambientMelodyTimeoutId); ambientMelodyTimeoutId = null; }
 }
@@ -1025,14 +1333,14 @@ function startAmbience(biome){
     lfoGain.connect(filter.frequency);
     src.connect(filter);
     filter.connect(gain);
-    gain.connect(masterGain);
+    gain.connect(sfxGain);
     src.start();
     lfo.start();
-    ambientNodes.push(src, lfo);
+    ambientNodes.push(src, lfo, filter, gain, lfoGain);
   } else if(theme.kind==='drone'){
     const gain = ctx.createGain();
     gain.gain.value = theme.droneVolume;
-    gain.connect(masterGain);
+    gain.connect(sfxGain);
     const osc1 = ctx.createOscillator();
     osc1.type = 'sine'; osc1.frequency.value = theme.droneFreq;
     const osc2 = ctx.createOscillator();
@@ -1041,14 +1349,14 @@ function startAmbience(biome){
     osc2.connect(gain);
     osc1.start();
     osc2.start();
-    ambientNodes.push(osc1, osc2);
+    ambientNodes.push(osc1, osc2, gain);
   }
 
   (function scheduleNote(){
     const semis = theme.scale[Math.floor(Math.random()*theme.scale.length)];
     const octave = Math.random()<0.25 ? 2 : 1;
     const freq = theme.root * Math.pow(2, semis/12) * octave;
-    playTone({freq, duration:theme.noteDur, type:theme.noteType, volume:theme.noteVol, attack:theme.noteDur*0.3, decay:theme.noteDur*0.7});
+    playTone({freq, duration:theme.noteDur, type:theme.noteType, volume:theme.noteVol, attack:theme.noteDur*0.3, decay:theme.noteDur*0.7, bus:'music'});
     const jitter = theme.noteInterval*(0.7+Math.random()*0.7);
     ambientMelodyTimeoutId = setTimeout(scheduleNote, jitter*1000);
   })();
@@ -1059,6 +1367,33 @@ const canvas = document.getElementById('gameCanvas');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+
+// requestPointerLock() returns a Promise in current browsers, and can be
+// rejected outright (e.g. a SecurityError if the page is loaded inside a
+// sandboxed iframe without allow-pointer-lock - which is exactly what an
+// embedded/webview-style HTML preview can do, as opposed to just opening
+// the file directly in a normal browser tab). Left unhandled, that
+// rejection surfaces as a scary "crash" via the error reporting above, even
+// though nothing is actually broken - just no mouse capture available in
+// that specific environment. This wraps every call site so it fails
+// quietly with one clear one-time message instead.
+let pointerLockWarningShown = false;
+function requestPointerLockSafe(){
+  try{
+    const p = canvas.requestPointerLock();
+    if(p && typeof p.catch==='function'){
+      p.catch((err)=>{
+        console.warn('Pointer lock unavailable:', err);
+        if(!pointerLockWarningShown){
+          pointerLockWarningShown = true;
+          flashMessage("Mouse look isn't available in this environment - try opening this file directly in a full browser tab rather than an embedded/sandboxed preview.");
+        }
+      });
+    }
+  }catch(err){
+    console.warn('Pointer lock unavailable:', err);
+  }
+}
 renderer.setClearColor(0x87ceeb);
 
 const scene = new THREE.Scene();
@@ -1125,6 +1460,35 @@ function updateSkybox(biome){
   renderer.setClearColor(theme.fog);
 }
 updateSkybox('highlands');
+
+// ---------- Round beacon (tiebreak point, revealed only in the final minute) ----------
+const beaconBeam = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.5, 0.5, 45, 12, 1, true),
+  new THREE.MeshBasicMaterial({color:0xfff2b0, transparent:true, opacity:0.35, side:THREE.DoubleSide, depthWrite:false})
+);
+beaconBeam.visible = false;
+scene.add(beaconBeam);
+const beaconRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.6, 1.2, 24),
+  new THREE.MeshBasicMaterial({color:0xfff2b0, transparent:true, opacity:0.7, side:THREE.DoubleSide, depthWrite:false})
+);
+beaconRing.rotation.x = -Math.PI/2;
+beaconRing.visible = false;
+scene.add(beaconRing);
+let beaconPos = null; // {x,z} - set once per round; y is found dynamically since terrain can change
+function setBeaconPosition(x,z){
+  beaconPos = {x,z};
+}
+function updateBeaconVisibility(){
+  const shouldShow = !!(multiplayer && matchPhase==='active' && typeof matchRoundTimeLeft==='number' && matchRoundTimeLeft<=60 && beaconPos);
+  beaconBeam.visible = shouldShow;
+  beaconRing.visible = shouldShow;
+  if(shouldShow){
+    const groundY = findSurfaceY(Math.floor(beaconPos.x), Math.floor(beaconPos.z));
+    beaconBeam.position.set(beaconPos.x, groundY+22.5, beaconPos.z);
+    beaconRing.position.set(beaconPos.x, groundY+0.05, beaconPos.z);
+  }
+}
 
 window.addEventListener('resize', ()=>{
   camera.aspect = window.innerWidth/window.innerHeight;
@@ -1573,6 +1937,116 @@ function updateMuzzleFlashes(dt){
     }
   }
 }
+// A quick, bright line for the sniper's instant hitscan shot - it has no
+// travel time, so instead of an object flying through the world like every
+// other projectile, this is just a brief flash along the line it hit.
+let sniperTracers = [];
+function spawnSniperTracer(origin, dir, length){
+  const endPoint = origin.clone().addScaledVector(dir, length);
+  const geo = new THREE.BufferGeometry().setFromPoints([origin, endPoint]);
+  const mat = new THREE.LineBasicMaterial({color:0xffee88, transparent:true, opacity:0.9});
+  const line = new THREE.Line(geo, mat);
+  scene.add(line);
+  sniperTracers.push({line, life:0, maxLife:0.15});
+}
+function updateSniperTracers(dt){
+  for(let i=sniperTracers.length-1;i>=0;i--){
+    const tr = sniperTracers[i];
+    tr.life += dt;
+    const frac = Math.min(1, tr.life/tr.maxLife);
+    tr.line.material.opacity = 0.9*(1-frac);
+    if(tr.life>=tr.maxLife){
+      scene.remove(tr.line);
+      tr.line.geometry.dispose(); tr.line.material.dispose();
+      sniperTracers.splice(i,1);
+    }
+  }
+}
+// The sniper's beam blows through basically everything along its entire
+// line (not just the first block it meets, and without ever stopping -
+// that's the whole point of the weapon) - including Stone and Metal, not
+// just soft terrain. Deliberately over-the-top: it should feel like it's
+// punching literal holes through the map. Batches all the changes from one
+// shot into a single rebuild + one network sync.
+function sniperDestroyTerrain(origin, dir, maxRange){
+  const destroyed = new Set();
+  const changes = [];
+  const step = 0.4;
+  for(let t=0; t<=maxRange; t+=step){
+    const x = Math.floor(origin.x + dir.x*t);
+    const y = Math.floor(origin.y + dir.y*t);
+    const z = Math.floor(origin.z + dir.z*t);
+    const key = x+','+y+','+z;
+    if(destroyed.has(key)) continue;
+    destroyed.add(key);
+    const b = getBlock(x,y,z);
+    if(b===LOOT_CRATE || b===POWERUP_CRATE){
+      // the sniper can crack a crate open from anywhere along its beam -
+      // no proximity requirement like every other gun's crateBreakRange
+      if(b===LOOT_CRATE) openLootCrate(x,y,z); else spawnPowerupPickup(x,y,z);
+      setBlock(x,y,z,AIR);
+      changes.push({x,y,z,blockType:AIR});
+      spawnBreakParticles(x,y,z, b===LOOT_CRATE?0xe8c94a:0x5fd0ff);
+    } else if(b===DIRT || b===GRASS || b===LEAVES || b===SNOW || b===WOOD || b===STONE || b===METAL){
+      // deliberately no dropItemOnGround here, unlike every other weapon's
+      // terrain breaking - a shot through a long corridor or a wall of
+      // Metal can destroy dozens of blocks in one go, and spawning a ground
+      // item (a networked 'dropItem' message in multiplayer) for every
+      // single one was almost certainly hammering the game with a burst of
+      // messages/objects far larger than any other weapon ever produces.
+      setBlock(x,y,z,AIR);
+      changes.push({x,y,z,blockType:AIR});
+      spawnBreakParticles(x,y,z,BLOCK_COLORS[b]);
+    }
+  }
+  if(changes.length){
+    rebuildMeshes();
+    sendBlockBatch(changes);
+  }
+}
+function fireSniperHitscan(weapon){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const origin = getMuzzleOrigin();
+  spawnMuzzleFlash(origin);
+  spawnSniperTracer(origin, dir, weapon.range);
+  sfxShootSniper();
+  sniperDestroyTerrain(origin, dir, weapon.range);
+
+  for(const en of enemies){
+    if(!en.alive) continue;
+    const zone = resolveRayHitZone(origin, dir, weapon.range, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R, en.y+ENEMY_BODY_Y,ENEMY_BODY_R);
+    if(zone){
+      const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
+      hitEnemy(en, dmg);
+      showHitMarker(zone==='head');
+      if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
+      spawnBreakParticles(Math.floor(en.x),Math.floor(en.y+0.5),Math.floor(en.z), 0xff5555);
+    }
+  }
+  if(multiplayer){
+    for(const [id,rp] of remotePlayers){
+      const pos = rp.group.position;
+      const zone = resolveRayHitZone(origin, dir, weapon.range, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
+      if(zone){
+        const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
+        sendHit(id, dmg);
+        showHitMarker(zone==='head');
+        if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
+        triggerHitEffect(rp);
+        spawnBreakParticles(Math.floor(pos.x),Math.floor(pos.y+0.5),Math.floor(pos.z), 0xff5555);
+      }
+    }
+  }
+  // purely cosmetic so other players see the shot too - no damage attached,
+  // same trust model as every other weapon's shot broadcast
+  if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
+    socket.send(JSON.stringify({
+      type:'shot', shotId:null, kind:'sniper', speed:0, color:weapon.color, radius:0,
+      ox:origin.x, oy:origin.y, oz:origin.z, dx:dir.x, dy:dir.y, dz:dir.z
+    }));
+  }
+}
 function spawnTrailParticle(pos, color){
   const positions = new Float32Array([pos.x, pos.y, pos.z]);
   const geo = new THREE.BufferGeometry();
@@ -1639,9 +2113,12 @@ function rebuildMeshes(){
 // ---------- First-person hand & held item ----------
 scene.add(camera); // needed so objects parented to the camera get rendered
 const handGroup = new THREE.Group();
-handGroup.position.set(0.32, -0.24, -0.55);
-handGroup.rotation.set(0.2, -0.35, 0.15);
+const HAND_BASE_X = 0.32, HAND_BASE_Y = -0.24, HAND_BASE_Z = -0.55;
+handGroup.position.set(HAND_BASE_X, HAND_BASE_Y, HAND_BASE_Z);
+handGroup.rotation.set(0.2, -0.08, 0.15);
 camera.add(handGroup);
+let handBobPhase = 0;
+let handBobAmount = 0;
 
 const arm = new THREE.Mesh(
   new THREE.BoxGeometry(0.16,0.16,0.55),
@@ -1655,7 +2132,11 @@ itemAnchor.position.set(0,0.1,-0.32);
 handGroup.add(itemAnchor);
 
 function clearItemAnchor(){
-  while(itemAnchor.children.length) itemAnchor.remove(itemAnchor.children[0]);
+  while(itemAnchor.children.length){
+    const child = itemAnchor.children[0];
+    itemAnchor.remove(child);
+    disposeHeldItemMesh(child);
+  }
 }
 function buildPickaxeMesh(){
   const group = new THREE.Group();
@@ -1816,6 +2297,30 @@ function buildCarbineMesh(){
   group.add(stock);
   return group;
 }
+function buildSniperMesh(){
+  const group = new THREE.Group();
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.022,0.022,0.85,8),
+    new THREE.MeshLambertMaterial({color:0x2a2a2a})
+  );
+  barrel.rotation.x = Math.PI/2;
+  barrel.position.z = -0.2;
+  group.add(barrel);
+  const scope = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035,0.035,0.3,10),
+    new THREE.MeshLambertMaterial({color:0x111111})
+  );
+  scope.rotation.x = Math.PI/2;
+  scope.position.set(0,0.07,-0.1);
+  group.add(scope);
+  const bipod = new THREE.Mesh(new THREE.BoxGeometry(0.03,0.15,0.03), new THREE.MeshLambertMaterial({color:0x333333}));
+  bipod.position.set(0,-0.12,-0.35);
+  group.add(bipod);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.1,0.32), new THREE.MeshLambertMaterial({color:0x4a3a2a}));
+  stock.position.set(0,0,0.42);
+  group.add(stock);
+  return group;
+}
 function updateHeldItemMesh(){
   clearItemAnchor();
   const slot = slots[selectedSlot];
@@ -1842,6 +2347,8 @@ function updateHeldItemMesh(){
     itemAnchor.add(buildPistolMesh());
   } else if(slot.type===CARBINE){
     itemAnchor.add(buildCarbineMesh());
+  } else if(slot.type===SNIPER){
+    itemAnchor.add(buildSniperMesh());
   } else if(slot.type===REEDS){
     itemAnchor.add(new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]));
   } else if(SOLID_TYPES.includes(slot.type)){
@@ -1859,7 +2366,7 @@ const WEAPON_CONFIG = {
   // it from across the map.
   [BLOW_PIPE]:       { kind:'projectile', damage:1.35, speed:23,   cooldown:0.15, radius:0.045, color:0x4a3520, sound:'light', crateBreakRange:3 },
   [STONE_SLING]:     { kind:'projectile', damage:3, speed:34.5, cooldown:0.3,  radius:0.06,  color:0x8a8a8a, sound:'sling', crateBreakRange:3 },
-  [PISTOL]:          { kind:'projectile', damage:6, speed:60,   cooldown:0.4,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3 },
+  [PISTOL]:          { kind:'projectile', damage:6, speed:60,   cooldown:0.4,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3, canBreakLeaves:true, breakRange:10 },
   [WAR_CLUB]:        { kind:'melee', damage:5, cooldown:0.6, range:1.7 },
   [GRENADE]:         { kind:'grenade', damage:17.5, cooldown:1.2, throwSpeed:11, blastRadius:2.8 },
   [ROCKET_LAUNCHER]: { kind:'rocket', damage:20, cooldown:1.4, speed:36, blastRadius:3.2, color:0xff5522 },
@@ -1870,7 +2377,7 @@ const WEAPON_CONFIG = {
   [RIFLE]:           { kind:'projectile', damage:8, speed:72, cooldown:1.0, radius:0.04, color:0xc9a227, sound:'rifle', penetration:2, crateBreakRange:3 },
   // carbine: same rifle family, no penetration, but noticeably faster on
   // both the bullet and the trigger, trading power for rate of fire.
-  [CARBINE]:         { kind:'projectile', damage:6, speed:78, cooldown:0.6, radius:0.04, color:0x8a6a45, sound:'rifle', crateBreakRange:3 },
+  [CARBINE]:         { kind:'projectile', damage:6, speed:78, cooldown:0.6, radius:0.04, color:0x8a6a45, sound:'rifle', crateBreakRange:3, canBreakLeaves:true, breakRange:10 },
   // shotguns: a spread of small fast pellets (reuses the same dart system as
   // blow pipe/sling) - burstCount>1 fires several blasts in quick succession
   // from one click before the real cooldown kicks in. No magazines/reloading.
@@ -1880,7 +2387,12 @@ const WEAPON_CONFIG = {
   // crateBreakRange is separate and much shorter - you have to be right on
   // top of a crate to shotgun it open.
   [DOUBLE_BARREL]:   { kind:'shotgun', burstCount:2, burstDelay:0.12, pelletCount:6, pelletDamage:4, spread:0.13, speed:45, cooldown:1.8, color:0x4a3520, breakRange:10, crateBreakRange:3 },
-  [PUMP_SHOTGUN]:    { kind:'shotgun', burstCount:1, burstDelay:0,    pelletCount:9, pelletDamage:4, spread:0.08, speed:45, cooldown:1.0, color:0x333333, breakRange:10, crateBreakRange:3 }
+  [PUMP_SHOTGUN]:    { kind:'shotgun', burstCount:1, burstDelay:0,    pelletCount:9, pelletDamage:4, spread:0.08, speed:45, cooldown:1.0, color:0x333333, breakRange:10, crateBreakRange:3 },
+  // sniper: instant hitscan rather than a travelling projectile - ignores
+  // terrain entirely (no block/crate interaction at all, unlike everything
+  // else) and hits every enemy/player along the line, not just the first.
+  // Balanced against that by a long cooldown - one shot every few seconds.
+  [SNIPER]:          { kind:'hitscan', damage:20, cooldown:3.5, range:60, color:0xd4af37 }
 };
 let lastAttackTime = 0;
 let pendingBurst = null; // {weapon, shotsRemaining, timer} - mid-burst shotgun state
@@ -1897,8 +2409,8 @@ function shootProjectile(weapon){
   mesh.position.copy(origin).addScaledVector(dir,0.4);
   scene.add(mesh);
   const shotId = multiplayer ? makeShotId() : null;
-  darts.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, color:weapon.color, shotId, pen:weapon.penetration||0, crateBreakRange:weapon.crateBreakRange});
-  sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:weapon.radius}, origin, dir, shotId);
+  darts.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, color:weapon.color, shotId, pen:weapon.penetration||0, crateBreakRange:weapon.crateBreakRange, canBreakLeaves:weapon.canBreakLeaves, breakRange:weapon.breakRange});
+  sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:weapon.radius, sound:weapon.sound}, origin, dir, shotId);
   if(weapon.sound==='rifle') sfxShootRifle();
   else if(weapon.sound==='sling') sfxShootSling();
   else if(weapon.sound==='pistol') sfxShootPistol();
@@ -1923,7 +2435,7 @@ function fireShotgunPellets(weapon){
     scene.add(mesh);
     const shotId = multiplayer ? makeShotId() : null;
     darts.push({mesh, dir, life:0, damage:weapon.pelletDamage, speed:weapon.speed, color:weapon.color, shotId, canBreakDirt:true, breakRange:weapon.breakRange, crateBreakRange:weapon.crateBreakRange});
-    sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:0.035}, origin, dir, shotId);
+    sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:0.035, sound: i===0 ? 'shotgun' : null}, origin, dir, shotId);
   }
   sfxShotgunBlast();
 }
@@ -2012,6 +2524,13 @@ function updateDarts(dt){
           brokenDirt.push({x:bx,y:by,z:bz,blockType:AIR});
           spawnBreakParticles(bx,by,bz,BLOCK_COLORS[t]);
           d.pen--;
+        } else if(d.canBreakLeaves && t===LEAVES && dist <= (d.breakRange||0)){
+          // pistol/carbine: leaves only, not dirt or other terrain
+          dropItemOnGround(bx,by,bz,t,1);
+          setBlock(bx,by,bz,AIR);
+          brokenDirt.push({x:bx,y:by,z:bz,blockType:AIR});
+          spawnBreakParticles(bx,by,bz,BLOCK_COLORS[t]);
+          hitSomething = true;
         } else {
           spawnBreakParticles(bx,by,bz,0xd9c98a);
           hitSomething = true;
@@ -2114,7 +2633,7 @@ function throwGrenade(weapon){
     radius: weapon.blastRadius,
     shotId
   });
-  sendShotEvent({kind:'grenade', speed:weapon.throwSpeed}, origin, dir, shotId);
+  sendShotEvent({kind:'grenade', speed:weapon.throwSpeed, sound:'grenade-throw'}, origin, dir, shotId);
   sfxGrenadeThrow();
 }
 function updateGrenades(dt){
@@ -2204,7 +2723,7 @@ function triggerExplosion(pos, damage, radius){
   }
 
   spawnBigExplosionEffect(pos, radius);
-  sfxExplosion();
+  sfxExplosion(pos);
 }
 
 // ---------- Rocket launcher: fast straight-line flight, explodes on impact ----------
@@ -2222,7 +2741,7 @@ function fireRocket(weapon){
   scene.add(mesh);
   const shotId = multiplayer ? makeShotId() : null;
   rockets.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, radius:weapon.blastRadius, shotId});
-  sendShotEvent({kind:'rocket', speed:weapon.speed, color:weapon.color, radius:0.09}, origin, dir, shotId);
+  sendShotEvent({kind:'rocket', speed:weapon.speed, color:weapon.color, radius:0.09, sound:'rocket-launch'}, origin, dir, shotId);
   sfxRocketLaunch();
 }
 function updateRockets(dt){
@@ -2270,13 +2789,60 @@ function disposeObject3D(obj){
     }
   });
 }
+// Held-item meshes (weapons, tools, or a block held in your hand) are always
+// freshly-created geometry, but two cases - Reeds and any placeable block -
+// reuse the SAME material objects the world uses to render actual terrain
+// (materials[REEDS], materials[type]). disposeObject3D would destroy those
+// shared materials outright, breaking that block type's rendering
+// everywhere in the world - not just the held-item view. This checks first.
+function isSharedBlockMaterial(mat){
+  for(const key in materials){
+    const m = materials[key];
+    if(m===mat) return true;
+    if(Array.isArray(m) && m.includes(mat)) return true;
+  }
+  return false;
+}
+function disposeHeldItemMesh(obj){
+  obj.traverse(o=>{
+    if(o.geometry) o.geometry.dispose();
+    if(o.material){
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for(const m of mats){
+        if(m && !isSharedBlockMaterial(m)) m.dispose();
+      }
+    }
+  });
+}
 
 // ---------- Remote projectiles (cosmetic only) ----------
 // When another player fires, we get a 'shot' message and spawn a visual-only
 // copy here - no damage or block destruction happens from these; that's all
 // handled authoritatively on the shooter's own client and synced separately.
 let remoteProjectiles = [];
+// So other players actually hear your shots too, not just see the muzzle
+// flash - dispatches to the same synthesized sounds you hear when you fire.
+// Not positional (no distance falloff/panning) - a simplification, but a
+// big step up from complete silence for anyone but the shooter.
+function playRemoteShotSound(soundTag, pos){
+  if(soundTag==='light') sfxShootLight(pos);
+  else if(soundTag==='sling') sfxShootSling(pos);
+  else if(soundTag==='pistol') sfxShootPistol(pos);
+  else if(soundTag==='rifle') sfxShootRifle(pos);
+  else if(soundTag==='shotgun') sfxShotgunBlast(pos);
+  else if(soundTag==='rocket-launch') sfxRocketLaunch(pos);
+  else if(soundTag==='grenade-throw') sfxGrenadeThrow(pos);
+}
 function spawnRemoteProjectile(msg){
+  if(msg.kind==='sniper'){
+    const origin = new THREE.Vector3(msg.ox, msg.oy, msg.oz);
+    const dir = new THREE.Vector3(msg.dx, msg.dy, msg.dz);
+    spawnMuzzleFlash(origin);
+    spawnSniperTracer(origin, dir, 60);
+    sfxShootSniper(origin);
+    return;
+  }
+  if(msg.sound) playRemoteShotSound(msg.sound, new THREE.Vector3(msg.ox, msg.oy, msg.oz));
   let mesh;
   if(msg.kind==='grenade') mesh = buildGrenadeMesh();
   else {
@@ -2301,7 +2867,7 @@ function spawnRemoteProjectile(msg){
 function endRemoteProjectile(p, pos){
   if(p.kind==='grenade' || p.kind==='rocket'){
     spawnBigExplosionEffect(pos, 3); // cosmetic only - exact radius doesn't need to match, just look right
-    sfxExplosion();
+    sfxExplosion(pos);
   } else {
     spawnBreakParticles(Math.floor(pos.x),Math.floor(pos.y),Math.floor(pos.z),0xd9c98a);
   }
@@ -2362,6 +2928,12 @@ function buildGroundItemMesh(type){
     case WAR_CLUB: return buildClubMesh();
     case GRENADE: return buildGrenadeMesh();
     case ROCKET_LAUNCHER: return buildRocketLauncherMesh();
+    case PISTOL: return buildPistolMesh();
+    case CARBINE: return buildCarbineMesh();
+    case RIFLE: return buildRifleMesh();
+    case DOUBLE_BARREL: return buildDoubleBarrelMesh();
+    case PUMP_SHOTGUN: return buildPumpShotgunMesh();
+    case SNIPER: return buildSniperMesh();
     case POWERUP_CRATE: return new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), materials[POWERUP_CRATE]);
     default: {
       const tex = GROUND_ICON_TEX[type];
@@ -2453,6 +3025,7 @@ function requestPickup(id){
     removeGroundItem(id);
   }
 }
+const GROUND_ITEM_BADGE_RANGE = 4; // count badge only visible this close - the icon itself always shows
 function updateGroundItems(dt){
   for(const [id,item] of groundItems){
     item.life += dt;
@@ -2467,9 +3040,11 @@ function updateGroundItems(dt){
       removeGroundItem(id);
       continue;
     }
-    if(item.pending) continue;
     const dx=item.group.position.x-player.x, dz=item.group.position.z-player.z, dy=item.group.position.y-(player.y+0.9);
-    if(dx*dx+dy*dy+dz*dz < 1.0*1.0){
+    const distSq = dx*dx+dy*dy+dz*dz;
+    if(item.countSprite) item.countSprite.visible = distSq < GROUND_ITEM_BADGE_RANGE*GROUND_ITEM_BADGE_RANGE;
+    if(item.pending) continue;
+    if(distSq < 1.0*1.0){
       requestPickup(id);
     }
   }
@@ -2574,6 +3149,16 @@ function updateRespawnCountdownUI(){
   el.style.display = 'block';
   el.querySelector('.big').textContent = respawnCountdownRemaining;
 }
+let timeWarningTimeout = null;
+function showTimeWarning(text){
+  const el = document.getElementById('timeWarning');
+  el.textContent = text;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  if(timeWarningTimeout) clearTimeout(timeWarningTimeout);
+  timeWarningTimeout = setTimeout(()=> el.classList.remove('show'), 3200);
+}
 
 // Spread across the map as fractional offsets rather than one fixed point -
 // used for both initial spawn and every respawn after death.
@@ -2609,15 +3194,23 @@ function spawnPlayer(){
 }
 
 // ---------- Simple enemies (to test the weapons on) ----------
-const ENEMY_MAX_HEALTH = 6;
-const ENEMY_TOUCH_DAMAGE = 1;
+const ENEMY_MAX_HEALTH = 8;
+// How many enemies are on the map at once (singleplayer default, and the
+// starting count before any respawns). Same idea as LOOT_TABLE above - this
+// is the one place to edit to change the spawn rate, nothing else needs to
+// change. The multiplayer/server-side count is the separate ENEMY_COUNT
+// constant near the top of server.js and should be kept in step with this
+// if you want singleplayer and multiplayer to feel the same.
+const ENEMY_SPAWN_COUNT = 14;
+const ENEMY_TOUCH_DAMAGE = 3;
+const ZOMBIE_TOUCH_DAMAGE = 4.5;
 const ENEMY_TOUCH_INTERVAL = 1.2;
 const ENEMY_RESPAWN_DELAY = [15000, 25000]; // ms range
 const ENEMY_HALF_W = 0.28, ENEMY_HEIGHT = 0.9;
 const ENEMY_GRAVITY = -24, ENEMY_JUMP_SPEED = 7.2, ENEMY_SPEED = 1.3;
 const ENEMY_AGGRO_RANGE = 10; // within this distance, an enemy stops wandering and chases the player
 const ZOMBIE_CHANCE = 0.25;
-const ZOMBIE_HEALTH_MULT = 1.8;
+const ZOMBIE_MAX_HEALTH = 20; // set directly rather than as a multiplier, for exact tuning
 const ZOMBIE_SPEED_MULT = 1.3;
 let enemies = [];
 let enemyIdCounter = 1;
@@ -2654,6 +3247,25 @@ function resolveHitZone(px,py,pz, cx,cz, headY,headR, bodyY,bodyR){
   if(bdx*bdx+bdy*bdy+bdz*bdz < bodyR*bodyR) return 'body';
   return null;
 }
+// Same idea as resolveHitZone, but against a whole ray instead of a single
+// point - used by the sniper's hitscan, which needs to check every enemy/
+// player against the shot's line instantly rather than a travelling dart's
+// current position.
+function pointToRayDistance(px,py,pz, ox,oy,oz, dx,dy,dz, maxRange){
+  const vx=px-ox, vy=py-oy, vz=pz-oz;
+  const t = vx*dx+vy*dy+vz*dz; // dir is normalized, so this is the projection distance along the ray
+  if(t<0 || t>maxRange) return null;
+  const cx=ox+dx*t, cy=oy+dy*t, cz=oz+dz*t;
+  const ddx=px-cx, ddy=py-cy, ddz=pz-cz;
+  return Math.sqrt(ddx*ddx+ddy*ddy+ddz*ddz);
+}
+function resolveRayHitZone(origin, dir, maxRange, cx,cz, headY,headR, bodyY,bodyR){
+  const headDist = pointToRayDistance(cx,headY,cz, origin.x,origin.y,origin.z, dir.x,dir.y,dir.z, maxRange);
+  if(headDist!==null && headDist<headR) return 'head';
+  const bodyDist = pointToRayDistance(cx,bodyY,cz, origin.x,origin.y,origin.z, dir.x,dir.y,dir.z, maxRange);
+  if(bodyDist!==null && bodyDist<bodyR) return 'body';
+  return null;
+}
 
 const HIT_FLASH_DURATION = 0.25;
 const HIT_BUMP_DURATION = 0.15;
@@ -2684,7 +3296,7 @@ function spawnEnemyAt(x,z,forceZombie){
   const group = makeEnemyMesh(isZombie);
   group.position.set(x,y,z);
   scene.add(group);
-  const maxHealth = isZombie ? Math.round(ENEMY_MAX_HEALTH*ZOMBIE_HEALTH_MULT) : ENEMY_MAX_HEALTH;
+  const maxHealth = isZombie ? ZOMBIE_MAX_HEALTH : ENEMY_MAX_HEALTH;
   const enemy = {
     id: enemyIdCounter++, group, x, y, z,
     velY: 0, onGround: true,
@@ -2699,7 +3311,7 @@ function spawnInitialEnemies(count){
   for(const en of enemies) scene.remove(en.group);
   enemies = [];
   let spawned=0, attempts=0;
-  const target = count || 8;
+  const target = count || ENEMY_SPAWN_COUNT;
   while(spawned<target && attempts<300){
     attempts++;
     const x = 4+Math.floor(Math.random()*(WORLD_X-8));
@@ -2741,7 +3353,7 @@ function respawnEnemy(enemy){
   enemy.x=x+0.5; enemy.z=z+0.5; enemy.y=y;
   enemy.velY=0; enemy.onGround=true;
   enemy.isZombie = Math.random()<ZOMBIE_CHANCE;
-  enemy.maxHealth = enemy.isZombie ? Math.round(ENEMY_MAX_HEALTH*ZOMBIE_HEALTH_MULT) : ENEMY_MAX_HEALTH;
+  enemy.maxHealth = enemy.isZombie ? ZOMBIE_MAX_HEALTH : ENEMY_MAX_HEALTH;
   enemy.health = enemy.maxHealth;
   enemy.alive = true;
   enemy.touchCooldown = 0.5;
@@ -2798,7 +3410,7 @@ function applyServerEnemyRespawn(id, x, z, isZombie){
   const y = findSurfaceY(Math.floor(x), Math.floor(z));
   en.x=x; en.y=y; en.z=z; en.serverX=x; en.serverZ=z;
   en.isZombie = !!isZombie;
-  en.health = en.isZombie ? Math.round(ENEMY_MAX_HEALTH*ZOMBIE_HEALTH_MULT) : ENEMY_MAX_HEALTH;
+  en.health = en.isZombie ? ZOMBIE_MAX_HEALTH : ENEMY_MAX_HEALTH;
   en.alive = true;
   scene.remove(en.group);
   en.group = makeEnemyMesh(en.isZombie);
@@ -2832,7 +3444,7 @@ function updateEnemies(dt){
       const tdx=en.x-player.x, tdy=(en.y+0.5)-(player.y+0.9), tdz=en.z-player.z;
       const dist = Math.sqrt(tdx*tdx+tdy*tdy+tdz*tdz);
       if(dist<0.9 && en.touchCooldown<=0){
-        takeDamage(ENEMY_TOUCH_DAMAGE);
+        takeDamage(en.isZombie ? ZOMBIE_TOUCH_DAMAGE : ENEMY_TOUCH_DAMAGE);
         en.touchCooldown = ENEMY_TOUCH_INTERVAL;
       }
     }
@@ -2893,7 +3505,7 @@ function updateEnemies(dt){
     const tdx=en.x-player.x, tdy=(en.y+0.5)-(player.y+0.9), tdz=en.z-player.z;
     const dist = Math.sqrt(tdx*tdx+tdy*tdy+tdz*tdz);
     if(dist<0.9 && en.touchCooldown<=0){
-      takeDamage(ENEMY_TOUCH_DAMAGE);
+      takeDamage(en.isZombie ? ZOMBIE_TOUCH_DAMAGE : ENEMY_TOUCH_DAMAGE);
       en.touchCooldown = ENEMY_TOUCH_INTERVAL;
     }
   }
@@ -2943,18 +3555,18 @@ document.addEventListener('keydown', (e)=>{
   if(e.code==='Escape'){
     if(devOpen){ toggleDev(); e.preventDefault(); return; }
     if(craftOpen){ toggleCraft(); e.preventDefault(); return; }
-    if(paused){ hidePause(); canvas.requestPointerLock(); e.preventDefault(); return; }
+    if(paused){ hidePause(); requestPointerLockSafe(); e.preventDefault(); return; }
     return; // otherwise let the browser's own Escape (exit pointer lock) trigger the pause menu
   }
   if((craftOpen||devOpen) && e.code!=='KeyE' && e.code!=='Backquote') return;
   switch(e.code){
-    case 'KeyW': keys.forward=true; break;
-    case 'KeyS': keys.back=true; break;
-    case 'KeyA': keys.left=true; break;
-    case 'KeyD': keys.right=true; break;
+    case 'KeyW': keys.forward=true; e.preventDefault(); break;
+    case 'KeyS': keys.back=true; e.preventDefault(); break;
+    case 'KeyA': keys.left=true; e.preventDefault(); break;
+    case 'KeyD': keys.right=true; e.preventDefault(); break;
     case 'Space': keys.jump=true; e.preventDefault(); break;
     case 'ShiftLeft': keys.sprint=true; break;
-    case 'ControlLeft': keys.crouch=true; break;
+    case 'KeyC': keys.crouch=true; break;
     case 'KeyE': toggleCraft(); break;
     case 'Backquote': toggleDev(); break;
     case 'KeyT': openChat(); break;
@@ -2972,19 +3584,19 @@ document.addEventListener('keyup', (e)=>{
     case 'KeyD': keys.right=false; break;
     case 'Space': keys.jump=false; break;
     case 'ShiftLeft': keys.sprint=false; break;
-    case 'ControlLeft': keys.crouch=false; break;
+    case 'KeyC': keys.crouch=false; break;
   }
 });
 
 canvas.addEventListener('click', ()=>{
   resumeAudio();
   if(!pointerLocked && !paused && !craftOpen){
-    canvas.requestPointerLock();
+    requestPointerLockSafe();
   }
 });
 document.addEventListener('pointerlockchange', ()=>{
   pointerLocked = document.pointerLockElement===canvas;
-  if(!pointerLocked && !craftOpen){
+  if(!pointerLocked && !craftOpen && !devOpen){
     showPause();
   }
 });
@@ -3013,6 +3625,7 @@ canvas.addEventListener('mousedown', (e)=>{
         else if(weapon.kind==='grenade') throwGrenade(weapon);
         else if(weapon.kind==='rocket') fireRocket(weapon);
         else if(weapon.kind==='shotgun') fireShotgunBurst(weapon);
+        else if(weapon.kind==='hitscan') fireSniperHitscan(weapon);
       }
       if(weapon.kind==='projectile') attackHeld = true; // hold the mouse down to keep firing
     } else {
@@ -3051,7 +3664,7 @@ function addToInventory(type){
   flashMessage('Inventory full!');
 }
 function openLootCrate(x,y,z){
-  const weapon = WEAPON_LOOT_POOL[Math.floor(Math.random()*WEAPON_LOOT_POOL.length)];
+  const weapon = pickWeightedLoot();
   dropItemOnGround(x,y,z,weapon,1);
   flashMessage('Loot crate! A '+BLOCK_NAMES[weapon]+' dropped');
   sfxCrateOpen();
@@ -3279,7 +3892,7 @@ function toggleCraft(){
   } else {
     heldSlotIndex = null;
     updateHeldIcon();
-    if(started && !paused) canvas.requestPointerLock();
+    if(started && !paused) requestPointerLockSafe();
   }
 }
 document.getElementById('btnCloseCraft').addEventListener('click', toggleCraft);
@@ -3310,7 +3923,7 @@ function toggleDev(){
     document.exitPointerLock();
     renderDevPanel();
   } else if(started && !paused){
-    canvas.requestPointerLock();
+    requestPointerLockSafe();
   }
 }
 function renderDevPanel(){
@@ -3538,7 +4151,7 @@ function hidePause(){
 }
 document.getElementById('btnResume').addEventListener('click', ()=>{
   hidePause();
-  canvas.requestPointerLock();
+  requestPointerLockSafe();
 });
 document.getElementById('btnSave').addEventListener('click', ()=>{
   if(multiplayer){ flashMessage('Leave multiplayer to use single-player save'); return; }
@@ -3669,7 +4282,7 @@ async function loadWorld(fromPause){
     updateHealthUI();
     flashMessage('World loaded!');
     document.getElementById('overlay').style.display='none';
-    if(fromPause){ hidePause(); canvas.requestPointerLock(); }
+    if(fromPause){ hidePause(); requestPointerLockSafe(); }
     started = true;
   }catch(err){
     console.error(err);
@@ -3715,6 +4328,7 @@ let matchStandings = [];
 let matchRoundTimeLeft = null;
 let awaitingInitialPhaseCheck = false;
 let inSpectatorBox = false; // true for fresh joins dropped into the box, not just eliminated players
+let oneMinWarningShownForRound = false;
 
 function makeNameSprite(text){
   const canvas = document.createElement('canvas');
@@ -3737,6 +4351,7 @@ function colorForId(id){
   const palette=[0xe05353,0x53a0e0,0x5be07a,0xe0c353,0xb057e0,0xe0834f,0x53d9e0];
   return palette[id % palette.length];
 }
+const NAME_TAG_RANGE = 5; // name only visible this close, and never at all while crouched
 function createRemotePlayer(id,name){
   const group = new THREE.Group();
   const body = new THREE.Mesh(
@@ -3754,10 +4369,11 @@ function createRemotePlayer(id,name){
   const heldAnchor = new THREE.Group();
   heldAnchor.position.set(0.32, 1.02, -0.15);
   group.add(heldAnchor);
-  group.add(makeNameSprite(name || ('Player'+id)));
+  const nameSprite = makeNameSprite(name || ('Player'+id));
+  group.add(nameSprite);
   scene.add(group);
   return {
-    group, name, heldAnchor, heldType:null, crouching:false, targetScaleY:1,
+    group, name, heldAnchor, nameSprite, heldType:null, crouching:false, targetScaleY:1,
     target:{x:group.position.x,y:0,z:group.position.z,yaw:0}, flashTimer:0, bumpTimer:0
   };
 }
@@ -3774,6 +4390,7 @@ function buildRemoteHeldItemMesh(type){
     case RIFLE: return buildRifleMesh();
     case PISTOL: return buildPistolMesh();
     case CARBINE: return buildCarbineMesh();
+    case SNIPER: return buildSniperMesh();
     case REEDS: return new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]);
     default:
       if(type!==null && type!==undefined && SOLID_TYPES.includes(type)){
@@ -3786,7 +4403,11 @@ function buildRemoteHeldItemMesh(type){
 function updateRemoteHeldItem(rp, type){
   if(rp.heldType===type) return; // unchanged - skip rebuilding the mesh
   rp.heldType = type;
-  while(rp.heldAnchor.children.length) rp.heldAnchor.remove(rp.heldAnchor.children[0]);
+  while(rp.heldAnchor.children.length){
+    const child = rp.heldAnchor.children[0];
+    rp.heldAnchor.remove(child);
+    disposeHeldItemMesh(child);
+  }
   if(type===null || type===undefined) return;
   const mesh = buildRemoteHeldItemMesh(type);
   if(mesh) rp.heldAnchor.add(mesh);
@@ -3810,6 +4431,34 @@ function updateRemotePlayers(dt){
     const targetScaleY = rp.crouching ? 0.72 : 1;
     const newScaleY = rp.group.scale.y + (targetScaleY-rp.group.scale.y)*Math.min(1,dt*10);
     rp.group.scale.y = newScaleY;
+
+    // Positional footsteps for other players too, not just yourself - a real
+    // multiplayer awareness win, so figured out from how fast their position
+    // is actually moving rather than any explicit "I'm walking" flag (there
+    // isn't one synced over the network).
+    if(rp.lastFootPos===undefined) rp.lastFootPos = {x:rp.group.position.x, z:rp.group.position.z};
+    if(rp.footstepTimer===undefined) rp.footstepTimer = 0;
+    const fdx = rp.group.position.x - rp.lastFootPos.x;
+    const fdz = rp.group.position.z - rp.lastFootPos.z;
+    const moveSpeed = Math.sqrt(fdx*fdx+fdz*fdz)/dt; // units/sec, horizontal only
+    rp.lastFootPos.x = rp.group.position.x;
+    rp.lastFootPos.z = rp.group.position.z;
+    if(moveSpeed > 0.6 && !rp.crouching){
+      rp.footstepTimer -= dt;
+      if(rp.footstepTimer<=0){
+        sfxFootstep(0.3, rp.group.position);
+        rp.footstepTimer = moveSpeed > 5 ? 0.28 : 0.4; // faster steps if they're sprinting
+      }
+    } else {
+      rp.footstepTimer = 0;
+    }
+
+    // Name tag: only visible within range, and never visible at all while
+    // they're crouched (regardless of distance) - a real stealth option,
+    // matching how crouching already goes silent and moves slower.
+    const ndx = rp.group.position.x-player.x, ndz = rp.group.position.z-player.z, ndy = rp.group.position.y-player.y;
+    const nameDistSq = ndx*ndx+ndy*ndy+ndz*ndz;
+    rp.nameSprite.visible = !rp.crouching && nameDistSq < NAME_TAG_RANGE*NAME_TAG_RANGE;
   }
 }
 function updateMpStatus(){
@@ -3915,7 +4564,7 @@ function handleNetMessage(msg){
     socket.send(JSON.stringify({type:'setName', name:myPlayerName}));
     document.getElementById('overlay').style.display='none';
     started = true;
-    canvas.requestPointerLock();
+    requestPointerLockSafe();
     updateMpStatus();
     updateMatchUI();
     flashMessage('Joined as '+myPlayerName);
@@ -3949,6 +4598,7 @@ function handleNetMessage(msg){
     matchPlayersList = msg.players || [];
     if(typeof msg.round==='number') matchRound = msg.round;
     if(typeof msg.roundsPerSeries==='number') matchRoundsPerSeries = msg.roundsPerSeries;
+    const prevRoundTimeLeft = matchRoundTimeLeft;
     matchRoundTimeLeft = typeof msg.roundTimeLeft==='number' ? msg.roundTimeLeft : null;
     matchStandings = msg.standings || [];
     const me = matchPlayersList.find(p=>p.id===myNetId);
@@ -3960,15 +4610,37 @@ function handleNetMessage(msg){
     } else if(myEliminated && !wasEliminated){
       teleportToSpectatorBox();
     }
+    if(matchPhase==='active' && typeof matchRoundTimeLeft==='number' && !oneMinWarningShownForRound
+       && matchRoundTimeLeft<=60 && (prevRoundTimeLeft===null || prevRoundTimeLeft>60)){
+      oneMinWarningShownForRound = true;
+      showTimeWarning('\u23f1 1 MINUTE REMAINING');
+      sfxTimeWarning();
+    }
+    updateBeaconVisibility();
     updateMatchUI();
   } else if(msg.type==='matchStart'){
     if(typeof msg.round==='number') matchRound = msg.round;
     if(typeof msg.roundsPerSeries==='number') matchRoundsPerSeries = msg.roundsPerSeries;
+    oneMinWarningShownForRound = false;
+    if(typeof msg.beaconX==='number' && typeof msg.beaconZ==='number') setBeaconPosition(msg.beaconX, msg.beaconZ);
     flashMessage('Round '+matchRound+' of '+matchRoundsPerSeries+' - good luck!');
     spawnPlayer();
     health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
     updateHealthUI();
     resetInventoryForNewRound();
+    // Safe to compute independently on every client, no extra network
+    // message needed for the actual placement logic - crate placement is
+    // fully deterministic from the shared world seed (same RNG sequence
+    // every time) and only ever fills spots that are actually empty, so it
+    // naturally just tops back up whatever got opened/looted last round
+    // rather than duplicating anything still standing. Still syncing the
+    // result via sendBlockBatch though, so the server's own diff-tracking
+    // knows about it too - otherwise a player joining mid-series later
+    // would never learn these crates exist, since this change never
+    // touched the server at all otherwise.
+    const crateChanges = scatterLootAndPowerCrates();
+    if(crateChanges.length) sendBlockBatch(crateChanges);
+    rebuildMeshes();
     sfxMatchStart();
   } else if(msg.type==='enemiesReset'){
     syncEnemiesFromServer(msg.enemies);
@@ -4042,10 +4714,11 @@ function makeShotId(){ return (myNetId||0)+'-'+(nextShotId++); }
 function sendShotEvent(desc, origin, dir, shotId){
   // Purely cosmetic broadcast - damage/hit-detection stays authoritative with whoever
   // fired it (via sendHit) and block destruction syncs separately (via sendBlockBatch).
-  // This just lets everyone else actually SEE the dart/pebble/grenade/rocket fly.
+  // This just lets everyone else actually SEE (and now hear) the shot.
   if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
   socket.send(JSON.stringify({
     type:'shot', shotId, kind:desc.kind, speed:desc.speed, color:desc.color, radius:desc.radius,
+    sound: desc.sound || null,
     ox:origin.x, oy:origin.y, oz:origin.z, dx:dir.x, dy:dir.y, dz:dir.z
   }));
 }
@@ -4096,7 +4769,7 @@ function closeChat(send){
   if(send && input.value.trim()) sendChat(input.value.trim());
   chatOpen = false;
   document.getElementById('chatInputWrap').style.display='none';
-  if(started && !paused && !craftOpen && !devOpen) canvas.requestPointerLock();
+  if(started && !paused && !craftOpen && !devOpen) requestPointerLockSafe();
 }
 document.getElementById('chatInput').addEventListener('keydown', (e)=>{
   e.stopPropagation();
@@ -4128,6 +4801,16 @@ document.getElementById('btnMuteTop').addEventListener('click', ()=>{
   resumeAudio();
   toggleAudio();
 });
+document.getElementById('musicVolumeSlider').addEventListener('input', (e)=>{
+  const pct = Number(e.target.value);
+  setMusicVolume(pct/100);
+  document.getElementById('musicVolumeVal').textContent = pct+'%';
+});
+document.getElementById('sfxVolumeSlider').addEventListener('input', (e)=>{
+  const pct = Number(e.target.value);
+  setSfxVolume(pct/100);
+  document.getElementById('sfxVolumeVal').textContent = pct+'%';
+});
 
 // ---------- Start screen ----------
 (function randomizeDefaultBiome(){
@@ -4141,7 +4824,7 @@ document.getElementById('btnStart').addEventListener('click', ()=>{
   document.getElementById('overlay').style.display='none';
   newWorld();
   started=true;
-  canvas.requestPointerLock();
+  requestPointerLockSafe();
 });
 document.getElementById('btnStartLoad').addEventListener('click', async ()=>{
   resumeAudio();
@@ -4152,7 +4835,7 @@ document.getElementById('btnStartLoad').addEventListener('click', async ()=>{
     newWorld();
     started=true;
   }
-  canvas.requestPointerLock();
+  requestPointerLockSafe();
 });
 
 // ---------- Main loop ----------
@@ -4219,12 +4902,24 @@ function animate(){
     if(canAct && onGround && move.lengthSq()>0){
       footstepTimer -= dt;
       if(footstepTimer<=0){
-        sfxFootstep();
+        if(!keys.crouch) sfxFootstep(keys.sprint ? 0.8 : 0.4);
         footstepTimer = keys.sprint ? 0.28 : 0.4;
       }
     } else {
       footstepTimer = 0;
     }
+
+    // Weapon/arm bob - driven by actual distance moved (not just elapsed
+    // time), so it naturally speeds up with sprinting or a speed boost
+    // instead of needing separate handling for each. Fades in/out smoothly
+    // so it never snaps abruptly when you start or stop moving.
+    const isWalking = canAct && onGround && move.lengthSq()>0;
+    const targetBobAmount = isWalking ? (keys.crouch ? 0.4 : 1) : 0;
+    handBobAmount += (targetBobAmount-handBobAmount)*Math.min(1,dt*8);
+    if(isWalking) handBobPhase += move.length()*2;
+    const bobX = Math.sin(handBobPhase) * 0.01 * handBobAmount;
+    const bobY = Math.abs(Math.sin(handBobPhase)) * 0.016 * handBobAmount;
+    handGroup.position.set(HAND_BASE_X+bobX, HAND_BASE_Y-bobY, HAND_BASE_Z);
 
     noDamageTimer += dt;
     if(health<MAX_HEALTH && noDamageTimer>6){
@@ -4247,6 +4942,7 @@ function animate(){
       camera.rotation.x += (Math.random()-0.5)*cameraShakeMag*frac;
       camera.rotation.y += (Math.random()-0.5)*cameraShakeMag*frac;
     }
+    updateAudioListener();
 
     // Enemies always keep updating too, for the same reason - otherwise
     // they visibly freeze while a menu's open and jump to their real
@@ -4276,6 +4972,8 @@ function animate(){
   updateParticles(dt);
   updateExplosionFlashes(dt);
   updateMuzzleFlashes(dt);
+  updateSniperTracers(dt);
+  if(beaconRing.visible) beaconRing.rotation.z += dt*0.3;
   updateDarts(dt);
   updateGrenades(dt);
   updateRockets(dt);
