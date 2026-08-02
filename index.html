@@ -214,6 +214,26 @@
     text-align:center; white-space:nowrap;
   }
   #timeWarning.show { opacity:1; transition:opacity 0.2s ease-in; }
+  #scoreboard {
+    position:fixed; top:8%; left:50%; transform:translate(-50%,0);
+    z-index:45; display:none; background:rgba(10,10,14,0.88); color:#eee;
+    border-radius:8px; padding:14px 18px; min-width:360px;
+    font-family:sans-serif; box-shadow:0 4px 24px rgba(0,0,0,0.5);
+  }
+  #scoreboard h3 { margin:0 0 10px; text-align:center; font-size:16px; color:#ccc; font-weight:normal; }
+  #scoreboard table { width:100%; border-collapse:collapse; font-size:14px; }
+  #scoreboard th { text-align:left; color:#888; font-weight:normal; padding:4px 8px; border-bottom:1px solid #333; }
+  #scoreboard td { padding:5px 8px; }
+  #scoreboard tr.me { background:rgba(127,217,255,0.12); }
+  #scoreboard .name { font-weight:bold; }
+  #seriesEndOverlay {
+    position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:60;
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    color:#fff; font-family:sans-serif; text-align:center;
+  }
+  #seriesEndOverlay .trophy { font-size:52px; margin-bottom:6px; }
+  #seriesEndOverlay .winnerLine { font-size:30px; font-weight:bold; color:#ffdd55; text-shadow:2px 2px 6px #000; margin-bottom:18px; }
+  #seriesEndOverlay .subLine { font-size:15px; color:#aaa; margin-top:14px; }
   #healthBar {
     position:fixed; bottom:82px; left:50%; transform:translateX(-50%);
     display:flex; gap:2px; z-index:10;
@@ -247,6 +267,13 @@
 <div id="killFeed"></div>
 <div id="respawnCountdown"><div class="big"></div><div class="label">Respawning...</div></div>
 <div id="timeWarning"></div>
+<div id="scoreboard"><h3>Scoreboard</h3><table><thead><tr><th>Player</th><th>K</th><th>D</th><th>Wins</th></tr></thead><tbody id="scoreboardBody"></tbody></table></div>
+<div id="seriesEndOverlay">
+  <div class="trophy">\uD83C\uDFC6</div>
+  <div class="winnerLine" id="seriesWinnerLine"></div>
+  <table><thead><tr><th style="text-align:left;color:#888;font-weight:normal;padding:4px 10px;">Player</th><th style="color:#888;font-weight:normal;padding:4px 10px;">K</th><th style="color:#888;font-weight:normal;padding:4px 10px;">D</th><th style="color:#888;font-weight:normal;padding:4px 10px;">Wins</th></tr></thead><tbody id="seriesEndBody" style="font-size:15px;"></tbody></table>
+  <div class="subLine" id="seriesEndSubLine"></div>
+</div>
 <div id="hint">WASD move · Space jump · C crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · ~ dev tools · T chat · Esc close/pause</div>
 <div id="message"></div>
 <div id="topButtons">
@@ -3108,6 +3135,7 @@ function takeDamage(amount){
   if(health<=0) respawnFromDeath();
 }
 let lastAttackerName = null;
+let lastAttackerId = null;
 let lastAttackerTime = 0;
 const RESPAWN_COUNTDOWN_SECONDS = 3;
 let respawnCountdownActive = false;
@@ -3117,9 +3145,11 @@ function respawnFromDeath(){
   // credit whoever hit us most recently, but only if it was recent enough
   // that it's plausibly what actually killed us (not, say, someone who
   // grazed us 20 seconds ago before we fell off a cliff)
-  const killerName = (lastAttackerName && (performance.now()-lastAttackerTime) < 4000) ? lastAttackerName : null;
+  const recentHit = lastAttackerName && (performance.now()-lastAttackerTime) < 4000;
+  const killerName = recentHit ? lastAttackerName : null;
+  const killerId = recentHit ? lastAttackerId : null;
   if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
-    socket.send(JSON.stringify({type:'died', killerName}));
+    socket.send(JSON.stringify({type:'died', killerName, killerId}));
   }
   flashMessage(killerName ? ('Eliminated by '+killerName+' - respawning...') : 'You died - respawning...');
   startRespawnCountdown();
@@ -3567,6 +3597,13 @@ document.addEventListener('keydown', (e)=>{
     case 'Space': keys.jump=true; e.preventDefault(); break;
     case 'ShiftLeft': keys.sprint=true; break;
     case 'KeyC': keys.crouch=true; break;
+    case 'Tab':
+      e.preventDefault(); // don't let the browser shift focus to another element
+      if(multiplayer){
+        updateLiveScoreboard();
+        document.getElementById('scoreboard').style.display = 'block';
+      }
+      break;
     case 'KeyE': toggleCraft(); break;
     case 'Backquote': toggleDev(); break;
     case 'KeyT': openChat(); break;
@@ -3585,6 +3622,7 @@ document.addEventListener('keyup', (e)=>{
     case 'Space': keys.jump=false; break;
     case 'ShiftLeft': keys.sprint=false; break;
     case 'KeyC': keys.crouch=false; break;
+    case 'Tab': document.getElementById('scoreboard').style.display = 'none'; break;
   }
 });
 
@@ -4471,6 +4509,40 @@ function formatClock(seconds){
   const r = s%60;
   return m+':'+String(r).padStart(2,'0');
 }
+// Shared row-builder for both the live Tab scoreboard and the end-of-series
+// overlay - same data (matchStandings, already kept up to date from every
+// routine matchState broadcast), just rendered into different tables.
+function buildScoreboardRows(standings){
+  const rows = standings.slice().sort((a,b)=> (b.kills-a.kills) || (b.wins-a.wins) || (a.deaths-b.deaths));
+  return rows.map(s=>{
+    const tr = document.createElement('tr');
+    if(s.id===myNetId) tr.className='me';
+    const nameTd = document.createElement('td'); nameTd.className='name'; nameTd.textContent = s.name;
+    const killsTd = document.createElement('td'); killsTd.textContent = s.kills||0;
+    const deathsTd = document.createElement('td'); deathsTd.textContent = s.deaths||0;
+    const winsTd = document.createElement('td'); winsTd.textContent = s.wins||0;
+    tr.appendChild(nameTd); tr.appendChild(killsTd); tr.appendChild(deathsTd); tr.appendChild(winsTd);
+    return tr;
+  });
+}
+function updateLiveScoreboard(){
+  const body = document.getElementById('scoreboardBody');
+  body.innerHTML = '';
+  for(const tr of buildScoreboardRows(matchStandings)) body.appendChild(tr);
+}
+function showSeriesEndOverlay(winnerName, standings){
+  const el = document.getElementById('seriesEndOverlay');
+  document.getElementById('seriesWinnerLine').textContent = winnerName ? (winnerName+' wins the series!') : 'Series ended';
+  const body = document.getElementById('seriesEndBody');
+  body.innerHTML = '';
+  for(const tr of buildScoreboardRows(standings)) body.appendChild(tr);
+  document.getElementById('seriesEndSubLine').textContent = 'A new map is coming up shortly...';
+  el.style.display = 'flex';
+}
+function hideSeriesEndOverlay(){
+  document.getElementById('seriesEndOverlay').style.display = 'none';
+}
+
 function updateMatchUI(){
   const banner = document.getElementById('matchBanner');
   if(!multiplayer){ banner.style.display='none'; return; }
@@ -4617,6 +4689,7 @@ function handleNetMessage(msg){
       sfxTimeWarning();
     }
     updateBeaconVisibility();
+    if(document.getElementById('scoreboard').style.display==='block') updateLiveScoreboard();
     updateMatchUI();
   } else if(msg.type==='matchStart'){
     if(typeof msg.round==='number') matchRound = msg.round;
@@ -4647,12 +4720,12 @@ function handleNetMessage(msg){
   } else if(msg.type==='matchEnd'){
     sfxMatchEnd();
     if(msg.seriesOver){
-      const standingsText = (msg.standings||[]).map(s=>s.name+': '+s.wins).join(', ');
-      flashMessage(msg.winnerName ? ('\uD83C\uDFC6 '+msg.winnerName+' wins the series! ('+standingsText+')') : 'Series ended - no winner');
+      showSeriesEndOverlay(msg.winnerName, msg.standings||[]);
     } else {
       flashMessage(msg.winnerName ? ('Round '+msg.round+' - '+msg.winnerName+' wins!') : 'Round '+msg.round+' ended - no winner');
     }
   } else if(msg.type==='mapReset'){
+    hideSeriesEndOverlay();
     seed = msg.seed;
     applyBiomeProfile(msg.biome || biomeMode);
     generateWorld();
@@ -4670,6 +4743,7 @@ function handleNetMessage(msg){
     addKillFeedEntry(msg.killerName, msg.victimName);
   } else if(msg.type==='hitByOther'){
     lastAttackerName = msg.fromName;
+    lastAttackerId = msg.from;
     lastAttackerTime = performance.now();
     takeDamage(msg.damage);
     flashMessage('Hit by '+msg.fromName+'!');
