@@ -167,6 +167,37 @@
     position:fixed; inset:0; background:#a00000; opacity:0;
     pointer-events:none; z-index:30;
   }
+  #hitMarker {
+    position:fixed; top:50%; left:50%; width:28px; height:28px;
+    transform:translate(-50%,-50%); pointer-events:none; z-index:31;
+    opacity:0; transition:opacity 0.15s ease-out;
+  }
+  #hitMarker.show { opacity:1; transition:none; }
+  #hitMarker::before, #hitMarker::after {
+    content:''; position:absolute; top:50%; left:50%; width:22px; height:3px;
+    background:#fff; box-shadow:0 0 2px #000;
+  }
+  #hitMarker::before { transform:translate(-50%,-50%) rotate(45deg); }
+  #hitMarker::after  { transform:translate(-50%,-50%) rotate(-45deg); }
+  #hitMarker.headshot::before, #hitMarker.headshot::after { background:#ff3333; }
+  #killFeed {
+    position:fixed; top:16px; right:16px; z-index:20;
+    display:flex; flex-direction:column; align-items:flex-end; gap:4px;
+    font-size:14px; pointer-events:none;
+  }
+  #killFeed .entry {
+    background:rgba(0,0,0,0.55); color:#eee; padding:5px 10px; border-radius:4px;
+    text-shadow:1px 1px 1px #000; white-space:nowrap;
+  }
+  #killFeed .entry .killer { color:#7fd9ff; font-weight:bold; }
+  #killFeed .entry .victim { color:#ff8080; font-weight:bold; }
+  #respawnCountdown {
+    position:fixed; top:40%; left:50%; transform:translate(-50%,-50%);
+    z-index:32; text-align:center; color:#fff; display:none;
+    text-shadow:2px 2px 3px #000;
+  }
+  #respawnCountdown .big { font-size:48px; font-weight:bold; }
+  #respawnCountdown .label { font-size:18px; margin-top:4px; }
   #healthBar {
     position:fixed; bottom:82px; left:50%; transform:translateX(-50%);
     display:flex; gap:2px; z-index:10;
@@ -196,6 +227,9 @@
 <div id="matchBanner"></div>
 <div id="hotbar"></div>
 <div id="damageFlash"></div>
+<div id="hitMarker"></div>
+<div id="killFeed"></div>
+<div id="respawnCountdown"><div class="big"></div><div class="label">Respawning...</div></div>
 <div id="hint">WASD move · Space jump · Ctrl crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · ~ dev tools · T chat · Esc close/pause</div>
 <div id="message"></div>
 <div id="topButtons">
@@ -249,11 +283,13 @@
   <div class="btn" id="btnStartLoad">Load Saved World</div>
   <div id="mpSection">
     <p style="font-size:13px; color:#bbb; margin:2px 0 6px;">Multiplayer (optional) - join a running MoplePvP server</p>
+    <div class="btn" id="btnQuickConnect" style="margin-bottom:6px;">Join MoplePvP Server (Railway)</div>
     <div>
       <input id="mpUrl" type="text" placeholder="ws://localhost:8080">
       <input id="mpName" type="text" placeholder="Your name" maxlength="24">
     </div>
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
+    <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
 </div>
 
@@ -1923,6 +1959,7 @@ function updateDarts(dt){
       if(zone){
         const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
         hitEnemy(en, dmg);
+        showHitMarker(zone==='head');
         if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
         spawnBreakParticles(Math.floor(en.x),Math.floor(en.y+0.5),Math.floor(en.z), 0xff5555);
         hitSomething = true;
@@ -1938,6 +1975,7 @@ function updateDarts(dt){
         if(zone){
           const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
           sendHit(id, dmg);
+          showHitMarker(zone==='head');
           if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
           triggerHitEffect(rp);
           spawnBreakParticles(Math.floor(pos.x),Math.floor(pos.y+0.5),Math.floor(pos.z), 0xff5555);
@@ -2022,6 +2060,7 @@ function meleeAttack(weapon){
     const zone = resolveHitZone(aim.x,aim.y,aim.z, closestTarget.x,closestTarget.z, closestTarget.y+ENEMY_HEAD_Y,ENEMY_HEAD_R+0.08, closestTarget.y+ENEMY_BODY_Y,ENEMY_BODY_R+0.15);
     const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
     hitEnemy(closestTarget, dmg);
+    showHitMarker(zone==='head');
     if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
     spawnBreakParticles(Math.floor(closestTarget.x),Math.floor(closestTarget.y+0.5),Math.floor(closestTarget.z), 0xff5555);
   } else if(closestKind==='player'){
@@ -2029,6 +2068,7 @@ function meleeAttack(weapon){
     const zone = resolveHitZone(aim.x,aim.y,aim.z, closestTarget.pos.x,closestTarget.pos.z, closestTarget.pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R+0.08, closestTarget.pos.y+PLAYER_BODY_Y,PLAYER_BODY_R+0.15);
     const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
     sendHit(closestTarget.id, dmg);
+    showHitMarker(zone==='head');
     if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
     triggerHitEffect(closestTarget.rp);
     spawnBreakParticles(Math.floor(closestTarget.pos.x),Math.floor(closestTarget.pos.y+0.5),Math.floor(closestTarget.pos.z), 0xff5555);
@@ -2097,6 +2137,7 @@ function updateGrenades(dt){
   }
 }
 function triggerExplosion(pos, damage, radius){
+  let hitAnyone = false;
   for(const en of enemies){
     if(!en.alive) continue;
     const dx=en.x-pos.x, dy=(en.y+0.5)-pos.y, dz=en.z-pos.z;
@@ -2104,6 +2145,7 @@ function triggerExplosion(pos, damage, radius){
     if(dist<=radius){
       const falloff = 1 - dist/radius;
       hitEnemy(en, Math.max(1, Math.ceil(damage*falloff)));
+      hitAnyone = true;
     }
   }
   const pdx=player.x-pos.x, pdy=(player.y+0.9)-pos.y, pdz=player.z-pos.z;
@@ -2121,9 +2163,12 @@ function triggerExplosion(pos, damage, radius){
         const falloff = 1 - rdist/radius;
         sendHit(id, Math.max(1, Math.ceil(damage*falloff)));
         triggerHitEffect(rp);
+        hitAnyone = true;
       }
     }
   }
+
+  if(hitAnyone) showHitMarker(false);
 
   // blow out terrain and player-placed blocks in the blast radius (leave water be)
   const cx=Math.floor(pos.x), cy=Math.floor(pos.y), cz=Math.floor(pos.z);
@@ -2478,6 +2523,7 @@ function flashDamageOverlay(){
 }
 function takeDamage(amount){
   if(amount<=0 || health<=0) return;
+  if(respawnCountdownActive) return; // invulnerable while waiting to respawn
   if(multiplayer && (myEliminated || inSpectatorBox)) return; // already out of the match - no more damage until reset
   health = Math.max(0, health-amount);
   noDamageTimer = 0;
@@ -2486,14 +2532,47 @@ function takeDamage(amount){
   sfxHit();
   if(health<=0) respawnFromDeath();
 }
+let lastAttackerName = null;
+let lastAttackerTime = 0;
+const RESPAWN_COUNTDOWN_SECONDS = 3;
+let respawnCountdownActive = false;
+let respawnCountdownRemaining = 0;
+let respawnCountdownTimerId = null;
 function respawnFromDeath(){
-  flashMessage('You died and respawned');
+  // credit whoever hit us most recently, but only if it was recent enough
+  // that it's plausibly what actually killed us (not, say, someone who
+  // grazed us 20 seconds ago before we fell off a cliff)
+  const killerName = (lastAttackerName && (performance.now()-lastAttackerTime) < 4000) ? lastAttackerName : null;
   if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
-    socket.send(JSON.stringify({type:'died'}));
+    socket.send(JSON.stringify({type:'died', killerName}));
   }
-  spawnPlayer();
-  health = MAX_HEALTH;
-  updateHealthUI();
+  flashMessage(killerName ? ('Eliminated by '+killerName+' - respawning...') : 'You died - respawning...');
+  startRespawnCountdown();
+}
+function startRespawnCountdown(){
+  respawnCountdownActive = true;
+  respawnCountdownRemaining = RESPAWN_COUNTDOWN_SECONDS;
+  updateRespawnCountdownUI();
+  if(respawnCountdownTimerId) clearInterval(respawnCountdownTimerId);
+  respawnCountdownTimerId = setInterval(()=>{
+    respawnCountdownRemaining--;
+    if(respawnCountdownRemaining<=0){
+      clearInterval(respawnCountdownTimerId);
+      respawnCountdownTimerId = null;
+      respawnCountdownActive = false;
+      document.getElementById('respawnCountdown').style.display = 'none';
+      spawnPlayer();
+      health = MAX_HEALTH;
+      updateHealthUI();
+    } else {
+      updateRespawnCountdownUI();
+    }
+  }, 1000);
+}
+function updateRespawnCountdownUI(){
+  const el = document.getElementById('respawnCountdown');
+  el.style.display = 'block';
+  el.querySelector('.big').textContent = respawnCountdownRemaining;
 }
 
 // Spread across the map as fractional offsets rather than one fixed point -
@@ -2921,7 +3000,7 @@ let mouseDown0 = false;
 let attackHeld = false;
 canvas.addEventListener('mousedown', (e)=>{
   if(!pointerLocked) return;
-  if(multiplayer && (myEliminated || inSpectatorBox)) return; // spectating - no combat or building until the next match
+  if(respawnCountdownActive || (multiplayer && (myEliminated || inSpectatorBox))) return; // spectating - no combat or building until the next match
   if(e.button===0){
     const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
     const weapon = WEAPON_CONFIG[equipped];
@@ -3207,8 +3286,23 @@ document.getElementById('btnCloseCraft').addEventListener('click', toggleCraft);
 document.getElementById('btnCraftTop').addEventListener('click', toggleCraft);
 
 let devOpen = false;
+// NOT real security - this is client-side JS, so anyone who opens the
+// browser's dev tools or views page source can read this password directly.
+// It's here to stop casual/curious players from poking at Dev Tools, not to
+// stop someone who's actually trying to bypass it. Change the password to
+// whatever you like below.
+const DEV_TOOLS_PASSWORD = 'mople123';
+let devToolsUnlocked = false;
 function toggleDev(){
   sfxClick();
+  if(!devOpen && !devToolsUnlocked){
+    const entered = prompt('Dev Tools password:');
+    if(entered !== DEV_TOOLS_PASSWORD){
+      flashMessage(entered===null ? 'Dev Tools cancelled' : 'Incorrect password');
+      return;
+    }
+    devToolsUnlocked = true;
+  }
   if(craftOpen){ craftOpen=false; document.getElementById('craftPanel').style.display='none'; }
   devOpen = !devOpen;
   document.getElementById('devPanel').style.display = devOpen ? 'block' : 'none';
@@ -3474,6 +3568,45 @@ function flashMessage(text){
   msgTimeout = setTimeout(()=> el.classList.remove('show'), 2200);
 }
 
+// ---------- Hit marker (screen-center flash when your shot connects) ----------
+let hitMarkerTimeout = null;
+function showHitMarker(isHeadshot){
+  const el = document.getElementById('hitMarker');
+  el.classList.toggle('headshot', !!isHeadshot);
+  el.classList.remove('show');
+  void el.offsetWidth; // restart the fade even if triggered again mid-fade
+  el.classList.add('show');
+  if(hitMarkerTimeout) clearTimeout(hitMarkerTimeout);
+  hitMarkerTimeout = setTimeout(()=> el.classList.remove('show'), 90);
+}
+
+// ---------- Kill feed (top-right log of eliminations) ----------
+function addKillFeedEntry(killerName, victimName){
+  const feed = document.getElementById('killFeed');
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  if(killerName){
+    const killerSpan = document.createElement('span');
+    killerSpan.className = 'killer';
+    killerSpan.textContent = killerName;
+    entry.appendChild(killerSpan);
+    entry.appendChild(document.createTextNode(' eliminated '));
+    const victimSpan = document.createElement('span');
+    victimSpan.className = 'victim';
+    victimSpan.textContent = victimName;
+    entry.appendChild(victimSpan);
+  } else {
+    const victimSpan = document.createElement('span');
+    victimSpan.className = 'victim';
+    victimSpan.textContent = victimName;
+    entry.appendChild(victimSpan);
+    entry.appendChild(document.createTextNode(' was eliminated'));
+  }
+  feed.appendChild(entry);
+  while(feed.children.length > 5) feed.removeChild(feed.firstChild);
+  setTimeout(()=>{ if(entry.parentNode) entry.parentNode.removeChild(entry); }, 6000);
+}
+
 // ---------- Save / Load (window.storage persistent API) ----------
 function encodeRLE(arr){
   const out=[];
@@ -3708,22 +3841,32 @@ function updateMatchUI(){
   }
 }
 
+function setMpConnectStatus(text, show){
+  const el = document.getElementById('mpConnectStatus');
+  el.textContent = text;
+  el.style.display = show ? 'block' : 'none';
+}
 function connectMultiplayer(url, name){
   myPlayerName = name;
+  setMpConnectStatus('Connecting to '+url+'...', true);
   try{
     socket = new WebSocket(url);
   }catch(e){
+    setMpConnectStatus('Could not connect: '+e.message, true);
     flashMessage('Could not connect: '+e.message);
     return;
   }
   socket.onopen = ()=>{
+    setMpConnectStatus('Connected - syncing world...', true);
     flashMessage('Connected - syncing world...');
   };
   socket.onerror = ()=>{
+    setMpConnectStatus('Connection error - check the address and try again', true);
     flashMessage('Multiplayer connection error');
   };
   socket.onclose = ()=>{
     if(multiplayer) flashMessage('Disconnected from server');
+    else setMpConnectStatus('Connection closed before it finished - check the address and try again', true);
     multiplayer = false;
     myEliminated = false;
     for(const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id);
@@ -3827,6 +3970,8 @@ function handleNetMessage(msg){
     updateHealthUI();
     resetInventoryForNewRound();
     sfxMatchStart();
+  } else if(msg.type==='enemiesReset'){
+    syncEnemiesFromServer(msg.enemies);
   } else if(msg.type==='matchEnd'){
     sfxMatchEnd();
     if(msg.seriesOver){
@@ -3849,7 +3994,11 @@ function handleNetMessage(msg){
     rebuildMeshes();
     updateHotbarUI(); updateHealthUI();
     flashMessage('New map! Fresh series starting soon.');
+  } else if(msg.type==='playerEliminated'){
+    addKillFeedEntry(msg.killerName, msg.victimName);
   } else if(msg.type==='hitByOther'){
+    lastAttackerName = msg.fromName;
+    lastAttackerTime = performance.now();
     takeDamage(msg.damage);
     flashMessage('Hit by '+msg.fromName+'!');
   } else if(msg.type==='shot'){
@@ -3962,6 +4111,13 @@ document.getElementById('btnJoinMp').addEventListener('click', ()=>{
   if(!url){ flashMessage('Enter a server address first'); return; }
   connectMultiplayer(url, name);
 });
+document.getElementById('btnQuickConnect').addEventListener('click', ()=>{
+  resumeAudio();
+  const railwayUrl = 'wss://moplepvp-production.up.railway.app';
+  document.getElementById('mpUrl').value = railwayUrl;
+  const name = document.getElementById('mpName').value.trim() || ('Player'+Math.floor(Math.random()*1000));
+  connectMultiplayer(railwayUrl, name);
+});
 document.getElementById('btnDisconnectMp').addEventListener('click', ()=>{
   if(socket) socket.close();
   hidePause();
@@ -4011,7 +4167,7 @@ function animate(){
   lastTime = now;
 
   if(started){
-    const canAct = !paused && !craftOpen;
+    const canAct = !paused && !craftOpen && !respawnCountdownActive;
     if(canAct && speedBoostTimer>0){
       speedBoostTimer -= dt;
       if(speedBoostTimer<=0){ speedBoostTimer=0; }
