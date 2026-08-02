@@ -1,0 +1,4109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MoplePvP</title>
+<style>
+  html,body { margin:0; padding:0; overflow:hidden; background:#87ceeb; font-family: 'Segoe UI', Arial, sans-serif; }
+  #gameCanvas { display:block; }
+
+  #crosshair {
+    position:fixed; top:50%; left:50%; width:20px; height:20px;
+    transform:translate(-50%,-50%); pointer-events:none; z-index:10;
+  }
+  #crosshair::before, #crosshair::after {
+    content:''; position:absolute; background:rgba(255,255,255,0.85);
+    box-shadow:0 0 2px rgba(0,0,0,0.8);
+  }
+  #crosshair::before { top:9px; left:2px; width:16px; height:2px; }
+  #crosshair::after { left:9px; top:2px; height:16px; width:2px; }
+
+  #hotbar {
+    position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+    display:flex; gap:6px; z-index:10; background:rgba(0,0,0,0.25);
+    padding:6px; border-radius:8px;
+  }
+  .slot {
+    width:52px; height:52px; border:2px solid rgba(255,255,255,0.4);
+    border-radius:6px; position:relative; background:rgba(20,20,20,0.5);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .slot.selected { border-color:#fff; box-shadow:0 0 8px rgba(255,255,255,0.9); }
+  .slot .swatch { width:32px; height:32px; border-radius:3px; box-shadow: inset 0 0 4px rgba(0,0,0,0.5); }
+  .slot .count {
+    position:absolute; bottom:2px; right:4px; color:#fff; font-size:12px;
+    font-weight:bold; text-shadow:1px 1px 1px #000;
+  }
+  .slot .key {
+    position:absolute; top:2px; left:4px; color:#fff; font-size:10px;
+    text-shadow:1px 1px 1px #000; opacity:0.8;
+  }
+
+  #hint {
+    position:fixed; top:16px; left:50%; transform:translateX(-50%);
+    color:#fff; text-shadow:1px 1px 2px #000; font-size:13px; z-index:10;
+    text-align:center; opacity:0.9;
+  }
+
+  #message {
+    position:fixed; top:60px; left:50%; transform:translateX(-50%);
+    color:#fff; background:rgba(0,0,0,0.55); padding:8px 16px; border-radius:6px;
+    font-size:14px; z-index:20; opacity:0; transition:opacity 0.3s;
+    pointer-events:none;
+  }
+  #message.show { opacity:1; }
+
+  #topButtons {
+    position:fixed; top:12px; right:12px; z-index:15; display:flex; gap:8px;
+  }
+  .btn {
+    background:rgba(30,30,30,0.7); color:#fff; border:1px solid rgba(255,255,255,0.3);
+    padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px;
+  }
+  .btn:hover { background:rgba(60,60,60,0.85); }
+
+  #overlay {
+    position:fixed; inset:0; background:rgba(10,15,10,0.88); z-index:100;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#fff; text-align:center;
+  }
+  #overlay h1 { font-size:42px; margin-bottom:4px; letter-spacing:2px; color:#7ac36a; text-shadow:2px 2px 0 #2e4a24;}
+  #overlay p { max-width:480px; line-height:1.5; color:#ddd; margin:6px 0 20px; }
+  #overlay .btn { font-size:16px; padding:12px 28px; margin:6px; }
+  #mpSection {
+    margin-top:16px; border-top:1px solid rgba(255,255,255,0.15); padding-top:14px;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  #mpSection input {
+    padding:8px; border-radius:5px; border:1px solid #555; background:#111;
+    color:#fff; font-size:13px; margin:4px;
+  }
+  #mpStatus {
+    color:#9fe0a8; font-size:12px; margin-left:8px; align-self:center;
+  }
+
+  #chatLog {
+    position:fixed; left:16px; bottom:110px; width:320px; z-index:10;
+    display:flex; flex-direction:column; gap:2px; pointer-events:none;
+  }
+  .chatLine {
+    color:#fff; font-size:13px; text-shadow:1px 1px 2px #000;
+    background:rgba(0,0,0,0.35); padding:3px 8px; border-radius:4px;
+    transition:opacity 1s;
+  }
+  #chatInputWrap {
+    position:fixed; left:16px; bottom:110px; width:320px; z-index:60; display:none;
+  }
+  #chatInputWrap input {
+    width:100%; box-sizing:border-box; padding:8px; border-radius:5px;
+    border:1px solid #666; background:rgba(0,0,0,0.75); color:#fff; font-size:13px;
+  }
+
+  #craftPanel {
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:rgba(20,20,25,0.95); border:2px solid rgba(255,255,255,0.25);
+    border-radius:10px; padding:20px; color:#fff; z-index:50; width:400px;
+    display:none;
+  }
+  #craftPanel h2 { margin-top:0; font-size:18px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:8px;}
+  .recipe { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .recipe .desc { font-size:13px; color:#ccc; }
+
+  #invGrid { display:grid; grid-template-columns: repeat(9, 1fr); gap:6px; margin:14px 0; }
+  .islot {
+    width:38px; height:38px; border:2px solid rgba(255,255,255,0.35);
+    border-radius:5px; position:relative; background:rgba(255,255,255,0.06);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .islot:hover { border-color:rgba(255,255,255,0.7); }
+  .islot .swatch { width:24px; height:24px; border-radius:3px; box-shadow: inset 0 0 3px rgba(0,0,0,0.5); }
+  .islot .count {
+    position:absolute; bottom:1px; right:3px; color:#fff; font-size:10px;
+    font-weight:bold; text-shadow:1px 1px 1px #000;
+  }
+  .toolIcon { font-size:15px; text-shadow:1px 1px 1px #000; }
+  .slot .toolIcon { font-size:20px; }
+
+  #heldItemIcon {
+    position:fixed; width:30px; height:30px; border-radius:4px;
+    pointer-events:none; z-index:200; display:none;
+    box-shadow:0 0 6px rgba(0,0,0,0.6); transform:translate(-50%,-50%);
+  }
+  #heldItemIcon .count {
+    position:absolute; bottom:-2px; right:-2px; color:#fff; font-size:11px;
+    font-weight:bold; text-shadow:1px 1px 1px #000;
+  }
+
+  #miningBarWrap {
+    position:fixed; top:calc(50% + 22px); left:50%; transform:translateX(-50%);
+    width:90px; height:7px; background:rgba(0,0,0,0.4); border-radius:4px;
+    z-index:10; overflow:hidden; opacity:0; transition:opacity 0.15s;
+  }
+  #miningBarWrap.show { opacity:1; }
+  #miningBar { height:100%; width:0%; background:#e8d95c; }
+
+  #pauseMenu {
+    position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:90;
+    display:none; align-items:center; justify-content:center; flex-direction:column;
+    color:#fff;
+  }
+  #pauseMenu h2 { margin-bottom:16px; }
+  #pauseMenu .btn { margin:6px; font-size:15px; padding:10px 24px; }
+
+  #devPanel {
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:rgba(20,20,25,0.95); border:2px solid rgba(255,255,255,0.25);
+    border-radius:10px; padding:20px; color:#fff; z-index:50; width:400px;
+    max-height:70vh; overflow-y:auto; display:none;
+  }
+  #devPanel h2 { margin-top:0; font-size:18px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:8px;}
+  .devRow { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .devRow .desc { font-size:13px; color:#ddd; display:flex; align-items:center; gap:8px; }
+  .devRow .sw { width:18px; height:18px; border-radius:3px; display:inline-block; }
+  .devRow .btns { display:flex; gap:6px; }
+  .devRow .btn { padding:5px 10px; font-size:12px; }
+
+  #damageFlash {
+    position:fixed; inset:0; background:#a00000; opacity:0;
+    pointer-events:none; z-index:30;
+  }
+  #healthBar {
+    position:fixed; bottom:82px; left:50%; transform:translateX(-50%);
+    display:flex; gap:2px; z-index:10;
+  }
+  #healthBar .heart {
+    font-size:20px; color:#e0313a; text-shadow:1px 1px 1px #000, -1px -1px 1px #000;
+  }
+  #buffIndicator {
+    position:fixed; bottom:106px; left:50%; transform:translateX(-50%);
+    color:#5fd0ff; font-size:13px; font-weight:bold; text-shadow:1px 1px 2px #000;
+    z-index:10; display:none;
+  }
+  #matchBanner {
+    position:fixed; top:52px; left:50%; transform:translateX(-50%);
+    color:#fff; background:rgba(0,0,0,0.5); padding:6px 16px; border-radius:6px;
+    font-size:14px; z-index:10; display:none; text-align:center; white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+<div id="crosshair"></div>
+<div id="miningBarWrap"><div id="miningBar"></div></div>
+<div id="healthBar"></div>
+<div id="buffIndicator"></div>
+<div id="matchBanner"></div>
+<div id="hotbar"></div>
+<div id="damageFlash"></div>
+<div id="hint">WASD move · Space jump · Ctrl crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · ~ dev tools · T chat · Esc close/pause</div>
+<div id="message"></div>
+<div id="topButtons">
+  <div class="btn" id="btnSaveTop">Save</div>
+  <div class="btn" id="btnCraftTop">Crafting (E)</div>
+  <div class="btn" id="btnDevTop">Dev Tools (~)</div>
+  <div class="btn" id="btnMuteTop" title="Mute/unmute sound">🔊</div>
+  <span id="mpStatus"></span>
+</div>
+
+<div id="devPanel">
+  <h2>Dev Tools</h2>
+  <p style="font-size:12px; color:#aaa; margin-top:-8px;">Spawn items straight into your inventory.</p>
+  <div id="devList"></div>
+  <div class="btn" id="btnCloseDev" style="text-align:center; margin-top:10px;">Close (~)</div>
+</div>
+
+<div id="craftPanel">
+  <h2>Inventory &amp; Crafting</h2>
+  <p style="font-size:12px; color:#aaa; margin-top:-8px;">Click a slot to pick an item up, click another slot to drop it there.</p>
+  <div id="invGrid"></div>
+  <div id="recipes"></div>
+  <div class="btn" id="btnCloseCraft" style="text-align:center; margin-top:10px;">Close (E)</div>
+</div>
+<div id="heldItemIcon"><div class="count"></div></div>
+
+<div id="pauseMenu">
+  <h2>Paused</h2>
+  <div class="btn" id="btnResume">Resume</div>
+  <div class="btn" id="btnSave">Save World</div>
+  <div class="btn" id="btnLoad">Load World</div>
+  <div class="btn" id="btnNew">New World</div>
+  <div class="btn" id="btnDisconnectMp" style="display:none;">Disconnect from Server</div>
+</div>
+
+<div id="overlay">
+  <h1>MOPLEPVP</h1>
+  <p>A tiny voxel world with procedural terrain, block building, an inventory, simple crafting, and save/load. Click below to drop in, then click the screen to lock your mouse and look around.</p>
+  <label style="font-size:13px; color:#ddd; display:block; margin:6px 0;">
+    Map type:
+    <select id="biomeSelect" style="padding:6px; border-radius:5px; border:1px solid #555; background:#111; color:#fff; margin-left:6px;">
+      <option value="highlands">Highlands - rolling hills &amp; forest</option>
+      <option value="plains">Plains - gentle, spread-out hills</option>
+      <option value="oasis">Oasis - desert with water pools</option>
+      <option value="ruins">Ruins - broken walls &amp; rubble</option>
+      <option value="industrial">Industrial - dense rooms &amp; corridors</option>
+      <option value="snow">Snow - frosty hills &amp; forest</option>
+    </select>
+  </label>
+  <div class="btn" id="btnStart">Start New World</div>
+  <div class="btn" id="btnStartLoad">Load Saved World</div>
+  <div id="mpSection">
+    <p style="font-size:13px; color:#bbb; margin:2px 0 6px;">Multiplayer (optional) - join a running MoplePvP server</p>
+    <div>
+      <input id="mpUrl" type="text" placeholder="ws://localhost:8080">
+      <input id="mpName" type="text" placeholder="Your name" maxlength="24">
+    </div>
+    <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
+  </div>
+</div>
+
+<div id="chatLog"></div>
+<div id="chatInputWrap"><input id="chatInput" type="text" maxlength="200" placeholder="Press Enter to send, Esc to cancel"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   MOPLEPVP - a compact voxel building/PvP game
+   ========================================================= */
+
+// ---------- Block type constants ----------
+const AIR=0, GRASS=1, DIRT=2, STONE=3, SAND=4, WOOD=5, LEAVES=6, WATER=7, PLANKS=8;
+const STONE_PICKAXE=9; // tool item - not placeable, held in hand, speeds up mining
+const REEDS=10;        // thin plant that grows on sandy banks next to water, gatherable
+const BLOW_PIPE=11;    // weapon - light fast dart, low damage
+const STONE_SLING=12;  // weapon - heavier pebble, medium damage, slower fire rate
+const WAR_CLUB=13;     // weapon - melee swing, high damage, short range
+const LOOT_CRATE=14;   // world object only - found scattered around the map, not craftable/placeable
+const GRENADE=15;      // weapon - thrown, arcs with gravity, explodes for area damage
+const POWERUP_CRATE=16; // world object only - grants an instant, auto-equipped buff (no inventory slot)
+const ROCKET_LAUNCHER=17; // weapon - fast straight-line rocket, big splash damage
+const RUBBLE=18; // what stone becomes when destroyed by an explosion instead of clean Stone - weaker, mines faster
+const DOUBLE_BARREL=19; // weapon - two quick pellet-spread blasts, then a longer cooldown
+const PUMP_SHOTGUN=20;  // weapon - single pellet-spread blast, steadier pace, no burst
+const RIFLE=21;         // weapon - single precise high-damage shot, same pace as the pump
+const SNOW=22;          // terrain surface block for the snow biome
+const METAL=23;         // heavy wall/floor material for the industrial biome
+const PISTOL=24;        // weapon - light sidearm, quick, modest damage, no penetration/crate range
+const CARBINE=25;       // weapon - faster-firing rifle variant, less damage per shot, no penetration
+const GLASS=26;         // transparent placeable block - also builds the spectator box's walls/roof
+const CLEAR_GLASS=27;   // near-invisible placeable block - the spectator box's floor, so it doesn't obscure the view down
+const SOLID_TYPES = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, PLANKS, REEDS, RUBBLE, SNOW, METAL, GLASS, CLEAR_GLASS];
+const WORLD_ONLY_TYPES = [LOOT_CRATE, POWERUP_CRATE]; // rendered in the world but never held/placed by the player
+const ALL_RENDER_TYPES = [...SOLID_TYPES, ...WORLD_ONLY_TYPES];
+const BLOCK_COLORS = {
+  [GRASS]:0x5a9b3c, [DIRT]:0x6b4a2c, [STONE]:0x8a8a8a, [SAND]:0xdccb86,
+  [WOOD]:0x6b4423, [LEAVES]:0x3c6b2a, [WATER]:0x3a6fd8, [PLANKS]:0xba8a54,
+  [STONE_PICKAXE]:0xb0b0b0, [REEDS]:0x8fae4a, [BLOW_PIPE]:0x9c7a4a,
+  [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [GRENADE]:0x3a4a3a,
+  [POWERUP_CRATE]:0x2a6f8a, [ROCKET_LAUNCHER]:0x555555, [RUBBLE]:0x9c8570,
+  [DOUBLE_BARREL]:0x4a3520, [PUMP_SHOTGUN]:0x333333, [RIFLE]:0xc9a227, [SNOW]:0xf0f5fa, [METAL]:0x5a6570,
+  [PISTOL]:0x707070, [CARBINE]:0x8a6a45, [GLASS]:0xbfe0f0, [CLEAR_GLASS]:0xeaf7fb
+};
+const BLOCK_NAMES = {
+  [GRASS]:'Grass', [DIRT]:'Dirt', [STONE]:'Stone', [SAND]:'Sand',
+  [WOOD]:'Wood', [LEAVES]:'Leaves', [WATER]:'Water', [PLANKS]:'Planks',
+  [STONE_PICKAXE]:'Stone Pickaxe', [REEDS]:'Reeds', [BLOW_PIPE]:'Blow Pipe',
+  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade',
+  [POWERUP_CRATE]:'Power Crate', [ROCKET_LAUNCHER]:'Rocket Launcher', [RUBBLE]:'Rubble',
+  [DOUBLE_BARREL]:'Double Barrel', [PUMP_SHOTGUN]:'Pump Shotgun', [RIFLE]:'Rifle', [SNOW]:'Snow', [METAL]:'Metal',
+  [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass'
+};
+const ITEM_ICON = {
+  [STONE_PICKAXE]:'\u26CF', [BLOW_PIPE]:'\u25CF', [STONE_SLING]:'\u25CF', [WAR_CLUB]:'\u2694',
+  [GRENADE]:'\u2600', [ROCKET_LAUNCHER]:'\u2191', [DOUBLE_BARREL]:'\u25CF', [PUMP_SHOTGUN]:'\u25CF', [RIFLE]:'\u25CF',
+  [PISTOL]:'\u25CF', [CARBINE]:'\u25CF'
+};
+const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS];
+const WEAPON_LOOT_POOL = [BLOW_PIPE, STONE_SLING, WAR_CLUB, GRENADE, ROCKET_LAUNCHER, DOUBLE_BARREL, PUMP_SHOTGUN, RIFLE, PISTOL, CARBINE];
+// Weapons that count as "guns" for the round-reset inventory rule (see
+// resetInventoryForNewRound) - everything except the melee club, which
+// isn't really a "gun" and is craftable from basic materials anyway.
+const GUN_TYPES = [BLOW_PIPE, STONE_SLING, GRENADE, ROCKET_LAUNCHER, DOUBLE_BARREL, PUMP_SHOTGUN, RIFLE, PISTOL, CARBINE];
+
+// ---------- World config ----------
+let WORLD_X=64, WORLD_Y=40, WORLD_Z=64;
+const WATER_LEVEL=8;
+const MAX_INSTANCES=60000;
+let seed = Math.floor(Math.random()*1000000);
+let blocks = null; // Uint8Array
+
+function idx(x,y,z){ return x + WORLD_X*(z + WORLD_Z*y); }
+function inBounds(x,y,z){ return x>=0&&x<WORLD_X&&y>=0&&y<WORLD_Y&&z>=0&&z<WORLD_Z; }
+function getBlock(x,y,z){
+  if(!inBounds(x,y,z)){ return y<0 ? STONE : AIR; }
+  return blocks[idx(x,y,z)];
+}
+function setBlock(x,y,z,t){
+  if(!inBounds(x,y,z)) return;
+  blocks[idx(x,y,z)] = t;
+}
+function isSolid(t){ return t!==AIR && t!==WATER && t!==REEDS; }
+function isEmptyForExposure(t){ return t===AIR || t===WATER || t===REEDS || t===GLASS || t===CLEAR_GLASS; }
+
+// ---------- Seeded PRNG ----------
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+// ---------- Simple Perlin-ish noise ----------
+class Noise2D {
+  constructor(sd){
+    const rand = mulberry32(sd);
+    const p = new Uint8Array(256);
+    for(let i=0;i<256;i++) p[i]=i;
+    for(let i=255;i>0;i--){
+      const j = Math.floor(rand()*(i+1));
+      const tmp=p[i]; p[i]=p[j]; p[j]=tmp;
+    }
+    this.perm = new Uint8Array(512);
+    for(let i=0;i<512;i++) this.perm[i]=p[i&255];
+  }
+  fade(t){ return t*t*t*(t*(t*6-15)+10); }
+  lerp(a,b,t){ return a+t*(b-a); }
+  grad(hash,x,y){
+    const h = hash & 7;
+    const u = h<4?x:y, v = h<4?y:x;
+    return ((h&1)?-u:u)+((h&2)?-2*v:2*v);
+  }
+  noise(x,y){
+    const X = Math.floor(x)&255, Y=Math.floor(y)&255;
+    x-=Math.floor(x); y-=Math.floor(y);
+    const u=this.fade(x), v=this.fade(y);
+    const p=this.perm;
+    const aa=p[p[X]+Y], ab=p[p[X]+((Y+1)&255)], ba=p[p[(X+1)&255]+Y], bb=p[p[(X+1)&255]+((Y+1)&255)];
+    const x1=this.lerp(this.grad(aa,x,y), this.grad(ba,x-1,y), u);
+    const x2=this.lerp(this.grad(ab,x,y-1), this.grad(bb,x-1,y-1), u);
+    return (this.lerp(x1,x2,v)+1)/2;
+  }
+}
+
+// ---------- Terrain generation ----------
+let heightMap = [];
+let terrainAmplitude = 13;
+let terrainOctave2Weight = 0.35;
+let terrainBaseHeight = 6;
+let terrainSurfaceBlock = GRASS;
+let treeDensity = 0.012;
+let biomeMode = 'highlands';
+const BIOME_PROFILES = {
+  // baseHeight matters a lot - it has to clear WATER_LEVEL+1 by a comfortable
+  // margin or low-amplitude biomes end up mostly sand no matter what (this is
+  // exactly what made "plains" look like a desert almost identical to oasis).
+  highlands: { amplitude:13, octave2Weight:0.35, treeDensity:0.012, baseHeight:6,  surfaceBlock:GRASS },
+  plains:    { amplitude:5,  octave2Weight:0.10, treeDensity:0.004, baseHeight:11, surfaceBlock:GRASS },
+  snow:      { amplitude:9,  octave2Weight:0.25, treeDensity:0.006, baseHeight:11, surfaceBlock:SNOW },
+  oasis:     { amplitude:4,  octave2Weight:0.08, treeDensity:0,     baseHeight:9,  surfaceBlock:SAND },  // uses its own generator entirely
+  ruins:     { amplitude:4,  octave2Weight:0.1,  treeDensity:0,     baseHeight:10, surfaceBlock:STONE }, // uses its own generator entirely
+  industrial:{ amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:8,  surfaceBlock:METAL }  // uses its own generator entirely
+};
+function applyBiomeProfile(mode){
+  biomeMode = BIOME_PROFILES[mode] ? mode : 'highlands';
+  const profile = BIOME_PROFILES[biomeMode];
+  terrainAmplitude = profile.amplitude;
+  terrainOctave2Weight = profile.octave2Weight;
+  treeDensity = profile.treeDensity;
+  terrainBaseHeight = profile.baseHeight;
+  terrainSurfaceBlock = profile.surfaceBlock;
+}
+// ---------- Spectator box ----------
+// A sealed glass box high above every map - fresh joins during an active
+// round (and players who just got eliminated) land in here instead of
+// dropping into a live fight or standing around on open ground. Big enough
+// to walk around in and see the arena below through the glass floor/walls;
+// everyone gets moved back down to a normal spawn automatically once the
+// next round actually starts.
+const SPECTATOR_BOX_SIZE = 12;   // footprint, width and depth
+const SPECTATOR_BOX_HEIGHT = 12;
+function spectatorBoxBaseY(){ return WORLD_Y - SPECTATOR_BOX_HEIGHT - 2; }
+function buildSpectatorBox(){
+  const cx = Math.floor(WORLD_X/2), cz = Math.floor(WORLD_Z/2);
+  const half = Math.floor(SPECTATOR_BOX_SIZE/2);
+  const baseY = spectatorBoxBaseY();
+  const topY = baseY + SPECTATOR_BOX_HEIGHT;
+  for(let x=cx-half; x<=cx+half; x++){
+    for(let z=cz-half; z<=cz+half; z++){
+      const isEdge = (x===cx-half || x===cx+half || z===cz-half || z===cz+half);
+      if(isEdge){
+        for(let y=baseY; y<=topY; y++) setBlock(x,y,z,GLASS);
+      } else {
+        setBlock(x, baseY, z, CLEAR_GLASS); // floor - practically invisible, so it doesn't obscure the arena below
+        setBlock(x, topY, z, GLASS);        // roof - fully sealed until the next round starts
+      }
+    }
+  }
+}
+function teleportToSpectatorBox(){
+  const cx = Math.floor(WORLD_X/2), cz = Math.floor(WORLD_Z/2);
+  const baseY = spectatorBoxBaseY();
+  player.x = cx + 0.5 + (Math.random()-0.5)*(SPECTATOR_BOX_SIZE-3);
+  player.z = cz + 0.5 + (Math.random()-0.5)*(SPECTATOR_BOX_SIZE-3);
+  player.y = baseY + 1.1;
+  velocity.y = 0;
+  airPeakY = player.y;
+  inSpectatorBox = true;
+  flashMessage('Spectating from above until the next round starts');
+}
+
+function scatterLootAndPowerCrates(){
+  const rand3 = mulberry32(seed+321);
+  let cratesPlaced=0, crateAttempts=0;
+  while(cratesPlaced<12 && crateAttempts<500){
+    crateAttempts++;
+    const x = 2+Math.floor(rand3()*(WORLD_X-4));
+    const z = 2+Math.floor(rand3()*(WORLD_Z-4));
+    const h = heightMap[x] ? heightMap[x][z] : undefined;
+    if(h===undefined) continue;
+    const surfaceType = getBlock(x,h,z);
+    if(surfaceType!==GRASS && surfaceType!==SAND && surfaceType!==SNOW && surfaceType!==STONE && surfaceType!==METAL) continue;
+    if(getBlock(x,h+1,z)!==AIR) continue; // don't bury one inside a tree or reeds
+    setBlock(x,h+1,z,LOOT_CRATE);
+    cratesPlaced++;
+  }
+  const rand4 = mulberry32(seed+654);
+  let powerCratesPlaced=0, powerAttempts=0;
+  while(powerCratesPlaced<6 && powerAttempts<500){
+    powerAttempts++;
+    const x = 2+Math.floor(rand4()*(WORLD_X-4));
+    const z = 2+Math.floor(rand4()*(WORLD_Z-4));
+    const h = heightMap[x] ? heightMap[x][z] : undefined;
+    if(h===undefined) continue;
+    const surfaceType = getBlock(x,h,z);
+    if(surfaceType!==GRASS && surfaceType!==SAND && surfaceType!==SNOW && surfaceType!==STONE && surfaceType!==METAL) continue;
+    if(getBlock(x,h+1,z)!==AIR) continue;
+    setBlock(x,h+1,z,POWERUP_CRATE);
+    powerCratesPlaced++;
+  }
+}
+function generateWorld(){
+  if(biomeMode==='oasis'){ generateOasisWorld(); buildSpectatorBox(); return; }
+  if(biomeMode==='ruins'){ generateRuinsWorld(); buildSpectatorBox(); return; }
+  if(biomeMode==='industrial'){ generateIndustrialWorld(); buildSpectatorBox(); return; }
+  blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
+  const n1 = new Noise2D(seed);
+  const n2 = new Noise2D(seed+7777);
+  heightMap = [];
+  for(let x=0;x<WORLD_X;x++){
+    heightMap[x]=[];
+    for(let z=0;z<WORLD_Z;z++){
+      const a = n1.noise(x*0.07, z*0.07);
+      const b = n2.noise(x*0.18, z*0.18)*terrainOctave2Weight;
+      let h = Math.floor(terrainBaseHeight + (a+b)*terrainAmplitude);
+      h = Math.max(3, Math.min(WORLD_Y-6, h));
+      heightMap[x][z]=h;
+      for(let y=0;y<=h;y++){
+        let t;
+        if(y===h) t = (h<=WATER_LEVEL+1) ? SAND : terrainSurfaceBlock;
+        else if(y>h-3) t = (h<=WATER_LEVEL+1) ? SAND : DIRT;
+        else t = STONE;
+        setBlock(x,y,z,t);
+      }
+      if(h<WATER_LEVEL){
+        for(let y=h+1;y<=WATER_LEVEL;y++) setBlock(x,y,z,WATER);
+      }
+    }
+  }
+  const rand = mulberry32(seed+42);
+  for(let x=3;x<WORLD_X-3;x++){
+    for(let z=3;z<WORLD_Z-3;z++){
+      const h = heightMap[x][z];
+      if(h>WATER_LEVEL+1 && getBlock(x,h,z)===terrainSurfaceBlock && rand()<treeDensity){
+        plantTree(x,h+1,z,rand);
+      }
+    }
+  }
+  const rand2 = mulberry32(seed+555);
+  for(let x=1;x<WORLD_X-1;x++){
+    for(let z=1;z<WORLD_Z-1;z++){
+      const h = heightMap[x][z];
+      if(h===WATER_LEVEL && getBlock(x,h,z)===SAND){
+        const nearWater = getBlock(x+1,h,z)===WATER || getBlock(x-1,h,z)===WATER ||
+                           getBlock(x,h,z+1)===WATER || getBlock(x,h,z-1)===WATER;
+        if(nearWater && rand2()<0.3){
+          const stalkH = 1 + Math.floor(rand2()*3);
+          for(let i=0;i<stalkH;i++) setBlock(x,h+1+i,z,REEDS);
+        }
+      }
+    }
+  }
+  scatterLootAndPowerCrates();
+  buildSpectatorBox();
+}
+// A desert biome: mostly flat sand with a handful of carved-out water oases
+// instead of a general height-based water table, plus greenery around each one.
+function generateOasisWorld(){
+  blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
+  const n1 = new Noise2D(seed);
+  heightMap = [];
+  const baseHeight = 9;
+  for(let x=0;x<WORLD_X;x++){
+    heightMap[x]=[];
+    for(let z=0;z<WORLD_Z;z++){
+      const n = n1.noise(x*0.05, z*0.05);
+      let h = Math.floor(baseHeight + n*3); // gentle dunes
+      h = Math.max(4, Math.min(WORLD_Y-6, h));
+      heightMap[x][z] = h;
+      for(let y=0;y<=h;y++){
+        setBlock(x,y,z, y>h-3 ? SAND : STONE);
+      }
+    }
+  }
+
+  const rand = mulberry32(seed+909);
+  const oasisCount = 3;
+  const oasisCenters = [];
+  for(let i=0;i<oasisCount;i++){
+    const ox = 10+Math.floor(rand()*(WORLD_X-20));
+    const oz = 10+Math.floor(rand()*(WORLD_Z-20));
+    const r = 4+Math.floor(rand()*3);
+    oasisCenters.push({x:ox,z:oz,r});
+    for(let x=Math.max(1,ox-r-2); x<=Math.min(WORLD_X-2,ox+r+2); x++){
+      for(let z=Math.max(1,oz-r-2); z<=Math.min(WORLD_Z-2,oz+r+2); z++){
+        const dist = Math.sqrt((x-ox)*(x-ox)+(z-oz)*(z-oz));
+        if(dist>r+2) continue;
+        const h = heightMap[x][z];
+        if(dist<=r){
+          const waterTop = h-2;
+          for(let y=waterTop+1; y<=h; y++) setBlock(x,y,z,AIR);
+          for(let y=Math.max(0,waterTop-1); y<=waterTop; y++) setBlock(x,y,z,WATER);
+          heightMap[x][z] = waterTop;
+        } else {
+          setBlock(x,h,z,GRASS); // grassy rim around the pool
+        }
+      }
+    }
+  }
+
+  const rand2 = mulberry32(seed+707);
+  for(const c of oasisCenters){
+    for(let i=0;i<5;i++){
+      const ang = rand2()*Math.PI*2;
+      const rr = c.r+1+rand2()*1.5;
+      const x = Math.floor(c.x+Math.cos(ang)*rr);
+      const z = Math.floor(c.z+Math.sin(ang)*rr);
+      if(x<1||x>=WORLD_X-1||z<1||z>=WORLD_Z-1) continue;
+      const h = heightMap[x][z];
+      if(getBlock(x,h,z)===GRASS && getBlock(x,h+1,z)===AIR){
+        if(rand2()<0.5){
+          const stalkH = 1+Math.floor(rand2()*2);
+          for(let k=0;k<stalkH;k++) setBlock(x,h+1+k,z,REEDS);
+        } else if(rand2()<0.3){
+          plantTree(x,h+1,z,rand2);
+        }
+      }
+    }
+  }
+
+  scatterLootAndPowerCrates();
+}
+// A war-torn/ruins biome: barren stone-and-dirt ground with sparse grass,
+// dotted with broken rectangular wall structures (deliberately full of gaps
+// and uneven crumbled heights) plus loose rubble scattered around them.
+function generateRuinsWorld(){
+  blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
+  const n1 = new Noise2D(seed);
+  heightMap = [];
+  const baseHeight = 10;
+  for(let x=0;x<WORLD_X;x++){
+    heightMap[x]=[];
+    for(let z=0;z<WORLD_Z;z++){
+      const n = n1.noise(x*0.06, z*0.06);
+      let h = Math.floor(baseHeight + n*4);
+      h = Math.max(4, Math.min(WORLD_Y-8, h));
+      heightMap[x][z] = h;
+      for(let y=0;y<=h;y++){
+        setBlock(x,y,z, y===h ? STONE : (y>h-2 ? DIRT : STONE));
+      }
+    }
+  }
+
+  // sparse grass patches so it doesn't look totally dead
+  const randGrass = mulberry32(seed+111);
+  for(let x=0;x<WORLD_X;x++){
+    for(let z=0;z<WORLD_Z;z++){
+      const h = heightMap[x][z];
+      if(getBlock(x,h,z)===STONE && randGrass()<0.15) setBlock(x,h,z,GRASS);
+    }
+  }
+
+  const rand = mulberry32(seed+222);
+  const ruinCount = 7;
+  for(let i=0;i<ruinCount;i++){
+    const cx = 8+Math.floor(rand()*(WORLD_X-16));
+    const cz = 8+Math.floor(rand()*(WORLD_Z-16));
+    buildRuinStructure(cx, heightMap[cx][cz]+1, cz, rand);
+  }
+
+  const rand2 = mulberry32(seed+333);
+  for(let i=0;i<24;i++){
+    const x = 2+Math.floor(rand2()*(WORLD_X-4));
+    const z = 2+Math.floor(rand2()*(WORLD_Z-4));
+    const h = heightMap[x][z];
+    if(getBlock(x,h+1,z)===AIR && rand2()<0.6) setBlock(x,h+1,z,RUBBLE);
+  }
+
+  scatterLootAndPowerCrates();
+}
+function buildRuinStructure(x,y,z,rand){
+  const w = 4+Math.floor(rand()*3);
+  const wallHeight = 2+Math.floor(rand()*3);
+  for(let side=0; side<4; side++){
+    for(let i=0;i<=w;i++){
+      let wx, wz;
+      if(side===0){ wx=x+i; wz=z; }
+      else if(side===1){ wx=x+i; wz=z+w; }
+      else if(side===2){ wx=x; wz=z+i; }
+      else { wx=x+w; wz=z+i; }
+      if(rand()<0.35) continue; // gap in the wall - the "half wall" broken look
+      const localHeight = Math.max(1, wallHeight - Math.floor(rand()*3));
+      for(let dy=0; dy<localHeight; dy++){
+        if(getBlock(wx,y+dy,wz)===AIR) setBlock(wx,y+dy,wz, rand()<0.7?STONE:RUBBLE);
+      }
+    }
+  }
+  for(let i=0;i<10;i++){
+    const dx = Math.floor(rand()*(w+2))-1;
+    const dz = Math.floor(rand()*(w+2))-1;
+    if(rand()<0.4 && getBlock(x+dx,y,z+dz)===AIR) setBlock(x+dx,y,z+dz,RUBBLE);
+  }
+}
+// An industrial/facility biome: a dense grid of Metal-walled rooms connected
+// by corridor gaps, covering almost the whole map. Deliberately roofless -
+// surface height everywhere else in the game (spawn points, enemy placement,
+// crate scattering) is computed by scanning down from the sky, so a real
+// ceiling would break that assumption across the whole codebase. Heavy walls
+// and tight, maze-like sightlines still give it a strong "inside a building"
+// feel even without a literal roof overhead.
+function generateIndustrialWorld(){
+  blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
+  heightMap = [];
+  const floorY = 8;
+  for(let x=0;x<WORLD_X;x++){
+    heightMap[x]=[];
+    for(let z=0;z<WORLD_Z;z++){
+      for(let y=0;y<=floorY;y++) setBlock(x,y,z,METAL);
+      heightMap[x][z] = floorY;
+    }
+  }
+
+  const cellSize = 10;
+  const wallHeight = 5;
+  const wallBaseY = floorY+1;
+  const doorHalfWidth = 2;
+  const rand = mulberry32(seed+444);
+
+  // walls running along Z at fixed X grid-lines, with door gaps
+  for(let gx=cellSize; gx<WORLD_X-1; gx+=cellSize){
+    for(let z=1; z<WORLD_Z-1; z++){
+      const m = ((z%cellSize)+cellSize)%cellSize;
+      if(m>cellSize/2-doorHalfWidth && m<cellSize/2+doorHalfWidth) continue; // doorway
+      for(let y=0;y<wallHeight;y++) setBlock(gx, wallBaseY+y, z, METAL);
+    }
+  }
+  // walls running along X at fixed Z grid-lines, with door gaps
+  for(let gz=cellSize; gz<WORLD_Z-1; gz+=cellSize){
+    for(let x=1; x<WORLD_X-1; x++){
+      const m = ((x%cellSize)+cellSize)%cellSize;
+      if(m>cellSize/2-doorHalfWidth && m<cellSize/2+doorHalfWidth) continue; // doorway
+      for(let y=0;y<wallHeight;y++) setBlock(x, wallBaseY+y, gz, METAL);
+    }
+  }
+
+  // seal the outer boundary too (no doorways here) - closes the whole facility off
+  for(let x=0;x<WORLD_X;x++){
+    for(let y=0;y<wallHeight;y++){
+      setBlock(x, wallBaseY+y, 0, METAL);
+      setBlock(x, wallBaseY+y, WORLD_Z-1, METAL);
+    }
+  }
+  for(let z=0;z<WORLD_Z;z++){
+    for(let y=0;y<wallHeight;y++){
+      setBlock(0, wallBaseY+y, z, METAL);
+      setBlock(WORLD_X-1, wallBaseY+y, z, METAL);
+    }
+  }
+
+  // scattered interior clutter (crates/pillars) so rooms aren't totally empty
+  const rand2 = mulberry32(seed+555);
+  for(let i=0;i<30;i++){
+    const x = 2+Math.floor(rand2()*(WORLD_X-4));
+    const z = 2+Math.floor(rand2()*(WORLD_Z-4));
+    if(getBlock(x,wallBaseY,z)===AIR && rand2()<0.3){
+      const h = 1+Math.floor(rand2()*2);
+      for(let k=0;k<h;k++) setBlock(x,wallBaseY+k,z, rand2()<0.5?METAL:PLANKS);
+    }
+  }
+
+  scatterLootAndPowerCrates();
+}
+function plantTree(x,y,z,rand){
+  const trunkH = 4 + Math.floor(rand()*2);
+  for(let i=0;i<trunkH;i++) setBlock(x,y+i,z,WOOD);
+  const topY = y+trunkH-1;
+  for(let ly=-1; ly<=1; ly++){
+    const ry = topY+ly;
+    const radius = ly===1 ? 1 : 2;
+    for(let dx=-radius; dx<=radius; dx++){
+      for(let dz=-radius; dz<=radius; dz++){
+        if(dx===0 && dz===0 && ly<1) continue;
+        if(Math.abs(dx)===radius && Math.abs(dz)===radius && rand()<0.5) continue;
+        if(getBlock(x+dx,ry,z+dz)===AIR) setBlock(x+dx,ry,z+dz,LEAVES);
+      }
+    }
+  }
+  setBlock(x,topY+2,z, getBlock(x,topY+2,z)===AIR?LEAVES:getBlock(x,topY+2,z));
+}
+function findSurfaceY(x,z){
+  // Skip the spectator box's vertical range entirely - it sits near the top
+  // of the world, and without this, any (x,z) under its footprint would
+  // have this function find the box's own floor/roof instead of the actual
+  // ground far below it.
+  for(let y=Math.min(WORLD_Y-1, spectatorBoxBaseY()-1);y>=0;y--){
+    const t = getBlock(x,y,z);
+    if(t!==AIR && t!==WATER) return y+1;
+  }
+  return WORLD_Y-1;
+}
+
+// ---------- Audio (fully procedural - synthesized on the fly, no sound files) ----------
+let audioCtx = null;
+let masterGain = null;
+let audioEnabled = true;
+function initAudio(){
+  if(audioCtx) return;
+  try{
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.4;
+    masterGain.connect(audioCtx.destination);
+  }catch(e){ audioEnabled=false; }
+}
+function resumeAudio(){
+  initAudio();
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+}
+function playTone(opts){
+  if(!audioEnabled) return;
+  initAudio();
+  if(!audioCtx) return;
+  const {freq=440, freqEnd=null, duration=0.15, type='sine', volume=0.3, attack=0.005, decay=null} = opts;
+  const ctx = audioCtx;
+  const t0 = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = type;
+  osc.frequency.setValueAtTime(Math.max(1,freq), t0);
+  if(freqEnd!==null) osc.frequency.exponentialRampToValueAtTime(Math.max(1,freqEnd), t0+duration);
+  const gain = ctx.createGain();
+  const dec = decay!==null ? decay : duration;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.linearRampToValueAtTime(volume, t0+attack);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0+attack+dec);
+  osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start(t0);
+  osc.stop(t0+attack+dec+0.03);
+}
+function playNoise(opts){
+  if(!audioEnabled) return;
+  initAudio();
+  if(!audioCtx) return;
+  const {duration=0.15, volume=0.3, filterType='lowpass', filterFreq=1200, attack=0.002} = opts;
+  const ctx = audioCtx;
+  const t0 = ctx.currentTime;
+  const bufferSize = Math.max(1, Math.floor(ctx.sampleRate*duration));
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++) data[i] = Math.random()*2-1;
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = filterType;
+  filter.frequency.value = filterFreq;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.linearRampToValueAtTime(volume, t0+attack);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0+duration);
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(masterGain);
+  noise.start(t0);
+  noise.stop(t0+duration+0.03);
+}
+function toggleAudio(){
+  audioEnabled = !audioEnabled;
+  if(masterGain) masterGain.gain.value = audioEnabled ? 0.4 : 0;
+  const btn = document.getElementById('btnMuteTop');
+  if(btn) btn.textContent = audioEnabled ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+}
+
+// ---- Named sound effects, all built from the two primitives above ----
+function sfxMine(type){
+  const hardness = MINE_TIME[type]||0.4;
+  const pitch = Math.max(300, 1500 - hardness*800);
+  playNoise({duration:0.09, volume:0.22, filterType:'lowpass', filterFreq:pitch});
+  playTone({freq:pitch*0.25, duration:0.07, type:'triangle', volume:0.13, attack:0.001});
+}
+function sfxPlace(){
+  playNoise({duration:0.07, volume:0.2, filterType:'lowpass', filterFreq:500});
+  playTone({freq:180, duration:0.08, type:'triangle', volume:0.13});
+}
+function sfxFootstep(){
+  playNoise({duration:0.05, volume:0.08, filterType:'lowpass', filterFreq:280});
+}
+function sfxJump(){
+  playTone({freq:220, freqEnd:480, duration:0.12, type:'square', volume:0.14});
+}
+function sfxLand(){
+  playNoise({duration:0.08, volume:0.14, filterType:'lowpass', filterFreq:220});
+}
+function sfxShootLight(){
+  playNoise({duration:0.06, volume:0.16, filterType:'highpass', filterFreq:2000});
+}
+function sfxShootSling(){
+  playNoise({duration:0.08, volume:0.18, filterType:'bandpass', filterFreq:1200});
+  playTone({freq:500, freqEnd:200, duration:0.08, type:'sawtooth', volume:0.1});
+}
+function sfxShootPistol(){
+  playNoise({duration:0.07, volume:0.22, filterType:'highpass', filterFreq:1200});
+  playTone({freq:700, freqEnd:250, duration:0.07, type:'square', volume:0.13});
+}
+function sfxShootRifle(){
+  playNoise({duration:0.09, volume:0.28, filterType:'highpass', filterFreq:1500});
+  playTone({freq:900, duration:0.05, type:'square', volume:0.14});
+}
+function sfxShotgunBlast(){
+  playNoise({duration:0.2, volume:0.35, filterType:'lowpass', filterFreq:1800});
+  playTone({freq:120, duration:0.13, type:'square', volume:0.22, attack:0.001});
+}
+function sfxRocketLaunch(){
+  playNoise({duration:0.3, volume:0.22, filterType:'bandpass', filterFreq:800});
+}
+function sfxGrenadeThrow(){
+  playTone({freq:320, freqEnd:200, duration:0.15, type:'sine', volume:0.12});
+}
+function sfxSwing(){
+  playNoise({duration:0.1, volume:0.14, filterType:'bandpass', filterFreq:1500});
+}
+function sfxExplosion(){
+  playNoise({duration:0.5, volume:0.38, filterType:'lowpass', filterFreq:900});
+  playTone({freq:90, freqEnd:30, duration:0.4, type:'sine', volume:0.28, attack:0.001});
+}
+function sfxHit(){
+  playTone({freq:180, freqEnd:80, duration:0.18, type:'sawtooth', volume:0.22});
+}
+function sfxHeadshotDing(){
+  playTone({freq:1500, duration:0.15, type:'sine', volume:0.22});
+}
+function sfxEnemyDeath(){
+  playTone({freq:220, freqEnd:60, duration:0.3, type:'triangle', volume:0.18});
+  playNoise({duration:0.2, volume:0.13, filterType:'lowpass', filterFreq:600});
+}
+function sfxPickup(){
+  playTone({freq:600, duration:0.06, type:'sine', volume:0.18});
+  setTimeout(()=>playTone({freq:900, duration:0.08, type:'sine', volume:0.18}), 60);
+}
+function sfxCrateOpen(){
+  playTone({freq:500, duration:0.07, type:'sine', volume:0.16});
+  setTimeout(()=>playTone({freq:750, duration:0.07, type:'sine', volume:0.16}), 70);
+  setTimeout(()=>playTone({freq:1100, duration:0.1, type:'sine', volume:0.16}), 140);
+}
+function sfxClick(){
+  playTone({freq:700, duration:0.04, type:'square', volume:0.1});
+}
+function sfxDenied(){
+  playTone({freq:160, duration:0.12, type:'square', volume:0.15});
+}
+function sfxCraftSuccess(){
+  playTone({freq:500, duration:0.06, type:'sine', volume:0.16});
+  setTimeout(()=>playTone({freq:700, duration:0.06, type:'sine', volume:0.16}), 70);
+  setTimeout(()=>playTone({freq:900, duration:0.08, type:'sine', volume:0.16}), 140);
+}
+function sfxMatchStart(){
+  playTone({freq:440, duration:0.1, type:'sine', volume:0.18});
+  setTimeout(()=>playTone({freq:660, duration:0.15, type:'sine', volume:0.18}), 100);
+}
+function sfxMatchEnd(){
+  playTone({freq:660, duration:0.12, type:'sine', volume:0.18});
+  setTimeout(()=>playTone({freq:550, duration:0.12, type:'sine', volume:0.18}), 120);
+  setTimeout(()=>playTone({freq:440, duration:0.25, type:'sine', volume:0.18}), 240);
+}
+function sfxSpeedBoost(){
+  playTone({freq:300, freqEnd:900, duration:0.25, type:'sine', volume:0.18});
+}
+
+// ---------- Ambient sound (continuous background layer, per biome) ----------
+// A quiet looping wind/drone plus a soft, algorithmically-generated melody -
+// notes picked at random from a scale on a jittered timer, so it's never
+// exactly the same twice but never clashes either (pentatonic-ish scales
+// are very forgiving for this). Everything here still just uses the same
+// two primitives (playTone/playNoise-style synthesis) as the rest of the
+// audio engine - no loops or files, still fully procedural.
+const AMBIENT_THEMES = {
+  highlands: { kind:'noise', filterType:'lowpass',  filterFreq:600, filterQ:0.7, lfoDepth:200, windVolume:0.05,
+               scale:[0,2,4,7,9],       root:220, noteInterval:3.5, noteDur:2.2, noteType:'sine',     noteVol:0.045 },
+  plains:    { kind:'noise', filterType:'lowpass',  filterFreq:500, filterQ:0.7, lfoDepth:150, windVolume:0.045,
+               scale:[0,2,4,7,9],       root:220, noteInterval:4,   noteDur:2.5, noteType:'sine',     noteVol:0.04 },
+  snow:      { kind:'noise', filterType:'bandpass', filterFreq:900, filterQ:1.2, lfoDepth:250, windVolume:0.06,
+               scale:[0,2,3,7,8],       root:196, noteInterval:4.5, noteDur:3,   noteType:'sine',     noteVol:0.04 },
+  oasis:     { kind:'noise', filterType:'lowpass',  filterFreq:350, filterQ:0.5, lfoDepth:100, windVolume:0.04,
+               scale:[0,1,4,5,7,8,11],  root:207, noteInterval:3.8, noteDur:2,   noteType:'triangle', noteVol:0.045 },
+  ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.05,
+               scale:[0,1,3,6,7],       root:110, noteInterval:5,   noteDur:3.5, noteType:'sawtooth', noteVol:0.04 },
+  industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.07,
+               scale:[0,3,5,7,10],      root:110, noteInterval:1.6, noteDur:0.4, noteType:'square',   noteVol:0.035 }
+};
+let ambientNodes = [];
+let ambientMelodyTimeoutId = null;
+function stopAmbience(){
+  for(const n of ambientNodes){ try{ n.stop(); }catch(e){} }
+  ambientNodes = [];
+  if(ambientMelodyTimeoutId){ clearTimeout(ambientMelodyTimeoutId); ambientMelodyTimeoutId = null; }
+}
+function startAmbience(biome){
+  stopAmbience();
+  initAudio();
+  if(!audioCtx) return;
+  const theme = AMBIENT_THEMES[biome] || AMBIENT_THEMES.highlands;
+  const ctx = audioCtx;
+
+  if(theme.kind==='noise'){
+    const bufferSize = ctx.sampleRate*4;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++) data[i] = Math.random()*2-1;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer; src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = theme.filterType; filter.frequency.value = theme.filterFreq; filter.Q.value = theme.filterQ;
+    const gain = ctx.createGain();
+    gain.gain.value = theme.windVolume;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.06 + Math.random()*0.03; // slow "gusting" wander
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = theme.lfoDepth;
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGain);
+    src.start();
+    lfo.start();
+    ambientNodes.push(src, lfo);
+  } else if(theme.kind==='drone'){
+    const gain = ctx.createGain();
+    gain.gain.value = theme.droneVolume;
+    gain.connect(masterGain);
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'sine'; osc1.frequency.value = theme.droneFreq;
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine'; osc2.frequency.value = theme.droneFreq + theme.droneDetune; // slight detune = a "beating" hum
+    osc1.connect(gain);
+    osc2.connect(gain);
+    osc1.start();
+    osc2.start();
+    ambientNodes.push(osc1, osc2);
+  }
+
+  (function scheduleNote(){
+    const semis = theme.scale[Math.floor(Math.random()*theme.scale.length)];
+    const octave = Math.random()<0.25 ? 2 : 1;
+    const freq = theme.root * Math.pow(2, semis/12) * octave;
+    playTone({freq, duration:theme.noteDur, type:theme.noteType, volume:theme.noteVol, attack:theme.noteDur*0.3, decay:theme.noteDur*0.7});
+    const jitter = theme.noteInterval*(0.7+Math.random()*0.7);
+    ambientMelodyTimeoutId = setTimeout(scheduleNote, jitter*1000);
+  })();
+}
+
+// ---------- Three.js setup ----------
+const canvas = document.getElementById('gameCanvas');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setClearColor(0x87ceeb);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x9fd3f0, 30, 100);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 200);
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x445533, 0.9);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4d6, 0.9);
+sun.position.set(30, 60, 20);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0x404040, 0.4));
+
+// ---------- Skybox (procedural, biome-dependent - gradient + painted clouds) ----------
+const SKY_THEMES = {
+  highlands: { top:0x5aa0e0, horizon:0xcfe8f5, cloud:0xffffff, cloudAlpha:0.3, cloudDensity:14, fog:0x9fd3f0, seed:501 },
+  plains:    { top:0x6db0e6, horizon:0xd7edf7, cloud:0xffffff, cloudAlpha:0.28, cloudDensity:10, fog:0xa9d8f2, seed:502 },
+  oasis:     { top:0x5f9fe0, horizon:0xf0d9a0, cloud:0xfff2d0, cloudAlpha:0.2,  cloudDensity:6,  fog:0xe8cf95, seed:503 },
+  snow:      { top:0x8fb8e0, horizon:0xeaf3fb, cloud:0xffffff, cloudAlpha:0.35, cloudDensity:9,  fog:0xd8e8f5, seed:504 },
+  ruins:     { top:0x2a0d0d, horizon:0xaa3a1a, cloud:0x1a0a0a, cloudAlpha:0.45, cloudDensity:18, fog:0x5a2a1a, seed:505 },
+  industrial:{ top:0x3a4048, horizon:0x6a7178, cloud:0x2a2f36, cloudAlpha:0.5,  cloudDensity:20, fog:0x5a6068, seed:506 }
+};
+function makeSkyTexture(theme){
+  const w=512, h=256;
+  const canvas = document.createElement('canvas');
+  canvas.width=w; canvas.height=h;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0, hexCss(theme.top));
+  grad.addColorStop(0.65, hexCss(theme.top));
+  grad.addColorStop(1, hexCss(theme.horizon));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+  const rand = mulberry32(theme.seed);
+  ctx.fillStyle = hexCss(theme.cloud);
+  for(let i=0;i<theme.cloudDensity;i++){
+    const cx = rand()*w, cy = rand()*h*0.55 + h*0.05;
+    const r = 12+rand()*32;
+    ctx.globalAlpha = theme.cloudAlpha*(0.7+rand()*0.6);
+    for(let k=0;k<5;k++){
+      ctx.beginPath();
+      ctx.arc(cx+(rand()-0.5)*r*1.4, cy+(rand()-0.5)*r*0.5, r*0.5+rand()*r*0.3, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  return tex;
+}
+const skyMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(150, 16, 12),
+  new THREE.MeshBasicMaterial({side:THREE.BackSide, fog:false})
+);
+scene.add(skyMesh);
+function updateSkybox(biome){
+  const theme = SKY_THEMES[biome] || SKY_THEMES.highlands;
+  const oldMap = skyMesh.material.map;
+  skyMesh.material.map = makeSkyTexture(theme);
+  skyMesh.material.needsUpdate = true;
+  if(oldMap) oldMap.dispose();
+  scene.fog.color.setHex(theme.fog);
+  renderer.setClearColor(theme.fog);
+}
+updateSkybox('highlands');
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------- Procedural block textures (canvas-generated, no external images needed) ----------
+function makeCanvas(size){
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  return c;
+}
+function hexCss(hex){ return '#'+hex.toString(16).padStart(6,'0'); }
+function toTexture(canvas){
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+function speckleTexture(seedNum, base, dark, light, density){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(base);
+  ctx.fillRect(0,0,size,size);
+  const rand = mulberry32(seedNum);
+  for(let y=0;y<size;y++){
+    for(let x=0;x<size;x++){
+      const r = rand();
+      if(r<density*0.5) ctx.fillStyle = hexCss(dark);
+      else if(r<density) ctx.fillStyle = hexCss(light);
+      else continue;
+      ctx.fillRect(x,y,1,1);
+    }
+  }
+  return toTexture(canvas);
+}
+function grassSideTexture(seedNum){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0x6b4a2c);
+  ctx.fillRect(0,0,size,size);
+  const rand = mulberry32(seedNum);
+  for(let y=3;y<size;y++){
+    for(let x=0;x<size;x++){
+      const r = rand();
+      if(r<0.18) ctx.fillStyle = hexCss(0x55381f);
+      else if(r<0.32) ctx.fillStyle = hexCss(0x7d5636);
+      else continue;
+      ctx.fillRect(x,y,1,1);
+    }
+  }
+  for(let x=0;x<size;x++){
+    const edge = 3 + Math.floor(rand()*2);
+    for(let y=0;y<edge;y++){
+      const r = rand();
+      ctx.fillStyle = r<0.5 ? hexCss(0x5a9b3c) : hexCss(0x487a30);
+      ctx.fillRect(x,y,1,1);
+    }
+  }
+  return toTexture(canvas);
+}
+function woodBarkTexture(seedNum, base, dark){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(base);
+  ctx.fillRect(0,0,size,size);
+  const rand = mulberry32(seedNum);
+  for(let x=0;x<size;x+=2){
+    if(rand()<0.8){
+      ctx.fillStyle = hexCss(dark);
+      ctx.fillRect(x+Math.floor(rand()*2),0,1,size);
+    }
+  }
+  return toTexture(canvas);
+}
+function woodRingTexture(seedNum, base, ring){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(base);
+  ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle = hexCss(ring);
+  ctx.lineWidth = 1;
+  for(let r=2; r<9; r+=2){
+    ctx.beginPath();
+    ctx.arc(size/2, size/2, r, 0, Math.PI*2);
+    ctx.stroke();
+  }
+  return toTexture(canvas);
+}
+function waterTexture(seedNum){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0x3a6fd8);
+  ctx.fillRect(0,0,size,size);
+  const rand = mulberry32(seedNum);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  for(let i=0;i<5;i++){
+    const y = Math.floor(rand()*size);
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(size,y+ (rand()<0.5?1:-1));
+    ctx.stroke();
+  }
+  return toTexture(canvas);
+}
+function planksTexture(seedNum){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0xba8a54);
+  ctx.fillRect(0,0,size,size);
+  const rand = mulberry32(seedNum);
+  ctx.strokeStyle = 'rgba(90,58,25,0.5)';
+  for(let y=0;y<size;y+=4){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(size,y); ctx.stroke();
+  }
+  for(let x=0;x<size;x+=1){
+    if(rand()<0.3){
+      ctx.strokeStyle='rgba(90,58,25,0.25)';
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,size); ctx.stroke();
+    }
+  }
+  return toTexture(canvas);
+}
+
+function crateTexture(seedNum){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0xa9743a);
+  ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle = hexCss(0x5c3d1a);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(0.75,0.75,size-1.5,size-1.5);
+  ctx.beginPath();
+  ctx.moveTo(0,size/2); ctx.lineTo(size,size/2);
+  ctx.moveTo(size/2,0); ctx.lineTo(size/2,size);
+  ctx.stroke();
+  const rand = mulberry32(seedNum);
+  for(let i=0;i<10;i++){
+    ctx.fillStyle = hexCss(0x8a5a2a);
+    ctx.fillRect(Math.floor(rand()*size), Math.floor(rand()*size), 1, 1);
+  }
+  return toTexture(canvas);
+}
+function powerCrateTexture(seedNum){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0x2a6f8a);
+  ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle = hexCss(0x0f3a4a);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(0.75,0.75,size-1.5,size-1.5);
+  ctx.fillStyle = hexCss(0xdff3ff);
+  ctx.beginPath();
+  ctx.moveTo(9,1); ctx.lineTo(5,8); ctx.lineTo(8,8); ctx.lineTo(6,15); ctx.lineTo(12,7); ctx.lineTo(9,7);
+  ctx.closePath();
+  ctx.fill();
+  const rand = mulberry32(seedNum);
+  for(let i=0;i<6;i++){
+    ctx.fillStyle = hexCss(0x3f8fae);
+    ctx.fillRect(Math.floor(rand()*size), Math.floor(rand()*size), 1, 1);
+  }
+  return toTexture(canvas);
+}
+
+function metalTexture(seedNum){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0x5a6570);
+  ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle = hexCss(0x3a4550);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5,0.5,size-1,size-1);
+  ctx.beginPath();
+  ctx.moveTo(size/2,0); ctx.lineTo(size/2,size);
+  ctx.moveTo(0,size/2); ctx.lineTo(size,size/2);
+  ctx.stroke();
+  const rand = mulberry32(seedNum);
+  for(let i=0;i<10;i++){
+    ctx.fillStyle = hexCss(rand()<0.5?0x4a5560:0x707d88);
+    ctx.fillRect(Math.floor(rand()*size), Math.floor(rand()*size), 1, 1);
+  }
+  return toTexture(canvas);
+}
+
+function glassTexture(seedNum){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0xdcf0f7);
+  ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle = hexCss(0xa8d0e0);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5,0.5,size-1,size-1);
+  const rand = mulberry32(seedNum);
+  ctx.fillStyle = hexCss(0xffffff);
+  for(let i=0;i<3;i++){
+    ctx.fillRect(2+Math.floor(rand()*4), 2+Math.floor(rand()*4), 2, 1);
+  }
+  return toTexture(canvas);
+}
+function clearGlassTexture(){
+  // Deliberately plain, no pane lines/speckle - this is meant to almost
+  // disappear visually (used for the spectator box floor), not read as a
+  // visible "glass" surface the way the wall glass does.
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0xeaf7fb);
+  ctx.fillRect(0,0,size,size);
+  return toTexture(canvas);
+}
+
+const TEX = {
+  dirt: speckleTexture(11, 0x6b4a2c, 0x55381f, 0x7d5636, 0.35),
+  stone: speckleTexture(22, 0x8a8a8a, 0x707070, 0x9d9d9d, 0.35),
+  sand: speckleTexture(33, 0xdccb86, 0xc9b56d, 0xe8dba0, 0.3),
+  leaves: speckleTexture(44, 0x3c6b2a, 0x2e5620, 0x4d8138, 0.45),
+  grassTop: speckleTexture(55, 0x5a9b3c, 0x487a30, 0x6cae4a, 0.35),
+  grassSide: grassSideTexture(66),
+  woodBark: woodBarkTexture(77, 0x6b4423, 0x4a2e17),
+  woodRing: woodRingTexture(88, 0x8a5a30, 0x4a2e17),
+  water: waterTexture(99),
+  planks: planksTexture(110),
+  reeds: speckleTexture(120, 0x8fae4a, 0x6f8e34, 0xa8c766, 0.3),
+  crate: crateTexture(140),
+  powerCrate: powerCrateTexture(150),
+  rubble: speckleTexture(160, 0x9c8570, 0x6e5a48, 0xb59a80, 0.5),
+  snow: speckleTexture(170, 0xf0f5fa, 0xd8e4f0, 0xffffff, 0.25),
+  metal: metalTexture(180),
+  glass: glassTexture(190),
+  clearGlass: clearGlassTexture()
+};
+
+// ---------- Instanced meshes ----------
+const boxGeo = new THREE.BoxGeometry(1,1,1);
+const reedsGeo = new THREE.BoxGeometry(0.3,1,0.3); // thin stalk instead of a full cube
+const crateGeo = new THREE.BoxGeometry(0.75,0.75,0.75); // a bit smaller than a full block, still grid-aligned
+const powerCrateGeo = new THREE.BoxGeometry(0.7,0.7,0.7);
+const GEOM_FOR_TYPE = { [REEDS]: reedsGeo, [LOOT_CRATE]: crateGeo, [POWERUP_CRATE]: powerCrateGeo };
+const materials = {};
+function litMat(map, opts){ return new THREE.MeshLambertMaterial(Object.assign({map}, opts||{})); }
+materials[DIRT]   = litMat(TEX.dirt);
+materials[STONE]  = litMat(TEX.stone);
+materials[SAND]   = litMat(TEX.sand);
+materials[LEAVES] = litMat(TEX.leaves, {transparent:true, opacity:0.95});
+materials[WATER]  = litMat(TEX.water, {transparent:true, opacity:0.65});
+materials[PLANKS] = litMat(TEX.planks);
+materials[REEDS]  = litMat(TEX.reeds);
+materials[LOOT_CRATE] = litMat(TEX.crate);
+materials[POWERUP_CRATE] = litMat(TEX.powerCrate);
+materials[RUBBLE] = litMat(TEX.rubble);
+materials[SNOW] = litMat(TEX.snow);
+materials[METAL] = litMat(TEX.metal);
+materials[GLASS] = litMat(TEX.glass, {transparent:true, opacity:0.35});
+materials[CLEAR_GLASS] = litMat(TEX.clearGlass, {transparent:true, opacity:0.08});
+// grass and wood use different textures per face: BoxGeometry face order is +x,-x,+y,-y,+z,-z
+const grassSideMat = litMat(TEX.grassSide), grassTopMat = litMat(TEX.grassTop), dirtMat = litMat(TEX.dirt);
+materials[GRASS] = [grassSideMat, grassSideMat, grassTopMat, dirtMat, grassSideMat, grassSideMat];
+const barkMat = litMat(TEX.woodBark), ringMat = litMat(TEX.woodRing);
+materials[WOOD] = [barkMat, barkMat, ringMat, ringMat, barkMat, barkMat];
+
+const instancedMeshes = {};
+function initMeshes(){
+  for(const t of ALL_RENDER_TYPES){
+    const geo = GEOM_FOR_TYPE[t] || boxGeo;
+    const mesh = new THREE.InstancedMesh(geo, materials[t], MAX_INSTANCES);
+    mesh.count = 0;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(mesh);
+    instancedMeshes[t] = mesh;
+  }
+}
+const _dummy = new THREE.Object3D();
+
+// ---------- Crack overlay shown while mining a block ----------
+const CRACK_STAGES = 6;
+const crackTextures = [];
+for(let stage=0; stage<CRACK_STAGES; stage++){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,size,size);
+  const rand = mulberry32(500+stage);
+  const lineCount = 2 + stage*3;
+  ctx.strokeStyle = 'rgba(20,20,20,0.6)';
+  ctx.lineWidth = 1;
+  for(let i=0;i<lineCount;i++){
+    ctx.beginPath();
+    ctx.moveTo(rand()*size, rand()*size);
+    ctx.lineTo(rand()*size, rand()*size);
+    ctx.lineTo(rand()*size, rand()*size);
+    ctx.stroke();
+  }
+  crackTextures.push(toTexture(canvas));
+}
+const crackMaterial = new THREE.MeshBasicMaterial({
+  map: crackTextures[0], transparent:true, depthWrite:false,
+  polygonOffset:true, polygonOffsetFactor:-4, polygonOffsetUnits:-4
+});
+const crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.002,1.002,1.002), crackMaterial);
+crackMesh.visible = false;
+scene.add(crackMesh);
+function updateCrackOverlay(){
+  if(!mining){ crackMesh.visible=false; return; }
+  crackMesh.visible = true;
+  crackMesh.position.set(mining.x+0.5, mining.y+0.5, mining.z+0.5);
+  const req = effectiveMineTime(mining.type);
+  const stage = Math.max(0, Math.min(CRACK_STAGES-1, Math.floor((mining.progress/req)*CRACK_STAGES)));
+  crackMaterial.map = crackTextures[stage];
+}
+
+// ---------- Little puff of particles when a block breaks ----------
+let particleSystems = [];
+function spawnBreakParticles(x,y,z,color){
+  const count = 10;
+  const positions = new Float32Array(count*3);
+  const velocities = [];
+  for(let i=0;i<count;i++){
+    positions[i*3]   = x+0.5+(Math.random()-0.5)*0.4;
+    positions[i*3+1] = y+0.5+(Math.random()-0.5)*0.4;
+    positions[i*3+2] = z+0.5+(Math.random()-0.5)*0.4;
+    velocities.push({
+      x:(Math.random()-0.5)*2.4,
+      y:Math.random()*2.6+0.6,
+      z:(Math.random()-0.5)*2.4
+    });
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  const mat = new THREE.PointsMaterial({color, size:0.18, transparent:true, opacity:1, depthWrite:false});
+  const points = new THREE.Points(geo, mat);
+  scene.add(points);
+  particleSystems.push({points, velocities, life:0, maxLife:0.45});
+}
+
+// ---------- Explosion visuals: bigger burst + an expanding flash so it actually
+// reads as "something big just landed", separate from the blast/damage radius ----------
+function spawnExplosionParticles(pos, radius){
+  const count = 26;
+  const spread = Math.max(1, radius*0.4);
+  const positions = new Float32Array(count*3);
+  const velocities = [];
+  for(let i=0;i<count;i++){
+    positions[i*3]   = pos.x + (Math.random()-0.5)*spread;
+    positions[i*3+1] = pos.y + (Math.random()-0.5)*spread*0.6;
+    positions[i*3+2] = pos.z + (Math.random()-0.5)*spread;
+    velocities.push({
+      x:(Math.random()-0.5)*7,
+      y:Math.random()*6+2,
+      z:(Math.random()-0.5)*7
+    });
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  const color = Math.random()<0.5 ? 0xff8c3a : 0xffe45c;
+  const mat = new THREE.PointsMaterial({color, size:0.3, transparent:true, opacity:1, depthWrite:false});
+  const points = new THREE.Points(geo, mat);
+  scene.add(points);
+  particleSystems.push({points, velocities, life:0, maxLife:0.6});
+}
+let explosionFlashes = [];
+function spawnExplosionFlash(pos, radius){
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.3, 10, 8),
+    new THREE.MeshBasicMaterial({color:0xffdd77, transparent:true, opacity:0.85, depthWrite:false})
+  );
+  mesh.position.copy(pos);
+  scene.add(mesh);
+  explosionFlashes.push({mesh, life:0, maxLife:0.22, targetScale: Math.max(2, radius*1.3)});
+}
+function updateExplosionFlashes(dt){
+  for(let i=explosionFlashes.length-1;i>=0;i--){
+    const f = explosionFlashes[i];
+    f.life += dt;
+    const t = Math.min(1, f.life/f.maxLife);
+    const s = 0.3 + t*f.targetScale;
+    f.mesh.scale.set(s,s,s);
+    f.mesh.material.opacity = 0.85*(1-t);
+    if(f.life>=f.maxLife){
+      scene.remove(f.mesh);
+      f.mesh.geometry.dispose(); f.mesh.material.dispose();
+      explosionFlashes.splice(i,1);
+    }
+  }
+}
+function spawnBigExplosionEffect(pos, radius){
+  spawnExplosionFlash(pos, radius);
+  spawnExplosionParticles(pos, radius);
+  spawnExplosionParticles(pos, radius);
+  const dx=pos.x-player.x, dy=pos.y-(player.y+0.9), dz=pos.z-player.z;
+  const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+  const shakeRange = radius*2.2;
+  if(dist < shakeRange){
+    triggerCameraShake(0.09*(1-dist/shakeRange), 0.35);
+  }
+}
+
+// Shots visually start from roughly where the held weapon actually sits
+// (lower-right of the camera, same offset as the first-person hand) rather
+// than dead-center from the camera/face - purely a spawn-point offset, the
+// direction is unchanged so aim/hit-detection is exactly as accurate as
+// before. This also fixes how it looks to OTHER players watching you fire,
+// since this same origin gets sent over the network as the shot's start point.
+function getMuzzleOrigin(){
+  const rightVec = new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);
+  const downVec = new THREE.Vector3(0,-1,0).applyQuaternion(camera.quaternion);
+  const fwdVec = new THREE.Vector3();
+  camera.getWorldDirection(fwdVec);
+  return camera.position.clone()
+    .addScaledVector(rightVec, 0.28)
+    .addScaledVector(downVec, 0.18)
+    .addScaledVector(fwdVec, 0.45);
+}
+let muzzleFlashes = [];
+function spawnMuzzleFlash(pos){
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06, 6, 6),
+    new THREE.MeshBasicMaterial({color:0xffe9a8, transparent:true, opacity:0.9, depthWrite:false})
+  );
+  mesh.position.copy(pos);
+  scene.add(mesh);
+  muzzleFlashes.push({mesh, life:0, maxLife:0.06});
+}
+function updateMuzzleFlashes(dt){
+  for(let i=muzzleFlashes.length-1;i>=0;i--){
+    const f = muzzleFlashes[i];
+    f.life += dt;
+    const t = Math.min(1, f.life/f.maxLife);
+    f.mesh.material.opacity = 0.9*(1-t);
+    f.mesh.scale.setScalar(1+t*1.5);
+    if(f.life>=f.maxLife){
+      scene.remove(f.mesh);
+      f.mesh.geometry.dispose(); f.mesh.material.dispose();
+      muzzleFlashes.splice(i,1);
+    }
+  }
+}
+function spawnTrailParticle(pos, color){
+  const positions = new Float32Array([pos.x, pos.y, pos.z]);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  const mat = new THREE.PointsMaterial({color, size:0.09, transparent:true, opacity:0.55, depthWrite:false});
+  const points = new THREE.Points(geo, mat);
+  scene.add(points);
+  particleSystems.push({points, velocities:[{x:0,y:-0.2,z:0}], life:0, maxLife:0.22});
+}
+function updateParticles(dt){
+  for(let i=particleSystems.length-1; i>=0; i--){
+    const ps = particleSystems[i];
+    ps.life += dt;
+    const posAttr = ps.points.geometry.attributes.position;
+    for(let j=0;j<ps.velocities.length;j++){
+      const v = ps.velocities[j];
+      v.y -= 6*dt;
+      posAttr.array[j*3]   += v.x*dt;
+      posAttr.array[j*3+1] += v.y*dt;
+      posAttr.array[j*3+2] += v.z*dt;
+    }
+    posAttr.needsUpdate = true;
+    ps.points.material.opacity = Math.max(0, 1 - ps.life/ps.maxLife);
+    if(ps.life >= ps.maxLife){
+      scene.remove(ps.points);
+      ps.points.geometry.dispose();
+      ps.points.material.dispose();
+      particleSystems.splice(i,1);
+    }
+  }
+}
+function rebuildMeshes(){
+  const counts = {};
+  for(const t of ALL_RENDER_TYPES) counts[t]=0;
+  for(let y=0;y<WORLD_Y;y++){
+    for(let z=0;z<WORLD_Z;z++){
+      for(let x=0;x<WORLD_X;x++){
+        const t = getBlock(x,y,z);
+        if(t===AIR) continue;
+        const exposed = t===REEDS ? true : (
+          isEmptyForExposure(getBlock(x+1,y,z)) ||
+          isEmptyForExposure(getBlock(x-1,y,z)) ||
+          isEmptyForExposure(getBlock(x,y+1,z)) ||
+          isEmptyForExposure(getBlock(x,y-1,z)) ||
+          isEmptyForExposure(getBlock(x,y,z+1)) ||
+          isEmptyForExposure(getBlock(x,y,z-1))
+        );
+        if(!exposed) continue;
+        const mesh = instancedMeshes[t];
+        if(!mesh || counts[t]>=MAX_INSTANCES) continue;
+        _dummy.position.set(x+0.5,y+0.5,z+0.5);
+        _dummy.updateMatrix();
+        mesh.setMatrixAt(counts[t]++, _dummy.matrix);
+      }
+    }
+  }
+  for(const t of ALL_RENDER_TYPES){
+    const mesh = instancedMeshes[t];
+    mesh.count = counts[t];
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+// ---------- First-person hand & held item ----------
+scene.add(camera); // needed so objects parented to the camera get rendered
+const handGroup = new THREE.Group();
+handGroup.position.set(0.32, -0.24, -0.55);
+handGroup.rotation.set(0.2, -0.35, 0.15);
+camera.add(handGroup);
+
+const arm = new THREE.Mesh(
+  new THREE.BoxGeometry(0.16,0.16,0.55),
+  new THREE.MeshLambertMaterial({color:0xdba36c})
+);
+arm.position.set(0,0,0.15);
+handGroup.add(arm);
+
+const itemAnchor = new THREE.Group();
+itemAnchor.position.set(0,0.1,-0.32);
+handGroup.add(itemAnchor);
+
+function clearItemAnchor(){
+  while(itemAnchor.children.length) itemAnchor.remove(itemAnchor.children[0]);
+}
+function buildPickaxeMesh(){
+  const group = new THREE.Group();
+  const handle = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05,0.34,0.05),
+    new THREE.MeshLambertMaterial({color:0x8a5a30})
+  );
+  handle.rotation.z = 0.55;
+  group.add(handle);
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.26,0.09,0.09),
+    new THREE.MeshLambertMaterial({color:0x9a9a9a})
+  );
+  head.position.set(0.12,0.16,0);
+  head.rotation.z = 0.55;
+  group.add(head);
+  return group;
+}
+function buildBlowPipeMesh(){
+  const tube = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035,0.045,0.5,8),
+    new THREE.MeshLambertMaterial({color:0x8fae4a})
+  );
+  tube.rotation.x = Math.PI/2;
+  return tube;
+}
+function buildSlingMesh(){
+  const group = new THREE.Group();
+  const forkMat = new THREE.MeshLambertMaterial({color:0x8a5a30});
+  const left = new THREE.Mesh(new THREE.BoxGeometry(0.04,0.3,0.04), forkMat);
+  left.position.set(-0.07,0.1,0); left.rotation.z=0.45;
+  group.add(left);
+  const right = new THREE.Mesh(new THREE.BoxGeometry(0.04,0.3,0.04), forkMat);
+  right.position.set(0.07,0.1,0); right.rotation.z=-0.45;
+  group.add(right);
+  const pebble = new THREE.Mesh(new THREE.SphereGeometry(0.05,6,6), new THREE.MeshLambertMaterial({color:0x8a8a8a}));
+  pebble.position.set(0,0.26,0);
+  group.add(pebble);
+  return group;
+}
+function buildClubMesh(){
+  const group = new THREE.Group();
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.42,0.06), new THREE.MeshLambertMaterial({color:0x6b4423}));
+  handle.rotation.z = 0.5;
+  group.add(handle);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.2), new THREE.MeshLambertMaterial({color:0x9a9a9a}));
+  head.position.set(0.18,0.2,0);
+  head.rotation.z = 0.5;
+  group.add(head);
+  return group;
+}
+function buildGrenadeMesh(){
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8), new THREE.MeshLambertMaterial({color:0x3a4a3a}));
+  group.add(body);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.08,6), new THREE.MeshLambertMaterial({color:0x8a5a30}));
+  stem.position.y=0.14;
+  group.add(stem);
+  return group;
+}
+function buildRocketLauncherMesh(){
+  const group = new THREE.Group();
+  const tube = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.07,0.07,0.55,8),
+    new THREE.MeshLambertMaterial({color:0x555555})
+  );
+  tube.rotation.x = Math.PI/2;
+  group.add(tube);
+  const tip = new THREE.Mesh(
+    new THREE.ConeGeometry(0.08,0.15,8),
+    new THREE.MeshLambertMaterial({color:0x333333})
+  );
+  tip.rotation.x = -Math.PI/2;
+  tip.position.z = -0.35;
+  group.add(tip);
+  return group;
+}
+function buildDoubleBarrelMesh(){
+  const group = new THREE.Group();
+  const barrelMat = new THREE.MeshLambertMaterial({color:0x333333});
+  const barrel1 = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.5,8), barrelMat);
+  barrel1.rotation.x = Math.PI/2;
+  barrel1.position.set(-0.045,0,0);
+  group.add(barrel1);
+  const barrel2 = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.5,8), barrelMat);
+  barrel2.rotation.x = Math.PI/2;
+  barrel2.position.set(0.045,0,0);
+  group.add(barrel2);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.09,0.24), new THREE.MeshLambertMaterial({color:0x6b4423}));
+  stock.position.set(0,0,0.32);
+  group.add(stock);
+  return group;
+}
+function buildPumpShotgunMesh(){
+  const group = new THREE.Group();
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.045,0.045,0.55,8),
+    new THREE.MeshLambertMaterial({color:0x333333})
+  );
+  barrel.rotation.x = Math.PI/2;
+  group.add(barrel);
+  const pump = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.08,0.16), new THREE.MeshLambertMaterial({color:0x5a3d28}));
+  pump.position.set(0,-0.05,-0.05);
+  group.add(pump);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.1,0.22), new THREE.MeshLambertMaterial({color:0x6b4423}));
+  stock.position.set(0,0,0.34);
+  group.add(stock);
+  return group;
+}
+function buildRifleMesh(){
+  const group = new THREE.Group();
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025,0.025,0.65,8),
+    new THREE.MeshLambertMaterial({color:0x3a3a3a})
+  );
+  barrel.rotation.x = Math.PI/2;
+  group.add(barrel);
+  const scope = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025,0.025,0.18,8),
+    new THREE.MeshLambertMaterial({color:0x1a1a1a})
+  );
+  scope.rotation.x = Math.PI/2;
+  scope.position.set(0,0.05,-0.05);
+  group.add(scope);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.09,0.28), new THREE.MeshLambertMaterial({color:0x6b4423}));
+  stock.position.set(0,0,0.4);
+  group.add(stock);
+  return group;
+}
+function buildPistolMesh(){
+  const group = new THREE.Group();
+  const slide = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08,0.09,0.28),
+    new THREE.MeshLambertMaterial({color:0x707070})
+  );
+  slide.position.set(0,0.02,0);
+  group.add(slide);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.16,0.09), new THREE.MeshLambertMaterial({color:0x3a2a1a}));
+  grip.position.set(0,-0.1,0.1);
+  grip.rotation.x = -0.25;
+  group.add(grip);
+  return group;
+}
+function buildCarbineMesh(){
+  const group = new THREE.Group();
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.028,0.028,0.5,8),
+    new THREE.MeshLambertMaterial({color:0x444444})
+  );
+  barrel.rotation.x = Math.PI/2;
+  barrel.position.z = -0.05;
+  group.add(barrel);
+  const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.1,0.2), new THREE.MeshLambertMaterial({color:0x8a6a45}));
+  receiver.position.set(0,0,0.12);
+  group.add(receiver);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.08,0.22), new THREE.MeshLambertMaterial({color:0x6b4423}));
+  stock.position.set(0,0,0.34);
+  group.add(stock);
+  return group;
+}
+function updateHeldItemMesh(){
+  clearItemAnchor();
+  const slot = slots[selectedSlot];
+  if(!slot || slot.type===null) return;
+  if(slot.type===STONE_PICKAXE){
+    itemAnchor.add(buildPickaxeMesh());
+  } else if(slot.type===BLOW_PIPE){
+    itemAnchor.add(buildBlowPipeMesh());
+  } else if(slot.type===STONE_SLING){
+    itemAnchor.add(buildSlingMesh());
+  } else if(slot.type===WAR_CLUB){
+    itemAnchor.add(buildClubMesh());
+  } else if(slot.type===GRENADE){
+    itemAnchor.add(buildGrenadeMesh());
+  } else if(slot.type===ROCKET_LAUNCHER){
+    itemAnchor.add(buildRocketLauncherMesh());
+  } else if(slot.type===DOUBLE_BARREL){
+    itemAnchor.add(buildDoubleBarrelMesh());
+  } else if(slot.type===PUMP_SHOTGUN){
+    itemAnchor.add(buildPumpShotgunMesh());
+  } else if(slot.type===RIFLE){
+    itemAnchor.add(buildRifleMesh());
+  } else if(slot.type===PISTOL){
+    itemAnchor.add(buildPistolMesh());
+  } else if(slot.type===CARBINE){
+    itemAnchor.add(buildCarbineMesh());
+  } else if(slot.type===REEDS){
+    itemAnchor.add(new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]));
+  } else if(SOLID_TYPES.includes(slot.type)){
+    const size=0.26;
+    itemAnchor.add(new THREE.Mesh(new THREE.BoxGeometry(size,size,size), materials[slot.type]));
+  }
+}
+
+// ---------- Weapons: ranged projectiles, melee, thrown & fired explosives ----------
+// Five different firing styles to test: a light fast dart, a heavier slower
+// pebble, a short-range melee swing, a lobbed grenade, and a straight-flying rocket.
+const WEAPON_CONFIG = {
+  // crateBreakRange: any gun can shatter a crate open at close range - short
+  // on purpose, so you have to actually walk up to one rather than sniping
+  // it from across the map.
+  [BLOW_PIPE]:       { kind:'projectile', damage:0.9, speed:23,   cooldown:0.15, radius:0.045, color:0x4a3520, sound:'light', crateBreakRange:3 },
+  [STONE_SLING]:     { kind:'projectile', damage:2, speed:34.5, cooldown:0.3,  radius:0.06,  color:0x8a8a8a, sound:'sling', crateBreakRange:3 },
+  [PISTOL]:          { kind:'projectile', damage:3, speed:40,   cooldown:0.4,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3 },
+  [WAR_CLUB]:        { kind:'melee', damage:5, cooldown:0.6, range:1.7 },
+  [GRENADE]:         { kind:'grenade', damage:7, cooldown:1.2, throwSpeed:11, blastRadius:2.8 },
+  [ROCKET_LAUNCHER]: { kind:'rocket', damage:8, cooldown:1.4, speed:30, blastRadius:3.2, color:0xff5522 },
+  // penetration: punches straight through this many soft blocks (dirt/grass/
+  // leaves/snow) in a row before finally stopping on the next hit - a high-
+  // powered round shooting through cover, unlike everything else which just
+  // stops on first contact.
+  [RIFLE]:           { kind:'projectile', damage:4, speed:48, cooldown:1.0, radius:0.04, color:0xc9a227, sound:'rifle', penetration:2, crateBreakRange:3 },
+  // carbine: same rifle family, no penetration, but noticeably faster on
+  // both the bullet and the trigger, trading power for rate of fire.
+  [CARBINE]:         { kind:'projectile', damage:3, speed:52, cooldown:0.6, radius:0.04, color:0x8a6a45, sound:'rifle', crateBreakRange:3 },
+  // shotguns: a spread of small fast pellets (reuses the same dart system as
+  // blow pipe/sling) - burstCount>1 fires several blasts in quick succession
+  // from one click before the real cooldown kicks in. No magazines/reloading.
+  // breakRange caps how far a pellet can still be close/fast enough to blow
+  // out dirt/grass/leaves/snow - past that it just stops on terrain like any
+  // other hit, so you can't delete a whole hillside from across the map.
+  // crateBreakRange is separate and much shorter - you have to be right on
+  // top of a crate to shotgun it open.
+  [DOUBLE_BARREL]:   { kind:'shotgun', burstCount:2, burstDelay:0.12, pelletCount:6, pelletDamage:2, spread:0.13, speed:30, cooldown:1.8, color:0x4a3520, breakRange:10, crateBreakRange:3 },
+  [PUMP_SHOTGUN]:    { kind:'shotgun', burstCount:1, burstDelay:0,    pelletCount:9, pelletDamage:2, spread:0.08, speed:30, cooldown:1.0, color:0x333333, breakRange:10, crateBreakRange:3 }
+};
+let lastAttackTime = 0;
+let pendingBurst = null; // {weapon, shotsRemaining, timer} - mid-burst shotgun state
+let darts = [];
+function shootProjectile(weapon){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const origin = getMuzzleOrigin();
+  spawnMuzzleFlash(origin);
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(weapon.radius,6,6),
+    new THREE.MeshLambertMaterial({color:weapon.color})
+  );
+  mesh.position.copy(origin).addScaledVector(dir,0.4);
+  scene.add(mesh);
+  const shotId = multiplayer ? makeShotId() : null;
+  darts.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, color:weapon.color, shotId, pen:weapon.penetration||0, crateBreakRange:weapon.crateBreakRange});
+  sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:weapon.radius}, origin, dir, shotId);
+  if(weapon.sound==='rifle') sfxShootRifle();
+  else if(weapon.sound==='sling') sfxShootSling();
+  else if(weapon.sound==='pistol') sfxShootPistol();
+  else sfxShootLight();
+}
+function fireShotgunPellets(weapon){
+  const baseDir = new THREE.Vector3();
+  camera.getWorldDirection(baseDir);
+  const origin = getMuzzleOrigin();
+  spawnMuzzleFlash(origin);
+  for(let i=0;i<weapon.pelletCount;i++){
+    const dir = baseDir.clone();
+    dir.x += (Math.random()-0.5)*weapon.spread;
+    dir.y += (Math.random()-0.5)*weapon.spread;
+    dir.z += (Math.random()-0.5)*weapon.spread;
+    dir.normalize();
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035,5,5),
+      new THREE.MeshLambertMaterial({color:weapon.color})
+    );
+    mesh.position.copy(origin).addScaledVector(dir,0.4);
+    scene.add(mesh);
+    const shotId = multiplayer ? makeShotId() : null;
+    darts.push({mesh, dir, life:0, damage:weapon.pelletDamage, speed:weapon.speed, color:weapon.color, shotId, canBreakDirt:true, breakRange:weapon.breakRange, crateBreakRange:weapon.crateBreakRange});
+    sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:0.035}, origin, dir, shotId);
+  }
+  sfxShotgunBlast();
+}
+function fireShotgunBurst(weapon){
+  fireShotgunPellets(weapon);
+  if(weapon.burstCount>1){
+    pendingBurst = {weapon, shotsRemaining: weapon.burstCount-1, timer: weapon.burstDelay};
+  }
+}
+function updatePendingBurst(dt){
+  if(!pendingBurst) return;
+  pendingBurst.timer -= dt;
+  if(pendingBurst.timer<=0){
+    fireShotgunPellets(pendingBurst.weapon);
+    pendingBurst.shotsRemaining--;
+    if(pendingBurst.shotsRemaining<=0) pendingBurst = null;
+    else pendingBurst.timer = pendingBurst.weapon.burstDelay;
+  }
+}
+function updateDarts(dt){
+  const brokenDirt = [];
+  for(let i=darts.length-1;i>=0;i--){
+    const d = darts[i];
+    d.life += dt;
+    d.mesh.position.addScaledVector(d.dir, d.speed*dt);
+    spawnTrailParticle(d.mesh.position, d.color);
+    let hitSomething = false;
+
+    // check enemies first
+    for(const en of enemies){
+      if(!en.alive) continue;
+      const zone = resolveHitZone(d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R, en.y+ENEMY_BODY_Y,ENEMY_BODY_R);
+      if(zone){
+        const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
+        hitEnemy(en, dmg);
+        if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
+        spawnBreakParticles(Math.floor(en.x),Math.floor(en.y+0.5),Math.floor(en.z), 0xff5555);
+        hitSomething = true;
+        break;
+      }
+    }
+
+    // then remote players (PvP)
+    if(!hitSomething && multiplayer){
+      for(const [id,rp] of remotePlayers){
+        const pos = rp.group.position;
+        const zone = resolveHitZone(d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
+        if(zone){
+          const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
+          sendHit(id, dmg);
+          if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
+          triggerHitEffect(rp);
+          spawnBreakParticles(Math.floor(pos.x),Math.floor(pos.y+0.5),Math.floor(pos.z), 0xff5555);
+          hitSomething = true;
+          break;
+        }
+      }
+    }
+
+    if(!hitSomething){
+      const bx=Math.floor(d.mesh.position.x), by=Math.floor(d.mesh.position.y), bz=Math.floor(d.mesh.position.z);
+      const t = getBlock(bx,by,bz);
+      if(isSolid(t)){
+        const dist = d.life*d.speed;
+        const isSoft = (t===DIRT || t===GRASS || t===LEAVES || t===SNOW);
+        const isCrate = (t===LOOT_CRATE || t===POWERUP_CRATE);
+
+        if(isCrate && dist <= (d.crateBreakRange||0)){
+          if(t===LOOT_CRATE) openLootCrate(bx,by,bz); else spawnPowerupPickup(bx,by,bz);
+          setBlock(bx,by,bz,AIR);
+          brokenDirt.push({x:bx,y:by,z:bz,blockType:AIR});
+          spawnBreakParticles(bx,by,bz, t===LOOT_CRATE?0xe8c94a:0x5fd0ff);
+          hitSomething = true;
+        } else if(d.canBreakDirt && isSoft && dist <= (d.breakRange||0)){
+          dropItemOnGround(bx,by,bz,t,1);
+          setBlock(bx,by,bz,AIR);
+          brokenDirt.push({x:bx,y:by,z:bz,blockType:AIR});
+          spawnBreakParticles(bx,by,bz,BLOCK_COLORS[t]);
+          hitSomething = true;
+        } else if(d.pen>0 && isSoft){
+          // punches straight through instead of stopping - the bullet keeps flying
+          dropItemOnGround(bx,by,bz,t,1);
+          setBlock(bx,by,bz,AIR);
+          brokenDirt.push({x:bx,y:by,z:bz,blockType:AIR});
+          spawnBreakParticles(bx,by,bz,BLOCK_COLORS[t]);
+          d.pen--;
+        } else {
+          spawnBreakParticles(bx,by,bz,0xd9c98a);
+          hitSomething = true;
+        }
+      }
+    }
+
+    if(hitSomething || d.life>3){
+      sendImpact(d.shotId, d.mesh.position);
+      scene.remove(d.mesh);
+      d.mesh.geometry.dispose();
+      d.mesh.material.dispose();
+      darts.splice(i,1);
+    }
+  }
+  if(brokenDirt.length){
+    rebuildMeshes();
+    sendBlockBatch(brokenDirt);
+  }
+}
+function meleeAttack(weapon){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  sfxSwing();
+  let closestKind=null, closestTarget=null, closestDist=Infinity;
+  for(const en of enemies){
+    if(!en.alive) continue;
+    const toEnemy = new THREE.Vector3(en.x-player.x, (en.y+0.6)-(player.y+currentEyeHeight), en.z-player.z);
+    const dist = toEnemy.length();
+    if(dist>weapon.range) continue;
+    toEnemy.normalize();
+    if(toEnemy.dot(dir)>0.55 && dist<closestDist){ closestDist=dist; closestTarget=en; closestKind='enemy'; }
+  }
+  if(multiplayer){
+    for(const [id,rp] of remotePlayers){
+      const pos = rp.group.position;
+      const toP = new THREE.Vector3(pos.x-player.x, (pos.y+0.8)-(player.y+currentEyeHeight), pos.z-player.z);
+      const dist = toP.length();
+      if(dist>weapon.range) continue;
+      toP.normalize();
+      if(toP.dot(dir)>0.55 && dist<closestDist){ closestDist=dist; closestTarget={id,pos,rp}; closestKind='player'; }
+    }
+  }
+  if(closestKind==='enemy'){
+    const aim = camera.position.clone().addScaledVector(dir, closestDist);
+    const zone = resolveHitZone(aim.x,aim.y,aim.z, closestTarget.x,closestTarget.z, closestTarget.y+ENEMY_HEAD_Y,ENEMY_HEAD_R+0.08, closestTarget.y+ENEMY_BODY_Y,ENEMY_BODY_R+0.15);
+    const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
+    hitEnemy(closestTarget, dmg);
+    if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
+    spawnBreakParticles(Math.floor(closestTarget.x),Math.floor(closestTarget.y+0.5),Math.floor(closestTarget.z), 0xff5555);
+  } else if(closestKind==='player'){
+    const aim = camera.position.clone().addScaledVector(dir, closestDist);
+    const zone = resolveHitZone(aim.x,aim.y,aim.z, closestTarget.pos.x,closestTarget.pos.z, closestTarget.pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R+0.08, closestTarget.pos.y+PLAYER_BODY_Y,PLAYER_BODY_R+0.15);
+    const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
+    sendHit(closestTarget.id, dmg);
+    if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
+    triggerHitEffect(closestTarget.rp);
+    spawnBreakParticles(Math.floor(closestTarget.pos.x),Math.floor(closestTarget.pos.y+0.5),Math.floor(closestTarget.pos.z), 0xff5555);
+  } else {
+    flashMessage('Swing missed');
+  }
+}
+
+// ---------- Grenade: lobbed with gravity, explodes in a radius on impact ----------
+const GRENADE_GRAVITY = -16;
+// How much of the blast radius a block type can "shrug off" - 1.0 means it's
+// destroyed anywhere in the full radius, lower means it only breaks up close.
+const BLAST_RESISTANCE = {
+  [STONE]: 0.45,
+  [DIRT]: 0.9,
+  [SAND]: 0.9,
+  [GRASS]: 0.95,
+  [WOOD]: 1.0,
+  [LEAVES]: 1.0,
+  [REEDS]: 1.0,
+  [PLANKS]: 0.85,
+  [LOOT_CRATE]: 0.9,
+  [RUBBLE]: 0.7,
+  [SNOW]: 0.95,
+  [METAL]: 0.35,
+  [GLASS]: 1.0,
+  [CLEAR_GLASS]: 1.0
+};
+let grenades = [];
+function throwGrenade(weapon){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const origin = getMuzzleOrigin();
+  const mesh = buildGrenadeMesh();
+  mesh.position.copy(origin).addScaledVector(dir, 0.5);
+  scene.add(mesh);
+  const shotId = multiplayer ? makeShotId() : null;
+  grenades.push({
+    mesh,
+    vel: dir.clone().multiplyScalar(weapon.throwSpeed),
+    life: 0,
+    damage: weapon.damage,
+    radius: weapon.blastRadius,
+    shotId
+  });
+  sendShotEvent({kind:'grenade', speed:weapon.throwSpeed}, origin, dir, shotId);
+  sfxGrenadeThrow();
+}
+function updateGrenades(dt){
+  for(let i=grenades.length-1;i>=0;i--){
+    const g = grenades[i];
+    g.life += dt;
+    g.vel.y += GRENADE_GRAVITY*dt;
+    g.mesh.position.addScaledVector(g.vel, dt);
+    g.mesh.rotation.x += dt*6;
+    spawnTrailParticle(g.mesh.position, 0x3a4a3a);
+
+    const bx=Math.floor(g.mesh.position.x), by=Math.floor(g.mesh.position.y), bz=Math.floor(g.mesh.position.z);
+    if(isSolid(getBlock(bx,by,bz)) || g.life>2.5){
+      triggerExplosion(g.mesh.position, g.damage, g.radius);
+      sendImpact(g.shotId, g.mesh.position);
+      scene.remove(g.mesh);
+      g.mesh.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
+      grenades.splice(i,1);
+    }
+  }
+}
+function triggerExplosion(pos, damage, radius){
+  for(const en of enemies){
+    if(!en.alive) continue;
+    const dx=en.x-pos.x, dy=(en.y+0.5)-pos.y, dz=en.z-pos.z;
+    const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(dist<=radius){
+      const falloff = 1 - dist/radius;
+      hitEnemy(en, Math.max(1, Math.ceil(damage*falloff)));
+    }
+  }
+  const pdx=player.x-pos.x, pdy=(player.y+0.9)-pos.y, pdz=player.z-pos.z;
+  const pdist = Math.sqrt(pdx*pdx+pdy*pdy+pdz*pdz);
+  if(pdist<=radius){
+    const falloff = 1 - pdist/radius;
+    takeDamage(Math.max(1, Math.ceil(damage*falloff)));
+    flashMessage('Caught in the blast!');
+  }
+  if(multiplayer){
+    for(const [id,rp] of remotePlayers){
+      const rdx=rp.group.position.x-pos.x, rdy=(rp.group.position.y+0.8)-pos.y, rdz=rp.group.position.z-pos.z;
+      const rdist = Math.sqrt(rdx*rdx+rdy*rdy+rdz*rdz);
+      if(rdist<=radius){
+        const falloff = 1 - rdist/radius;
+        sendHit(id, Math.max(1, Math.ceil(damage*falloff)));
+        triggerHitEffect(rp);
+      }
+    }
+  }
+
+  // blow out terrain and player-placed blocks in the blast radius (leave water be)
+  const cx=Math.floor(pos.x), cy=Math.floor(pos.y), cz=Math.floor(pos.z);
+  const r = Math.ceil(radius);
+  const changes = [];
+  for(let x=cx-r; x<=cx+r; x++){
+    for(let y=cy-r; y<=cy+r; y++){
+      for(let z=cz-r; z<=cz+r; z++){
+        const dx=(x+0.5)-pos.x, dy=(y+0.5)-pos.y, dz=(z+0.5)-pos.z;
+        const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(dist > radius) continue;
+        const t = getBlock(x,y,z);
+        if(t===AIR || t===WATER) continue;
+        const resistance = BLAST_RESISTANCE[t]!==undefined ? BLAST_RESISTANCE[t] : 1.0;
+        if(dist > radius*resistance) continue; // tougher material, too far from the center to break
+        setBlock(x,y,z,AIR);
+        changes.push({x,y,z,blockType:AIR});
+        // a rocket/grenade doesn't harvest cleanly - a coin flip on whether anything survives
+        const LOOT_SURVIVAL_CHANCE = 0.5;
+        if(t===STONE){
+          if(Math.random()<LOOT_SURVIVAL_CHANCE) dropItemOnGround(x,y,z,RUBBLE,1);
+        } else if(t===LOOT_CRATE){
+          if(Math.random()<LOOT_SURVIVAL_CHANCE) openLootCrate(x,y,z);
+        } else if(t===POWERUP_CRATE){
+          if(Math.random()<LOOT_SURVIVAL_CHANCE) spawnPowerupPickup(x,y,z);
+        }
+      }
+    }
+  }
+  if(changes.length){
+    rebuildMeshes();
+    sendBlockBatch(changes);
+  }
+
+  spawnBigExplosionEffect(pos, radius);
+  sfxExplosion();
+}
+
+// ---------- Rocket launcher: fast straight-line flight, explodes on impact ----------
+let rockets = [];
+function fireRocket(weapon){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const origin = getMuzzleOrigin();
+  spawnMuzzleFlash(origin);
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09,8,8),
+    new THREE.MeshLambertMaterial({color:weapon.color})
+  );
+  mesh.position.copy(origin).addScaledVector(dir, 0.5);
+  scene.add(mesh);
+  const shotId = multiplayer ? makeShotId() : null;
+  rockets.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, radius:weapon.blastRadius, shotId});
+  sendShotEvent({kind:'rocket', speed:weapon.speed, color:weapon.color, radius:0.09}, origin, dir, shotId);
+  sfxRocketLaunch();
+}
+function updateRockets(dt){
+  for(let i=rockets.length-1;i>=0;i--){
+    const r = rockets[i];
+    r.life += dt;
+    r.mesh.position.addScaledVector(r.dir, r.speed*dt);
+    spawnTrailParticle(r.mesh.position, 0xff5522);
+    let hit = false;
+
+    for(const en of enemies){
+      if(!en.alive) continue;
+      const dx=r.mesh.position.x-en.x, dy=r.mesh.position.y-(en.y+0.6), dz=r.mesh.position.z-en.z;
+      if(dx*dx+dy*dy+dz*dz < 0.5*0.5){ hit=true; break; }
+    }
+    if(!hit && multiplayer){
+      for(const rp of remotePlayers.values()){
+        const pos = rp.group.position;
+        const dx=r.mesh.position.x-pos.x, dy=r.mesh.position.y-(pos.y+0.8), dz=r.mesh.position.z-pos.z;
+        if(dx*dx+dy*dy+dz*dz < 0.6*0.6){ hit=true; break; }
+      }
+    }
+    if(!hit){
+      const bx=Math.floor(r.mesh.position.x), by=Math.floor(r.mesh.position.y), bz=Math.floor(r.mesh.position.z);
+      if(isSolid(getBlock(bx,by,bz))) hit=true;
+    }
+
+    if(hit || r.life>2.5){
+      triggerExplosion(r.mesh.position, r.damage, r.radius);
+      sendImpact(r.shotId, r.mesh.position);
+      scene.remove(r.mesh);
+      r.mesh.geometry.dispose();
+      r.mesh.material.dispose();
+      rockets.splice(i,1);
+    }
+  }
+}
+
+function disposeObject3D(obj){
+  obj.traverse(o=>{
+    if(o.geometry) o.geometry.dispose();
+    if(o.material){
+      if(Array.isArray(o.material)) o.material.forEach(m=>{ if(m) m.dispose(); });
+      else o.material.dispose();
+    }
+  });
+}
+
+// ---------- Remote projectiles (cosmetic only) ----------
+// When another player fires, we get a 'shot' message and spawn a visual-only
+// copy here - no damage or block destruction happens from these; that's all
+// handled authoritatively on the shooter's own client and synced separately.
+let remoteProjectiles = [];
+function spawnRemoteProjectile(msg){
+  let mesh;
+  if(msg.kind==='grenade') mesh = buildGrenadeMesh();
+  else {
+    mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(msg.radius||0.08,6,6),
+      new THREE.MeshLambertMaterial({color: msg.color!==undefined ? msg.color : 0x888888})
+    );
+    spawnMuzzleFlash(new THREE.Vector3(msg.ox, msg.oy, msg.oz));
+  }
+  mesh.position.set(msg.ox, msg.oy, msg.oz);
+  scene.add(mesh);
+  const dir = new THREE.Vector3(msg.dx, msg.dy, msg.dz);
+  remoteProjectiles.push({
+    mesh, kind: msg.kind, shotId: msg.shotId,
+    dir: msg.kind==='grenade' ? null : dir,
+    vel: msg.kind==='grenade' ? dir.clone().multiplyScalar(msg.speed) : null,
+    speed: msg.speed,
+    color: msg.color!==undefined ? msg.color : 0x888888,
+    life: 0
+  });
+}
+function endRemoteProjectile(p, pos){
+  if(p.kind==='grenade' || p.kind==='rocket'){
+    spawnBigExplosionEffect(pos, 3); // cosmetic only - exact radius doesn't need to match, just look right
+    sfxExplosion();
+  } else {
+    spawnBreakParticles(Math.floor(pos.x),Math.floor(pos.y),Math.floor(pos.z),0xd9c98a);
+  }
+  scene.remove(p.mesh);
+  disposeObject3D(p.mesh);
+}
+function applyRemoteImpact(shotId, pos){
+  const idx = remoteProjectiles.findIndex(p=>p.shotId===shotId);
+  if(idx===-1) return; // already ended locally (its own timeout/collision beat the message here)
+  endRemoteProjectile(remoteProjectiles[idx], pos);
+  remoteProjectiles.splice(idx,1);
+}
+function updateRemoteProjectiles(dt){
+  for(let i=remoteProjectiles.length-1; i>=0; i--){
+    const p = remoteProjectiles[i];
+    p.life += dt;
+    if(p.kind==='grenade'){
+      p.vel.y += GRENADE_GRAVITY*dt;
+      p.mesh.position.addScaledVector(p.vel, dt);
+      p.mesh.rotation.x += dt*6;
+    } else {
+      p.mesh.position.addScaledVector(p.dir, p.speed*dt);
+    }
+    spawnTrailParticle(p.mesh.position, p.color);
+
+    const bx=Math.floor(p.mesh.position.x), by=Math.floor(p.mesh.position.y), bz=Math.floor(p.mesh.position.z);
+    const maxLife = p.kind==='projectile' ? 3 : 2.5;
+    if(isSolid(getBlock(bx,by,bz)) || p.life>maxLife){
+      endRemoteProjectile(p, p.mesh.position);
+      remoteProjectiles.splice(i,1);
+    }
+  }
+}
+
+// ---------- Ground items ----------
+// Dropped blocks/weapons/buffs sit in the world as a single stacked icon (with a
+// count badge) rather than one mesh per item. In multiplayer, this is server-
+// authoritative - only one player can ever actually collect a given drop, even
+// if two people reach it at the same instant (see sendDropItem/requestPickup).
+const GROUND_ITEM_LIFESPAN = 90; // seconds before an uncollected drop fades away
+const groundItems = new Map(); // id -> {group, icon, countSprite, type, count, baseY, bobPhase, life, pending}
+let nextLocalItemId = 1;
+
+// Plain resource drops (dirt, stone, wood, etc.) render as a flat billboard
+// icon instead of a full textured cube - much cheaper when a lot of them pile
+// up after an explosion, and sidesteps needing per-face material arrays
+// (grass/wood) on a tiny throwaway mesh entirely.
+const GROUND_ICON_TEX = {
+  [DIRT]: TEX.dirt, [STONE]: TEX.stone, [SAND]: TEX.sand, [LEAVES]: TEX.leaves,
+  [WATER]: TEX.water, [PLANKS]: TEX.planks, [REEDS]: TEX.reeds, [RUBBLE]: TEX.rubble,
+  [GRASS]: TEX.grassTop, [WOOD]: TEX.woodRing
+};
+function buildGroundItemMesh(type){
+  switch(type){
+    case STONE_PICKAXE: return buildPickaxeMesh();
+    case BLOW_PIPE: return buildBlowPipeMesh();
+    case STONE_SLING: return buildSlingMesh();
+    case WAR_CLUB: return buildClubMesh();
+    case GRENADE: return buildGrenadeMesh();
+    case ROCKET_LAUNCHER: return buildRocketLauncherMesh();
+    case POWERUP_CRATE: return new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), materials[POWERUP_CRATE]);
+    default: {
+      const tex = GROUND_ICON_TEX[type];
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true}));
+      sprite.scale.set(0.4,0.4,1);
+      return sprite;
+    }
+  }
+}
+function makeCountSprite(count){
+  const canvas = document.createElement('canvas');
+  canvas.width=64; canvas.height=64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.beginPath(); ctx.arc(32,32,26,0,Math.PI*2); ctx.fill();
+  ctx.font='bold 26px sans-serif';
+  ctx.fillStyle='#fff';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(String(count),32,34);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:false}));
+  sprite.scale.set(0.4,0.4,1);
+  sprite.position.set(0,0.35,0);
+  return sprite;
+}
+function spawnGroundItemVisual(id, x, y, z, type, count){
+  if(groundItems.has(id)) return;
+  const group = new THREE.Group();
+  const icon = buildGroundItemMesh(type);
+  icon.scale.multiplyScalar(0.8);
+  group.add(icon);
+  let countSprite = null;
+  if(count>1){ countSprite = makeCountSprite(count); group.add(countSprite); }
+  const baseY = y+0.35;
+  group.position.set(x+0.5, baseY, z+0.5);
+  scene.add(group);
+  groundItems.set(id, {group, icon, countSprite, type, count, baseY, bobPhase:Math.random()*Math.PI*2, life:0, pending:false});
+}
+function updateGroundItemCount(id, count){
+  const item = groundItems.get(id);
+  if(!item) return;
+  item.count = count;
+  if(item.countSprite){ item.group.remove(item.countSprite); disposeObject3D(item.countSprite); item.countSprite=null; }
+  if(count>1){ item.countSprite = makeCountSprite(count); item.group.add(item.countSprite); }
+}
+function removeGroundItem(id){
+  const item = groundItems.get(id);
+  if(!item) return;
+  scene.remove(item.group);
+  disposeObject3D(item.group);
+  groundItems.delete(id);
+}
+function dropItemOnGround(x,y,z,type,count){
+  count = count||1;
+  if(multiplayer){
+    if(socket && socket.readyState===WebSocket.OPEN){
+      socket.send(JSON.stringify({type:'dropItem', x, y, z, itemType:type, count}));
+    }
+    return; // wait for the server's authoritative broadcast rather than showing it optimistically
+  }
+  for(const [id,item] of groundItems){
+    if(item.type!==type) continue;
+    const dx=item.group.position.x-(x+0.5), dz=item.group.position.z-(z+0.5);
+    if(Math.abs(dx)<1.1 && Math.abs(dz)<1.1){
+      updateGroundItemCount(id, item.count+count);
+      return;
+    }
+  }
+  spawnGroundItemVisual('local-'+(nextLocalItemId++), x, y, z, type, count);
+}
+function collectGroundItem(item){
+  if(item.type===POWERUP_CRATE){
+    applySpeedBoost();
+  } else {
+    for(let i=0;i<item.count;i++) addToInventory(item.type);
+    sfxPickup();
+  }
+}
+function requestPickup(id){
+  const item = groundItems.get(id);
+  if(!item || item.pending) return;
+  if(multiplayer){
+    item.pending = true;
+    if(socket && socket.readyState===WebSocket.OPEN){
+      socket.send(JSON.stringify({type:'pickupItem', id}));
+    }
+  } else {
+    collectGroundItem(item);
+    removeGroundItem(id);
+  }
+}
+function updateGroundItems(dt){
+  for(const [id,item] of groundItems){
+    item.life += dt;
+    item.bobPhase += dt*2;
+    item.group.position.y = item.baseY + Math.sin(item.bobPhase)*0.08;
+    item.group.rotation.y += dt*1.2;
+    if(item.life > GROUND_ITEM_LIFESPAN-5){
+      const fade = Math.max(0, (GROUND_ITEM_LIFESPAN-item.life)/5);
+      item.group.traverse(o=>{ if(o.material){ o.material.transparent=true; o.material.opacity=fade; } });
+    }
+    if(item.life > GROUND_ITEM_LIFESPAN){
+      removeGroundItem(id);
+      continue;
+    }
+    if(item.pending) continue;
+    const dx=item.group.position.x-player.x, dz=item.group.position.z-player.z, dy=item.group.position.y-(player.y+0.9);
+    if(dx*dx+dy*dy+dz*dz < 1.0*1.0){
+      requestPickup(id);
+    }
+  }
+}
+
+// ---------- Player ----------
+const player = { x: WORLD_X/2, y: WORLD_Y, z: WORLD_Z/2 };
+let velocity = { y:0 };
+let yaw=0, pitch=0;
+let onGround=false;
+const EYE_HEIGHT=1.6, CROUCH_EYE_HEIGHT=1.05, HALF_W=0.3, HEIGHT_=1.8, GRAVITY=-24, JUMP_SPEED=8.2;
+let currentEyeHeight = EYE_HEIGHT;
+
+let cameraShakeTimer = 0, cameraShakeDuration = 0.3, cameraShakeMag = 0;
+function triggerCameraShake(mag, duration){
+  cameraShakeTimer = duration;
+  cameraShakeDuration = duration;
+  cameraShakeMag = mag;
+}
+
+// ---------- Health ----------
+const MAX_HEALTH = 20;
+let health = MAX_HEALTH;
+let noDamageTimer = 0, regenTimer = 0;
+let airPeakY = 0;
+let footstepTimer = 0;
+const SAFE_FALL_DISTANCE = 3;
+function updateHealthUI(){
+  const wrap = document.getElementById('healthBar');
+  wrap.innerHTML = '';
+  const fullHearts = Math.floor(health/2);
+  const halfHeart = health%2===1;
+  for(let i=0;i<10;i++){
+    const span = document.createElement('span');
+    span.className='heart';
+    span.textContent='\u2764';
+    if(i<fullHearts) span.style.opacity='1';
+    else if(i===fullHearts && halfHeart) span.style.opacity='0.5';
+    else span.style.opacity='0.15';
+    wrap.appendChild(span);
+  }
+}
+function flashDamageOverlay(){
+  const el = document.getElementById('damageFlash');
+  el.style.transition='none';
+  el.style.opacity='0.35';
+  requestAnimationFrame(()=>{
+    el.style.transition='opacity 0.4s';
+    el.style.opacity='0';
+  });
+}
+function takeDamage(amount){
+  if(amount<=0 || health<=0) return;
+  if(multiplayer && (myEliminated || inSpectatorBox)) return; // already out of the match - no more damage until reset
+  health = Math.max(0, health-amount);
+  noDamageTimer = 0;
+  flashDamageOverlay();
+  updateHealthUI();
+  sfxHit();
+  if(health<=0) respawnFromDeath();
+}
+function respawnFromDeath(){
+  flashMessage('You died and respawned');
+  if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
+    socket.send(JSON.stringify({type:'died'}));
+  }
+  spawnPlayer();
+  health = MAX_HEALTH;
+  updateHealthUI();
+}
+
+// Spread across the map as fractional offsets rather than one fixed point -
+// used for both initial spawn and every respawn after death.
+const SPAWN_OFFSETS = [
+  {dx:0.5, dz:0.5}, {dx:0.15,dz:0.15}, {dx:0.85,dz:0.15}, {dx:0.15,dz:0.85},
+  {dx:0.85,dz:0.85}, {dx:0.5, dz:0.15}, {dx:0.5, dz:0.85}, {dx:0.15,dz:0.5}, {dx:0.85,dz:0.5}
+];
+let lastSpawnIndex = -1;
+function spawnPlayer(){
+  const margin = 6;
+  let chosen = null, chosenIndex = -1;
+  for(let attempt=0; attempt<10; attempt++){
+    const idx = Math.floor(Math.random()*SPAWN_OFFSETS.length);
+    if(idx===lastSpawnIndex && SPAWN_OFFSETS.length>1) continue; // avoid repeating the last spot
+    const o = SPAWN_OFFSETS[idx];
+    const x = Math.floor(margin + o.dx*(WORLD_X-2*margin));
+    const z = Math.floor(margin + o.dz*(WORLD_Z-2*margin));
+    const y = findSurfaceY(x,z);
+    if(getBlock(x,y,z)===WATER) continue; // don't spawn in a lake/oasis pool
+    chosen = {x,y,z}; chosenIndex = idx;
+    break;
+  }
+  if(!chosen){
+    const sx=Math.floor(WORLD_X/2), sz=Math.floor(WORLD_Z/2);
+    chosen = {x:sx, y:findSurfaceY(sx,sz), z:sz};
+  }
+  lastSpawnIndex = chosenIndex;
+  player.x = chosen.x+0.5; player.z = chosen.z+0.5;
+  player.y = chosen.y+0.1;
+  velocity.y=0; yaw=Math.random()*Math.PI*2; pitch=0;
+  airPeakY = player.y;
+  inSpectatorBox = false;
+}
+
+// ---------- Simple enemies (to test the weapons on) ----------
+const ENEMY_MAX_HEALTH = 6;
+const ENEMY_TOUCH_DAMAGE = 1;
+const ENEMY_TOUCH_INTERVAL = 1.2;
+const ENEMY_RESPAWN_DELAY = [15000, 25000]; // ms range
+const ENEMY_HALF_W = 0.28, ENEMY_HEIGHT = 0.9;
+const ENEMY_GRAVITY = -24, ENEMY_JUMP_SPEED = 7.2, ENEMY_SPEED = 1.3;
+let enemies = [];
+let enemyIdCounter = 1;
+
+function makeEnemyMesh(){
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.9,0.35), new THREE.MeshLambertMaterial({color:0x5a3d5c}));
+  body.position.y=0.55;
+  group.add(body);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), new THREE.MeshLambertMaterial({color:0x7a5c7a}));
+  head.position.y=1.15;
+  group.add(head);
+  const eyeGeo = new THREE.BoxGeometry(0.06,0.06,0.03);
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xff3333});
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.09,1.18,0.2); group.add(eyeL);
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.09,1.18,0.2); group.add(eyeR);
+  return group;
+}
+// Brief red emissive flash + a little scale "punch" whenever an enemy or
+// remote player takes a hit - works on anything with a .group of meshes.
+// ---------- Headshot zones ----------
+// Separate head/body hit spheres per target type, matched to their actual
+// mesh geometry (the old single hit-sphere for each was centered too low to
+// ever actually reach the head model - this fixes that and adds a crit).
+const HEADSHOT_MULT = 2;
+const ENEMY_HEAD_Y = 1.15, ENEMY_HEAD_R = 0.28, ENEMY_BODY_Y = 0.55, ENEMY_BODY_R = 0.5;
+const PLAYER_HEAD_Y = 1.5, PLAYER_HEAD_R = 0.28, PLAYER_BODY_Y = 0.75, PLAYER_BODY_R = 0.5;
+function resolveHitZone(px,py,pz, cx,cz, headY,headR, bodyY,bodyR){
+  const hdx=px-cx, hdy=py-headY, hdz=pz-cz;
+  if(hdx*hdx+hdy*hdy+hdz*hdz < headR*headR) return 'head';
+  const bdx=px-cx, bdy=py-bodyY, bdz=pz-cz;
+  if(bdx*bdx+bdy*bdy+bdz*bdz < bodyR*bodyR) return 'body';
+  return null;
+}
+
+const HIT_FLASH_DURATION = 0.25;
+const HIT_BUMP_DURATION = 0.15;
+function triggerHitEffect(entity){
+  entity.flashTimer = HIT_FLASH_DURATION;
+  entity.bumpTimer = HIT_BUMP_DURATION;
+}
+function updateHitEffect(entity, dt){
+  if(entity.flashTimer===undefined) entity.flashTimer = 0;
+  if(entity.bumpTimer===undefined) entity.bumpTimer = 0;
+  if(entity.flashTimer>0){
+    entity.flashTimer = Math.max(0, entity.flashTimer-dt);
+    const t = entity.flashTimer/HIT_FLASH_DURATION;
+    entity.group.traverse(o=>{ if(o.material && o.material.emissive) o.material.emissive.setRGB(t,0,0); });
+  }
+  if(entity.bumpTimer>0){
+    entity.bumpTimer = Math.max(0, entity.bumpTimer-dt);
+    const s = 1 + 0.15*(entity.bumpTimer/HIT_BUMP_DURATION);
+    entity.group.scale.set(s,s,s);
+  } else if(entity.group.scale.x!==1){
+    entity.group.scale.set(1,1,1);
+  }
+}
+
+function spawnEnemyAt(x,z){
+  const y = findSurfaceY(Math.floor(x), Math.floor(z));
+  const group = makeEnemyMesh();
+  group.position.set(x,y,z);
+  scene.add(group);
+  const enemy = {
+    id: enemyIdCounter++, group, x, y, z,
+    velY: 0, onGround: true,
+    health: ENEMY_MAX_HEALTH, alive:true,
+    wanderDir: Math.random()*Math.PI*2, wanderTimer: 1+Math.random()*2,
+    touchCooldown: 0
+  };
+  enemies.push(enemy);
+  return enemy;
+}
+function spawnInitialEnemies(count){
+  for(const en of enemies) scene.remove(en.group);
+  enemies = [];
+  let spawned=0, attempts=0;
+  const target = count || 8;
+  while(spawned<target && attempts<300){
+    attempts++;
+    const x = 4+Math.floor(Math.random()*(WORLD_X-8));
+    const z = 4+Math.floor(Math.random()*(WORLD_Z-8));
+    const y = findSurfaceY(x,z);
+    if(getBlock(x,y,z)===WATER) continue; // don't spawn on a submerged lakebed/oasis floor
+    spawnEnemyAt(x+0.5, z+0.5);
+    spawned++;
+  }
+}
+function damageEnemy(enemy, amount){
+  // Singleplayer-authoritative path: applies damage immediately, locally.
+  if(!enemy.alive) return;
+  enemy.health -= amount;
+  triggerHitEffect(enemy);
+  if(enemy.health<=0){
+    enemy.alive=false;
+    scene.remove(enemy.group);
+    flashMessage('Enemy defeated!');
+    sfxEnemyDeath();
+    const delay = ENEMY_RESPAWN_DELAY[0] + Math.random()*(ENEMY_RESPAWN_DELAY[1]-ENEMY_RESPAWN_DELAY[0]);
+    setTimeout(()=>respawnEnemy(enemy), delay);
+  }
+}
+function hitEnemy(enemy, amount){
+  // Called from weapons instead of damageEnemy directly - routes to whichever
+  // side is actually authoritative for enemy health right now.
+  if(multiplayer){
+    sendHitEnemy(enemy.id, amount); // wait for the server's 'enemyHealth' broadcast
+  } else {
+    damageEnemy(enemy, amount);
+  }
+}
+function respawnEnemy(enemy){
+  const x = 4+Math.floor(Math.random()*(WORLD_X-8));
+  const z = 4+Math.floor(Math.random()*(WORLD_Z-8));
+  const y = findSurfaceY(x,z);
+  if(getBlock(x,y,z)===WATER){ setTimeout(()=>respawnEnemy(enemy), 3000); return; }
+  enemy.x=x+0.5; enemy.z=z+0.5; enemy.y=y;
+  enemy.velY=0; enemy.onGround=true;
+  enemy.group.position.set(enemy.x,enemy.y,enemy.z);
+  enemy.health = ENEMY_MAX_HEALTH;
+  enemy.alive = true;
+  enemy.touchCooldown = 0.5;
+  enemy.flashTimer = 0; enemy.bumpTimer = 0;
+  enemy.group.scale.set(1,1,1);
+  scene.add(enemy.group);
+}
+
+// ---------- Multiplayer enemy sync (server is authoritative here) ----------
+function syncEnemiesFromServer(list){
+  for(const en of enemies) scene.remove(en.group);
+  enemies = [];
+  if(!list) return;
+  for(const e of list){
+    const y = findSurfaceY(Math.floor(e.x), Math.floor(e.z));
+    const group = makeEnemyMesh();
+    group.position.set(e.x, y, e.z);
+    scene.add(group);
+    enemies.push({
+      id: e.id, group,
+      x: e.x, y, z: e.z,
+      serverX: e.x, serverZ: e.z,
+      health: e.health, alive: e.alive,
+      flashTimer: 0, bumpTimer: 0, touchCooldown: 0,
+      // unused in multiplayer, kept so nothing else has to special-case the shape:
+      velY: 0, onGround: true, wanderDir: 0, wanderTimer: 0
+    });
+  }
+}
+function updateEnemyTick(list){
+  for(const e of list){
+    const en = enemies.find(x=>x.id===e.id);
+    if(en){ en.serverX = e.x; en.serverZ = e.z; en.alive = e.alive; }
+  }
+}
+function applyServerEnemyHealth(id, health, alive){
+  const en = enemies.find(e=>e.id===id);
+  if(!en) return;
+  const wasAlive = en.alive;
+  en.health = health;
+  en.alive = alive;
+  if(wasAlive){
+    triggerHitEffect(en);
+    if(!alive){ scene.remove(en.group); flashMessage('Enemy defeated!'); sfxEnemyDeath(); }
+  }
+}
+function applyServerEnemyRespawn(id, x, z){
+  const en = enemies.find(e=>e.id===id);
+  if(!en) return;
+  const y = findSurfaceY(Math.floor(x), Math.floor(z));
+  en.x=x; en.y=y; en.z=z; en.serverX=x; en.serverZ=z;
+  en.health = ENEMY_MAX_HEALTH; en.alive = true;
+  en.group.position.set(x,y,z);
+  en.group.scale.set(1,1,1);
+  scene.add(en.group);
+}
+function sendHitEnemy(enemyId, damage){
+  if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
+  socket.send(JSON.stringify({type:'hitEnemy', enemyId, damage}));
+}
+
+function updateEnemies(dt){
+  if(multiplayer){
+    // Server owns position/health here - we just glide toward whatever it last
+    // told us, same pattern as remote players. No local jump/collision physics
+    // (the server doesn't know the terrain, so it can't drive that part).
+    for(const en of enemies){
+      updateHitEffect(en, dt);
+      if(!en.alive) continue;
+      const posLerp = Math.min(1, dt*4);
+      en.x += (en.serverX-en.x)*posLerp;
+      en.z += (en.serverZ-en.z)*posLerp;
+      const groundY = findSurfaceY(Math.floor(en.x), Math.floor(en.z));
+      en.y += (groundY-en.y)*Math.min(1, dt*6);
+      const dx=en.serverX-en.x, dz=en.serverZ-en.z;
+      if(Math.abs(dx)>0.02 || Math.abs(dz)>0.02) en.group.rotation.y = Math.atan2(dx,dz);
+      en.group.position.set(en.x, en.y, en.z);
+
+      en.touchCooldown -= dt;
+      const tdx=en.x-player.x, tdy=(en.y+0.5)-(player.y+0.9), tdz=en.z-player.z;
+      const dist = Math.sqrt(tdx*tdx+tdy*tdy+tdz*tdz);
+      if(dist<0.9 && en.touchCooldown<=0){
+        takeDamage(ENEMY_TOUCH_DAMAGE);
+        en.touchCooldown = ENEMY_TOUCH_INTERVAL;
+      }
+    }
+    return;
+  }
+  for(const en of enemies){
+    if(!en.alive) continue;
+    updateHitEffect(en, dt);
+    en.wanderTimer -= dt;
+    if(en.wanderTimer<=0){
+      en.wanderDir = Math.random()*Math.PI*2;
+      en.wanderTimer = 2+Math.random()*3;
+    }
+
+    const dx = Math.sin(en.wanderDir)*ENEMY_SPEED*dt;
+    const dz = Math.cos(en.wanderDir)*ENEMY_SPEED*dt;
+    const nx = en.x+dx, nz = en.z+dz;
+    const inBoundsXZ = nx>1 && nx<WORLD_X-1 && nz>1 && nz<WORLD_Z-1;
+    const blockedX = !inBoundsXZ || checkCollisionBox(nx, en.y, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
+    const blockedZ = !inBoundsXZ || checkCollisionBox(en.x, en.y, nz, ENEMY_HALF_W, ENEMY_HEIGHT);
+
+    if(!blockedX) en.x = nx;
+    if(!blockedZ) en.z = nz;
+
+    if(blockedX || blockedZ){
+      // try to jump over whatever's in the way if there's headroom above
+      const canJump = en.onGround && !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
+      if(canJump){ en.velY = ENEMY_JUMP_SPEED; en.onGround = false; }
+      else { en.wanderTimer = 0; } // properly stuck - turn and pick a new direction
+    }
+
+    // gravity + vertical collision, same approach as the player
+    en.velY += ENEMY_GRAVITY*dt;
+    if(en.velY < -30) en.velY = -30;
+    const newY = en.y + en.velY*dt;
+    if(checkCollisionBox(en.x, newY, en.z, ENEMY_HALF_W, ENEMY_HEIGHT)){
+      if(en.velY<0) en.onGround = true;
+      en.velY = 0;
+    } else {
+      en.y = newY;
+      en.onGround = false;
+    }
+
+    en.group.position.set(en.x, en.y, en.z);
+    en.group.rotation.y = en.wanderDir;
+
+    en.touchCooldown -= dt;
+    const tdx=en.x-player.x, tdy=(en.y+0.5)-(player.y+0.9), tdz=en.z-player.z;
+    const dist = Math.sqrt(tdx*tdx+tdy*tdy+tdz*tdz);
+    if(dist<0.9 && en.touchCooldown<=0){
+      takeDamage(ENEMY_TOUCH_DAMAGE);
+      en.touchCooldown = ENEMY_TOUCH_INTERVAL;
+    }
+  }
+}
+
+function checkCollisionBox(px,py,pz,halfW,height){
+  const minX=Math.floor(px-halfW), maxX=Math.floor(px+halfW);
+  const minY=Math.floor(py), maxY=Math.floor(py+height);
+  const minZ=Math.floor(pz-halfW), maxZ=Math.floor(pz+halfW);
+  for(let x=minX;x<=maxX;x++)
+    for(let y=minY;y<=maxY;y++)
+      for(let z=minZ;z<=maxZ;z++)
+        if(isSolid(getBlock(x,y,z))) return true;
+  return false;
+}
+function checkCollision(px,py,pz){
+  return checkCollisionBox(px,py,pz,HALF_W,HEIGHT_);
+}
+function tryMove(dx,dy,dz){
+  if(dx!==0){
+    const nx=player.x+dx;
+    if(!checkCollision(nx,player.y,player.z)) player.x=nx;
+  }
+  if(dz!==0){
+    const nz=player.z+dz;
+    if(!checkCollision(player.x,player.y,nz)) player.z=nz;
+  }
+  if(dy!==0){
+    const ny=player.y+dy;
+    if(!checkCollision(player.x,ny,player.z)){
+      player.y=ny;
+      onGround=false;
+    } else {
+      if(dy<0) onGround=true;
+      velocity.y=0;
+    }
+  }
+}
+
+// ---------- Input ----------
+const keys = { forward:false, back:false, left:false, right:false, jump:false, sprint:false, crouch:false };
+let pointerLocked=false;
+let paused=false, craftOpen=false;
+
+document.addEventListener('keydown', (e)=>{
+  if(chatOpen) return; // the chat input handles its own keys and stops propagation
+  if(e.code==='Escape'){
+    if(devOpen){ toggleDev(); e.preventDefault(); return; }
+    if(craftOpen){ toggleCraft(); e.preventDefault(); return; }
+    if(paused){ hidePause(); canvas.requestPointerLock(); e.preventDefault(); return; }
+    return; // otherwise let the browser's own Escape (exit pointer lock) trigger the pause menu
+  }
+  if((craftOpen||devOpen) && e.code!=='KeyE' && e.code!=='Backquote') return;
+  switch(e.code){
+    case 'KeyW': keys.forward=true; break;
+    case 'KeyS': keys.back=true; break;
+    case 'KeyA': keys.left=true; break;
+    case 'KeyD': keys.right=true; break;
+    case 'Space': keys.jump=true; e.preventDefault(); break;
+    case 'ShiftLeft': keys.sprint=true; break;
+    case 'ControlLeft': keys.crouch=true; break;
+    case 'KeyE': toggleCraft(); break;
+    case 'Backquote': toggleDev(); break;
+    case 'KeyT': openChat(); break;
+    case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
+    case 'Digit5': case 'Digit6': case 'Digit7': case 'Digit8': case 'Digit9':
+      selectSlot(parseInt(e.code.slice(5))-1); break;
+    case 'Escape': break; // handled by pointerlockchange
+  }
+});
+document.addEventListener('keyup', (e)=>{
+  switch(e.code){
+    case 'KeyW': keys.forward=false; break;
+    case 'KeyS': keys.back=false; break;
+    case 'KeyA': keys.left=false; break;
+    case 'KeyD': keys.right=false; break;
+    case 'Space': keys.jump=false; break;
+    case 'ShiftLeft': keys.sprint=false; break;
+    case 'ControlLeft': keys.crouch=false; break;
+  }
+});
+
+canvas.addEventListener('click', ()=>{
+  resumeAudio();
+  if(!pointerLocked && !paused && !craftOpen){
+    canvas.requestPointerLock();
+  }
+});
+document.addEventListener('pointerlockchange', ()=>{
+  pointerLocked = document.pointerLockElement===canvas;
+  if(!pointerLocked && !craftOpen){
+    showPause();
+  }
+});
+document.addEventListener('mousemove', (e)=>{
+  if(!pointerLocked) return;
+  const sens=0.0022;
+  yaw -= e.movementX*sens;
+  pitch -= e.movementY*sens;
+  const lim = Math.PI/2 - 0.02;
+  pitch = Math.max(-lim, Math.min(lim, pitch));
+});
+let mouseDown0 = false;
+let attackHeld = false;
+canvas.addEventListener('mousedown', (e)=>{
+  if(!pointerLocked) return;
+  if(multiplayer && (myEliminated || inSpectatorBox)) return; // spectating - no combat or building until the next match
+  if(e.button===0){
+    const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
+    const weapon = WEAPON_CONFIG[equipped];
+    if(weapon){
+      const now = performance.now();
+      if(now-lastAttackTime >= weapon.cooldown*1000){
+        lastAttackTime = now;
+        if(weapon.kind==='projectile') shootProjectile(weapon);
+        else if(weapon.kind==='melee') meleeAttack(weapon);
+        else if(weapon.kind==='grenade') throwGrenade(weapon);
+        else if(weapon.kind==='rocket') fireRocket(weapon);
+        else if(weapon.kind==='shotgun') fireShotgunBurst(weapon);
+      }
+      if(weapon.kind==='projectile') attackHeld = true; // hold the mouse down to keep firing
+    } else {
+      mouseDown0=true;
+    }
+  }
+  if(e.button===2){ placeBlock(); }
+});
+document.addEventListener('mouseup', (e)=>{
+  if(e.button===0){ mouseDown0=false; attackHeld=false; mining=null; updateMiningBar(); updateCrackOverlay(); }
+});
+canvas.addEventListener('contextmenu', (e)=> e.preventDefault());
+canvas.addEventListener('wheel', (e)=>{
+  if(!pointerLocked) return;
+  const dir = e.deltaY>0 ? 1 : -1;
+  selectSlot((selectedSlot + dir + HOTBAR_SIZE) % HOTBAR_SIZE);
+});
+
+// ---------- Inventory (hotbar + backpack grid), all slots start empty ----------
+const HOTBAR_SIZE = 9;
+const INVENTORY_SIZE = 18;
+const TOTAL_SLOTS = HOTBAR_SIZE + INVENTORY_SIZE;
+const slots = Array.from({length: TOTAL_SLOTS}, ()=>({type:null, count:0}));
+let selectedSlot = 0;
+let heldSlotIndex = null; // index of slot currently "picked up" with the mouse in the inventory screen
+
+function addToInventory(type){
+  // stack onto an existing pile of the same type first
+  for(const s of slots){
+    if(s.type===type){ s.count++; updateHotbarUI(); if(craftOpen) renderInventoryPanel(); return; }
+  }
+  // otherwise use the first empty slot
+  for(const s of slots){
+    if(s.type===null){ s.type=type; s.count=1; updateHotbarUI(); if(craftOpen) renderInventoryPanel(); return; }
+  }
+  flashMessage('Inventory full!');
+}
+function openLootCrate(x,y,z){
+  const weapon = WEAPON_LOOT_POOL[Math.floor(Math.random()*WEAPON_LOOT_POOL.length)];
+  dropItemOnGround(x,y,z,weapon,1);
+  flashMessage('Loot crate! A '+BLOCK_NAMES[weapon]+' dropped');
+  sfxCrateOpen();
+}
+// ---------- Speed boost powerup ("shoes") - auto-equips on pickup, no inventory slot ----------
+const SPEED_BOOST_MULT = 1.8;
+const SPEED_BOOST_DURATION = 20;
+let speedBoostTimer = 0;
+function spawnPowerupPickup(x,y,z){
+  dropItemOnGround(x,y,z,POWERUP_CRATE,1);
+  sfxCrateOpen();
+}
+function applySpeedBoost(){
+  speedBoostTimer = SPEED_BOOST_DURATION;
+  flashMessage('Speed Boots! +80% speed for 20s');
+  updateBuffUI();
+  sfxSpeedBoost();
+}
+function updateBuffUI(){
+  const el = document.getElementById('buffIndicator');
+  if(speedBoostTimer>0){
+    el.style.display='block';
+    el.textContent = '\u26A1 Speed Boost: '+Math.ceil(speedBoostTimer)+'s';
+  } else {
+    el.style.display='none';
+  }
+}
+function spawnCrateNearPlayer(){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const x = Math.floor(player.x + dir.x*2.5);
+  const z = Math.floor(player.z + dir.z*2.5);
+  const y = findSurfaceY(x,z);
+  if(getBlock(x,y,z)!==AIR){ flashMessage('No room to spawn a crate there'); return; }
+  setBlock(x,y,z,LOOT_CRATE);
+  sendBlockChange(x,y,z,LOOT_CRATE);
+  rebuildMeshes();
+  flashMessage('Spawned a loot crate nearby');
+}
+function spawnPowerCrateNearPlayer(){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const x = Math.floor(player.x + dir.x*2.5);
+  const z = Math.floor(player.z + dir.z*2.5);
+  const y = findSurfaceY(x,z);
+  if(getBlock(x,y,z)!==AIR){ flashMessage('No room to spawn a crate there'); return; }
+  setBlock(x,y,z,POWERUP_CRATE);
+  sendBlockChange(x,y,z,POWERUP_CRATE);
+  rebuildMeshes();
+  flashMessage('Spawned a power crate nearby');
+}
+function spawnEnemyNearPlayer(){
+  if(multiplayer){
+    flashMessage('Enemies are server-controlled in multiplayer - spawn extra ones from server.js instead');
+    return;
+  }
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const x = player.x + dir.x*3;
+  const z = player.z + dir.z*3;
+  spawnEnemyAt(x,z);
+  flashMessage('Spawned an enemy nearby');
+}
+function countOfType(type){
+  return slots.reduce((sum,s)=> s.type===type ? sum+s.count : sum, 0);
+}
+function removeOneOfType(type){
+  const s = slots.find(sl=>sl.type===type && sl.count>0);
+  if(!s) return false;
+  s.count--;
+  if(s.count===0) s.type=null;
+  return true;
+}
+function selectSlot(i){
+  if(i<0||i>=HOTBAR_SIZE) return;
+  if(selectedSlot!==i) sfxClick();
+  selectedSlot=i;
+  updateHotbarUI();
+}
+
+function slotInnerHTML(s){
+  if(!s.type) return '';
+  const icon = ITEM_ICON[s.type];
+  return `<div class="swatch" style="background:#${BLOCK_COLORS[s.type].toString(16).padStart(6,'0')}">${icon?'<span class="toolIcon">'+icon+'</span>':''}</div><div class="count">${s.count>1?s.count:''}</div>`;
+}
+function buildHotbarDOM(){
+  const bar = document.getElementById('hotbar');
+  bar.innerHTML='';
+  for(let i=0;i<HOTBAR_SIZE;i++){
+    const s = slots[i];
+    const el = document.createElement('div');
+    el.className='slot'+(i===selectedSlot?' selected':'');
+    el.innerHTML = `<div class="key">${i+1}</div>${slotInnerHTML(s)}`;
+    el.addEventListener('click', ()=>{
+      if(craftOpen) onSlotClick(i); else selectSlot(i);
+    });
+    bar.appendChild(el);
+  }
+}
+function updateHotbarUI(){ buildHotbarDOM(); updateHeldItemMesh(); }
+function resetInventoryForNewRound(){
+  // Guns get cleared out at the start of every new round - building blocks,
+  // Stone Pickaxe, and War Club all survive. Keeps the loot-crate scramble
+  // meaningful each round instead of one early pickup snowballing the whole
+  // series, without punishing anyone for gathering/building materials.
+  for(const s of slots){
+    if(s.type!==null && GUN_TYPES.includes(s.type)){
+      s.type = null;
+      s.count = 0;
+    }
+  }
+  updateHotbarUI();
+}
+
+// ---------- Mining (hold left click, speed depends on block type & equipped tool) ----------
+const MINE_TIME = {
+  [GRASS]:0.3, [DIRT]:0.25, [SAND]:0.25, [LEAVES]:0.2,
+  [WOOD]:0.6, [PLANKS]:0.5, [STONE]:1.1, [REEDS]:0.15, [WATER]:0.2, [LOOT_CRATE]:0.6, [POWERUP_CRATE]:0.4,
+  [RUBBLE]:0.5, [SNOW]:0.2, [METAL]:1.4, [GLASS]:0.2, [CLEAR_GLASS]:0.2
+};
+const PICKAXE_SPEED_MULT = 2.5;
+function effectiveMineTime(type){
+  const base = MINE_TIME[type] || 0.4;
+  const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
+  return equipped===STONE_PICKAXE ? base/PICKAXE_SPEED_MULT : base;
+}
+let mining = null; // {x,y,z,type,progress}
+function updateMiningBar(){
+  const wrap = document.getElementById('miningBarWrap');
+  const bar = document.getElementById('miningBar');
+  if(!mining){ wrap.classList.remove('show'); bar.style.width='0%'; return; }
+  wrap.classList.add('show');
+  const req = effectiveMineTime(mining.type);
+  bar.style.width = Math.min(100, (mining.progress/req)*100) + '%';
+}
+function updateMining(dt){
+  if(!mouseDown0 || !pointerLocked || paused || craftOpen){
+    if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
+    return;
+  }
+  const hit = raycastVoxel();
+  if(!hit){
+    if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
+    return;
+  }
+  const t = getBlock(hit.x,hit.y,hit.z);
+  if(!mining || mining.x!==hit.x || mining.y!==hit.y || mining.z!==hit.z){
+    mining = {x:hit.x, y:hit.y, z:hit.z, type:t, progress:0};
+  } else {
+    mining.progress += dt;
+    const req = effectiveMineTime(mining.type);
+    if(mining.progress>=req){
+      if(mining.type===LOOT_CRATE){
+        openLootCrate(mining.x, mining.y, mining.z);
+        spawnBreakParticles(mining.x, mining.y, mining.z, 0xe8c94a);
+      } else if(mining.type===POWERUP_CRATE){
+        spawnPowerupPickup(mining.x, mining.y, mining.z);
+        spawnBreakParticles(mining.x, mining.y, mining.z, 0x5fd0ff);
+      } else {
+        dropItemOnGround(mining.x, mining.y, mining.z, mining.type, 1);
+        spawnBreakParticles(mining.x, mining.y, mining.z, BLOCK_COLORS[mining.type]);
+        sfxMine(mining.type);
+      }
+      setBlock(mining.x,mining.y,mining.z,AIR);
+      sendBlockChange(mining.x,mining.y,mining.z,AIR);
+      rebuildMeshes();
+      mining=null;
+    }
+  }
+  updateMiningBar();
+  updateCrackOverlay();
+}
+
+// ---------- Raycast for break/place ----------
+function raycastVoxel(){
+  const origin = camera.position.clone();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const maxDist=6, step=0.05;
+  let prev=null;
+  for(let t=0; t<maxDist; t+=step){
+    const p = origin.clone().addScaledVector(dir,t);
+    const bx=Math.floor(p.x), by=Math.floor(p.y), bz=Math.floor(p.z);
+    const b = getBlock(bx,by,bz);
+    if(b!==AIR){
+      return {x:bx,y:by,z:bz,prev};
+    }
+    prev={x:bx,y:by,z:bz};
+  }
+  return null;
+}
+function placeBlock(){
+  const hit = raycastVoxel();
+  if(!hit || !hit.prev) return;
+  const slot = slots[selectedSlot];
+  if(!slot.type || slot.count<=0) return;
+  if(!SOLID_TYPES.includes(slot.type)) return; // tools can't be placed as blocks
+  const {x,y,z} = hit.prev;
+  if(!inBounds(x,y,z)) return;
+  // don't place inside the player
+  const overlapsPlayer =
+    x+1>player.x-HALF_W && x<player.x+HALF_W &&
+    z+1>player.z-HALF_W && z<player.z+HALF_W &&
+    y+1>player.y && y<player.y+HEIGHT_;
+  if(overlapsPlayer) return;
+  if(getBlock(x,y,z)!==AIR) return;
+  setBlock(x,y,z,slot.type);
+  sendBlockChange(x,y,z,slot.type);
+  slot.count--;
+  if(slot.count===0) slot.type=null;
+  rebuildMeshes();
+  updateHotbarUI();
+  sfxPlace();
+}
+
+// ---------- Crafting ----------
+function toggleCraft(){
+  sfxClick();
+  if(devOpen){ devOpen=false; document.getElementById('devPanel').style.display='none'; }
+  craftOpen = !craftOpen;
+  document.getElementById('craftPanel').style.display = craftOpen ? 'block' : 'none';
+  if(craftOpen){
+    document.exitPointerLock();
+    renderInventoryPanel();
+  } else {
+    heldSlotIndex = null;
+    updateHeldIcon();
+    if(started && !paused) canvas.requestPointerLock();
+  }
+}
+document.getElementById('btnCloseCraft').addEventListener('click', toggleCraft);
+document.getElementById('btnCraftTop').addEventListener('click', toggleCraft);
+
+let devOpen = false;
+function toggleDev(){
+  sfxClick();
+  if(craftOpen){ craftOpen=false; document.getElementById('craftPanel').style.display='none'; }
+  devOpen = !devOpen;
+  document.getElementById('devPanel').style.display = devOpen ? 'block' : 'none';
+  if(devOpen){
+    document.exitPointerLock();
+    renderDevPanel();
+  } else if(started && !paused){
+    canvas.requestPointerLock();
+  }
+}
+function renderDevPanel(){
+  const list = document.getElementById('devList');
+  list.innerHTML='';
+  const healthRow = document.createElement('div');
+  healthRow.className='devRow';
+  healthRow.innerHTML = `<div class="desc">Health (${health}/${MAX_HEALTH})</div>`;
+  const healthBtns = document.createElement('div');
+  healthBtns.className='btns';
+  const healBtn = document.createElement('div'); healBtn.className='btn'; healBtn.textContent='Full Heal';
+  healBtn.addEventListener('click', ()=>{ health=MAX_HEALTH; noDamageTimer=0; updateHealthUI(); renderDevPanel(); });
+  const hurtBtn = document.createElement('div'); hurtBtn.className='btn'; hurtBtn.textContent='-5 HP';
+  hurtBtn.addEventListener('click', ()=>{ takeDamage(5); renderDevPanel(); });
+  healthBtns.appendChild(healBtn); healthBtns.appendChild(hurtBtn);
+  healthRow.appendChild(healthBtns);
+  list.appendChild(healthRow);
+
+  const spawnRow = document.createElement('div');
+  spawnRow.className='devRow';
+  spawnRow.innerHTML = `<div class="desc">Spawn near you</div>`;
+  const spawnBtns = document.createElement('div');
+  spawnBtns.className='btns';
+  const crateBtn = document.createElement('div'); crateBtn.className='btn'; crateBtn.textContent='Loot Crate';
+  crateBtn.addEventListener('click', ()=>{ spawnCrateNearPlayer(); });
+  const powerBtn = document.createElement('div'); powerBtn.className='btn'; powerBtn.textContent='Power Crate';
+  powerBtn.addEventListener('click', ()=>{ spawnPowerCrateNearPlayer(); });
+  const enemyBtn = document.createElement('div'); enemyBtn.className='btn'; enemyBtn.textContent='Enemy';
+  enemyBtn.addEventListener('click', ()=>{ spawnEnemyNearPlayer(); });
+  spawnBtns.appendChild(crateBtn); spawnBtns.appendChild(powerBtn); spawnBtns.appendChild(enemyBtn);
+  spawnRow.appendChild(spawnBtns);
+  list.appendChild(spawnRow);
+
+  ALL_ITEM_TYPES.forEach(t=>{
+    const row = document.createElement('div');
+    row.className='devRow';
+    row.innerHTML = `<div class="desc"><span class="sw" style="background:#${BLOCK_COLORS[t].toString(16).padStart(6,'0')}"></span>${BLOCK_NAMES[t]}</div>`;
+    const btns = document.createElement('div');
+    btns.className='btns';
+    const b1 = document.createElement('div'); b1.className='btn'; b1.textContent='+1';
+    b1.addEventListener('click', ()=>{ addToInventory(t); });
+    const b10 = document.createElement('div'); b10.className='btn'; b10.textContent='+10';
+    b10.addEventListener('click', ()=>{ for(let i=0;i<10;i++) addToInventory(t); });
+    btns.appendChild(b1); btns.appendChild(b10);
+    row.appendChild(btns);
+    list.appendChild(row);
+  });
+}
+document.getElementById('btnCloseDev').addEventListener('click', toggleDev);
+document.getElementById('btnDevTop').addEventListener('click', toggleDev);
+
+// Clicking a slot (in the hotbar or the backpack grid) either picks its stack up
+// or, if something is already held, drops/merges/swaps it into that slot.
+function onSlotClick(i){
+  const clicked = slots[i];
+  if(heldSlotIndex===null){
+    if(clicked.type!==null && clicked.count>0){
+      heldSlotIndex = i;
+    }
+  } else if(heldSlotIndex===i){
+    heldSlotIndex = null; // clicking the same slot again just puts it back down
+  } else {
+    const held = slots[heldSlotIndex];
+    if(clicked.type===null){
+      slots[i] = {type:held.type, count:held.count};
+      slots[heldSlotIndex] = {type:null, count:0};
+    } else if(clicked.type===held.type){
+      clicked.count += held.count;
+      slots[heldSlotIndex] = {type:null, count:0};
+    } else {
+      const tmp = {type:clicked.type, count:clicked.count};
+      slots[i] = {type:held.type, count:held.count};
+      slots[heldSlotIndex] = tmp;
+    }
+    heldSlotIndex = null;
+  }
+  updateHotbarUI();
+  renderInventoryPanel();
+  updateHeldIcon();
+}
+function updateHeldIcon(){
+  const icon = document.getElementById('heldItemIcon');
+  if(heldSlotIndex===null){ icon.style.display='none'; return; }
+  const s = slots[heldSlotIndex];
+  icon.style.display='block';
+  icon.style.background = '#'+BLOCK_COLORS[s.type].toString(16).padStart(6,'0');
+  icon.querySelector('.count').textContent = s.count>1 ? s.count : '';
+}
+document.addEventListener('mousemove', (e)=>{
+  if(heldSlotIndex===null) return;
+  const icon = document.getElementById('heldItemIcon');
+  icon.style.left = e.clientX+'px';
+  icon.style.top = e.clientY+'px';
+});
+
+function renderInventoryPanel(){
+  const grid = document.getElementById('invGrid');
+  grid.innerHTML='';
+  for(let i=HOTBAR_SIZE;i<TOTAL_SLOTS;i++){
+    const s = slots[i];
+    const el = document.createElement('div');
+    el.className='islot';
+    el.innerHTML = slotInnerHTML(s);
+    el.title = s.type ? `${BLOCK_NAMES[s.type]}: ${s.count}` : '';
+    el.addEventListener('click', ()=>onSlotClick(i));
+    grid.appendChild(el);
+  }
+  const recipesDiv = document.getElementById('recipes');
+  recipesDiv.innerHTML='';
+  const recipe = document.createElement('div');
+  recipe.className='recipe';
+  recipe.innerHTML = `<div class="desc">1 Wood &rarr; 4 Planks</div>`;
+  const craftBtn = document.createElement('div');
+  craftBtn.className='btn';
+  craftBtn.textContent='Craft';
+  craftBtn.addEventListener('click', ()=>{
+    if(countOfType(WOOD)>=1){
+      removeOneOfType(WOOD);
+      addToInventory(PLANKS); addToInventory(PLANKS);
+      addToInventory(PLANKS); addToInventory(PLANKS);
+      renderInventoryPanel(); updateHotbarUI();
+      flashMessage('Crafted 4 Planks');
+    } else {
+      flashMessage('Not enough wood');
+    }
+  });
+  recipe.appendChild(craftBtn);
+  recipesDiv.appendChild(recipe);
+
+  const recipe2 = document.createElement('div');
+  recipe2.className='recipe';
+  recipe2.innerHTML = `<div class="desc">3 Stone + 1 Planks &rarr; Stone Pickaxe (mines faster)</div>`;
+  const craftBtn2 = document.createElement('div');
+  craftBtn2.className='btn';
+  craftBtn2.textContent='Craft';
+  craftBtn2.addEventListener('click', ()=>{
+    if(countOfType(STONE)>=3 && countOfType(PLANKS)>=1){
+      removeOneOfType(STONE); removeOneOfType(STONE); removeOneOfType(STONE);
+      removeOneOfType(PLANKS);
+      addToInventory(STONE_PICKAXE);
+      renderInventoryPanel(); updateHotbarUI();
+      flashMessage('Crafted a Stone Pickaxe!');
+      sfxCraftSuccess();
+    } else {
+      flashMessage('Need 3 Stone + 1 Planks');
+      sfxDenied();
+    }
+  });
+  recipe2.appendChild(craftBtn2);
+  recipesDiv.appendChild(recipe2);
+
+  const recipe3 = document.createElement('div');
+  recipe3.className='recipe';
+  recipe3.innerHTML = `<div class="desc">3 Reeds &rarr; 1 Blow Pipe (shoots little darts)</div>`;
+  const craftBtn3 = document.createElement('div');
+  craftBtn3.className='btn';
+  craftBtn3.textContent='Craft';
+  craftBtn3.addEventListener('click', ()=>{
+    if(countOfType(REEDS)>=3){
+      removeOneOfType(REEDS); removeOneOfType(REEDS); removeOneOfType(REEDS);
+      addToInventory(BLOW_PIPE);
+      renderInventoryPanel(); updateHotbarUI();
+      flashMessage('Crafted a Blow Pipe!');
+      sfxCraftSuccess();
+    } else {
+      flashMessage('Need 3 Reeds');
+      sfxDenied();
+    }
+  });
+  recipe3.appendChild(craftBtn3);
+  recipesDiv.appendChild(recipe3);
+
+  const recipe4 = document.createElement('div');
+  recipe4.className='recipe';
+  recipe4.innerHTML = `<div class="desc">2 Stone + 1 Reeds &rarr; 1 Stone Sling (heavier, slower, more damage)</div>`;
+  const craftBtn4 = document.createElement('div');
+  craftBtn4.className='btn';
+  craftBtn4.textContent='Craft';
+  craftBtn4.addEventListener('click', ()=>{
+    if(countOfType(STONE)>=2 && countOfType(REEDS)>=1){
+      removeOneOfType(STONE); removeOneOfType(STONE); removeOneOfType(REEDS);
+      addToInventory(STONE_SLING);
+      renderInventoryPanel(); updateHotbarUI();
+      flashMessage('Crafted a Stone Sling!');
+      sfxCraftSuccess();
+    } else {
+      flashMessage('Need 2 Stone + 1 Reeds');
+      sfxDenied();
+    }
+  });
+  recipe4.appendChild(craftBtn4);
+  recipesDiv.appendChild(recipe4);
+
+  const recipe5 = document.createElement('div');
+  recipe5.className='recipe';
+  recipe5.innerHTML = `<div class="desc">2 Wood + 1 Stone &rarr; 1 War Club (melee, short range, high damage)</div>`;
+  const craftBtn5 = document.createElement('div');
+  craftBtn5.className='btn';
+  craftBtn5.textContent='Craft';
+  craftBtn5.addEventListener('click', ()=>{
+    if(countOfType(WOOD)>=2 && countOfType(STONE)>=1){
+      removeOneOfType(WOOD); removeOneOfType(WOOD); removeOneOfType(STONE);
+      addToInventory(WAR_CLUB);
+      renderInventoryPanel(); updateHotbarUI();
+      flashMessage('Crafted a War Club!');
+      sfxCraftSuccess();
+    } else {
+      flashMessage('Need 2 Wood + 1 Stone');
+      sfxDenied();
+    }
+  });
+  recipe5.appendChild(craftBtn5);
+  recipesDiv.appendChild(recipe5);
+}
+
+// ---------- Pause menu ----------
+function showPause(){
+  paused=true;
+  document.getElementById('pauseMenu').style.display='flex';
+  document.getElementById('btnDisconnectMp').style.display = multiplayer ? 'block' : 'none';
+}
+function hidePause(){
+  paused=false;
+  document.getElementById('pauseMenu').style.display='none';
+}
+document.getElementById('btnResume').addEventListener('click', ()=>{
+  hidePause();
+  canvas.requestPointerLock();
+});
+document.getElementById('btnSave').addEventListener('click', ()=>{
+  if(multiplayer){ flashMessage('Leave multiplayer to use single-player save'); return; }
+  saveWorld();
+});
+document.getElementById('btnSaveTop').addEventListener('click', ()=>{
+  if(multiplayer){ flashMessage('Leave multiplayer to use single-player save'); return; }
+  saveWorld();
+});
+document.getElementById('btnLoad').addEventListener('click', ()=>{
+  if(multiplayer){ flashMessage('Leave multiplayer to use single-player load'); return; }
+  loadWorld(true);
+});
+document.getElementById('btnNew').addEventListener('click', ()=>{
+  if(multiplayer){ flashMessage('Leave multiplayer to start a single-player world'); return; }
+  hidePause();
+  newWorld();
+});
+
+// ---------- Messages ----------
+let msgTimeout=null;
+function flashMessage(text){
+  const el = document.getElementById('message');
+  el.textContent = text;
+  el.classList.add('show');
+  if(msgTimeout) clearTimeout(msgTimeout);
+  msgTimeout = setTimeout(()=> el.classList.remove('show'), 2200);
+}
+
+// ---------- Save / Load (window.storage persistent API) ----------
+function encodeRLE(arr){
+  const out=[];
+  let i=0;
+  while(i<arr.length){
+    const v=arr[i];
+    let run=1;
+    while(i+run<arr.length && arr[i+run]===v) run++;
+    out.push(v,run);
+    i+=run;
+  }
+  return out;
+}
+function decodeRLE(rle,total){
+  const out = new Uint8Array(total);
+  let p=0;
+  for(let i=0;i<rle.length;i+=2){
+    const v=rle[i], run=rle[i+1];
+    out.fill(v,p,p+run);
+    p+=run;
+  }
+  return out;
+}
+async function saveWorld(){
+  try{
+    const data = {
+      worldX:WORLD_X, worldY:WORLD_Y, worldZ:WORLD_Z, seed,
+      rle: encodeRLE(Array.from(blocks)),
+      player: {x:player.x, y:player.y, z:player.z, yaw, pitch},
+      inventory: slots.map(s=>({type:s.type, count:s.count})),
+      health, biome: biomeMode
+    };
+    const res = await window.storage.set('mc_save', JSON.stringify(data), false);
+    if(res) flashMessage('World saved!');
+    else flashMessage('Save failed');
+  }catch(err){
+    console.error(err);
+    flashMessage('Save failed');
+  }
+}
+async function loadWorld(fromPause){
+  try{
+    const res = await window.storage.get('mc_save', false);
+    if(!res){ flashMessage('No saved world found'); return; }
+    const data = JSON.parse(res.value);
+    WORLD_X=data.worldX; WORLD_Y=data.worldY; WORLD_Z=data.worldZ; seed=data.seed;
+    blocks = decodeRLE(data.rle, WORLD_X*WORLD_Y*WORLD_Z);
+    biomeMode = data.biome && BIOME_PROFILES[data.biome] ? data.biome : 'highlands';
+    updateSkybox(biomeMode);
+    startAmbience(biomeMode);
+    player.x=data.player.x; player.y=data.player.y; player.z=data.player.z;
+    yaw=data.player.yaw; pitch=data.player.pitch; velocity.y=0;
+    airPeakY = player.y; noDamageTimer=0; regenTimer=0;
+    health = typeof data.health==='number' ? data.health : MAX_HEALTH;
+    data.inventory.forEach((s,i)=>{ if(slots[i]){ slots[i].type=s.type; slots[i].count=s.count; } });
+    for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
+    spawnInitialEnemies();
+    rebuildMeshes();
+    updateHotbarUI();
+    updateHealthUI();
+    flashMessage('World loaded!');
+    document.getElementById('overlay').style.display='none';
+    if(fromPause){ hidePause(); canvas.requestPointerLock(); }
+    started = true;
+  }catch(err){
+    console.error(err);
+    flashMessage('No saved world found');
+  }
+}
+function newWorld(){
+  seed = Math.floor(Math.random()*1000000);
+  applyBiomeProfile(document.getElementById('biomeSelect').value);
+  generateWorld();
+  updateSkybox(biomeMode);
+  startAmbience(biomeMode);
+  spawnPlayer();
+  slots.forEach(s=>{ s.type=null; s.count=0; });
+  health = MAX_HEALTH;
+  noDamageTimer=0; regenTimer=0;
+  for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
+  spawnInitialEnemies();
+  rebuildMeshes();
+  updateHotbarUI();
+  updateHealthUI();
+}
+
+// ---------- Multiplayer (optional) ----------
+// The client never simulates other players' physics - it just renders where
+// the server last said they were, smoothly interpolating toward it each frame.
+let socket = null;
+let myNetId = null;
+let multiplayer = false;
+let myPlayerName = 'Player';
+const remotePlayers = new Map(); // id -> {group, name, target:{x,y,z,yaw}}
+
+// Match state is server-authoritative - the client just displays whatever
+// the server last told it and gates local actions (like firing weapons) off it.
+let matchPhase = 'waiting'; // waiting | countdown | active | ended
+let matchCountdown = 0;
+let matchPlayersList = [];
+let myLives = 0;
+let myEliminated = false;
+let matchRound = 1;
+let matchRoundsPerSeries = 3;
+let matchStandings = [];
+let matchRoundTimeLeft = null;
+let awaitingInitialPhaseCheck = false;
+let inSpectatorBox = false; // true for fresh joins dropped into the box, not just eliminated players
+
+function makeNameSprite(text){
+  const canvas = document.createElement('canvas');
+  canvas.width=256; canvas.height=64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle='rgba(0,0,0,0.45)';
+  ctx.fillRect(0,0,256,64);
+  ctx.font='bold 30px sans-serif';
+  ctx.fillStyle='#fff';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text,128,32);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({map:tex, depthTest:false});
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(1.6,0.4,1);
+  sprite.position.set(0,2.3,0);
+  return sprite;
+}
+function colorForId(id){
+  const palette=[0xe05353,0x53a0e0,0x5be07a,0xe0c353,0xb057e0,0xe0834f,0x53d9e0];
+  return palette[id % palette.length];
+}
+function createRemotePlayer(id,name){
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5,1.1,0.3),
+    new THREE.MeshLambertMaterial({color:colorForId(id)})
+  );
+  body.position.y=0.75;
+  group.add(body);
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.38,0.38,0.38),
+    new THREE.MeshLambertMaterial({color:0xdba36c})
+  );
+  head.position.y=1.5;
+  group.add(head);
+  const heldAnchor = new THREE.Group();
+  heldAnchor.position.set(0.32, 1.02, -0.15);
+  group.add(heldAnchor);
+  group.add(makeNameSprite(name || ('Player'+id)));
+  scene.add(group);
+  return {
+    group, name, heldAnchor, heldType:null, crouching:false, targetScaleY:1,
+    target:{x:group.position.x,y:0,z:group.position.z,yaw:0}, flashTimer:0, bumpTimer:0
+  };
+}
+function buildRemoteHeldItemMesh(type){
+  switch(type){
+    case STONE_PICKAXE: return buildPickaxeMesh();
+    case BLOW_PIPE: return buildBlowPipeMesh();
+    case STONE_SLING: return buildSlingMesh();
+    case WAR_CLUB: return buildClubMesh();
+    case GRENADE: return buildGrenadeMesh();
+    case ROCKET_LAUNCHER: return buildRocketLauncherMesh();
+    case DOUBLE_BARREL: return buildDoubleBarrelMesh();
+    case PUMP_SHOTGUN: return buildPumpShotgunMesh();
+    case RIFLE: return buildRifleMesh();
+    case PISTOL: return buildPistolMesh();
+    case CARBINE: return buildCarbineMesh();
+    case REEDS: return new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]);
+    default:
+      if(type!==null && type!==undefined && SOLID_TYPES.includes(type)){
+        const size=0.26;
+        return new THREE.Mesh(new THREE.BoxGeometry(size,size,size), materials[type]);
+      }
+      return null;
+  }
+}
+function updateRemoteHeldItem(rp, type){
+  if(rp.heldType===type) return; // unchanged - skip rebuilding the mesh
+  rp.heldType = type;
+  while(rp.heldAnchor.children.length) rp.heldAnchor.remove(rp.heldAnchor.children[0]);
+  if(type===null || type===undefined) return;
+  const mesh = buildRemoteHeldItemMesh(type);
+  if(mesh) rp.heldAnchor.add(mesh);
+}
+function removeRemotePlayer(id){
+  const rp = remotePlayers.get(id);
+  if(!rp) return;
+  scene.remove(rp.group);
+  remotePlayers.delete(id);
+}
+function updateRemotePlayers(dt){
+  const lerp = Math.min(1, dt*10);
+  for(const rp of remotePlayers.values()){
+    const t = rp.target;
+    rp.group.position.x += (t.x-rp.group.position.x)*lerp;
+    rp.group.position.y += (t.y-rp.group.position.y)*lerp;
+    rp.group.position.z += (t.z-rp.group.position.z)*lerp;
+    rp.group.rotation.y = t.yaw;
+    rp.heldAnchor.rotation.x = t.pitch||0;
+    updateHitEffect(rp, dt);
+    const targetScaleY = rp.crouching ? 0.72 : 1;
+    const newScaleY = rp.group.scale.y + (targetScaleY-rp.group.scale.y)*Math.min(1,dt*10);
+    rp.group.scale.y = newScaleY;
+  }
+}
+function updateMpStatus(){
+  const el = document.getElementById('mpStatus');
+  el.textContent = multiplayer ? `\u25CF Online \u00b7 ${remotePlayers.size+1} player${remotePlayers.size===0?'':'s'}` : '';
+}
+function formatClock(seconds){
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s/60);
+  const r = s%60;
+  return m+':'+String(r).padStart(2,'0');
+}
+function updateMatchUI(){
+  const banner = document.getElementById('matchBanner');
+  if(!multiplayer){ banner.style.display='none'; return; }
+  banner.style.display='block';
+  const roundLabel = 'Round '+matchRound+'/'+matchRoundsPerSeries;
+  if(matchPhase==='waiting'){
+    banner.textContent = 'Waiting for more players to start a match (need 2+)...';
+  } else if(matchPhase==='countdown'){
+    banner.textContent = roundLabel+' starts in '+matchCountdown+'...';
+  } else if(matchPhase==='active'){
+    const clock = typeof matchRoundTimeLeft==='number' ? (' \u00b7 \u23f1 '+formatClock(matchRoundTimeLeft)) : '';
+    banner.textContent = myEliminated
+      ? (roundLabel+' \u00b7 Eliminated - spectating'+clock)
+      : (roundLabel+' \u00b7 LIVE \u00b7 Lives: '+'\u2764'.repeat(Math.max(0,myLives))+clock);
+  } else if(matchPhase==='ended'){
+    banner.textContent = roundLabel+' over - next round starting soon';
+  }
+}
+
+function connectMultiplayer(url, name){
+  myPlayerName = name;
+  try{
+    socket = new WebSocket(url);
+  }catch(e){
+    flashMessage('Could not connect: '+e.message);
+    return;
+  }
+  socket.onopen = ()=>{
+    flashMessage('Connected - syncing world...');
+  };
+  socket.onerror = ()=>{
+    flashMessage('Multiplayer connection error');
+  };
+  socket.onclose = ()=>{
+    if(multiplayer) flashMessage('Disconnected from server');
+    multiplayer = false;
+    myEliminated = false;
+    for(const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id);
+    updateMpStatus();
+    updateMatchUI();
+  };
+  socket.onmessage = (event)=>{
+    let msg;
+    try{ msg = JSON.parse(event.data); }catch(e){ return; }
+    handleNetMessage(msg);
+  };
+}
+function handleNetMessage(msg){
+  if(msg.type==='welcome'){
+    myNetId = msg.id;
+    seed = msg.seed;
+    WORLD_X=msg.worldX; WORLD_Y=msg.worldY; WORLD_Z=msg.worldZ;
+    // the server decides the biome (so every client generates identical terrain);
+    // fall back to highlands if an older server didn't send this field
+    applyBiomeProfile(msg.biome || 'highlands');
+    generateWorld();
+    updateSkybox(biomeMode);
+    startAmbience(biomeMode);
+    if(msg.diffs) for(const d of msg.diffs) setBlock(d.x,d.y,d.z,d.blockType);
+    for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
+    if(msg.items) for(const it of msg.items) spawnGroundItemVisual(it.id, it.x, it.y, it.z, it.itemType, it.count);
+    spawnPlayer();
+    health=MAX_HEALTH; noDamageTimer=0; regenTimer=0;
+    slots.forEach(s=>{ s.type=null; s.count=0; });
+    syncEnemiesFromServer(msg.enemies);
+    rebuildMeshes(); updateHotbarUI(); updateHealthUI();
+    multiplayer = true;
+    matchPhase='waiting'; matchCountdown=0; matchPlayersList=[]; myLives=0; myEliminated=false;
+    matchRound=1; matchRoundsPerSeries=3; matchStandings=[];
+    awaitingInitialPhaseCheck = true;
+    inSpectatorBox = false;
+    for(const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id);
+    if(msg.players) for(const p of msg.players){
+      const rp = createRemotePlayer(p.id, p.name);
+      rp.group.position.set(p.x,p.y,p.z);
+      rp.target = {x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch||0};
+      updateRemoteHeldItem(rp, p.heldType);
+      rp.crouching = !!p.crouching;
+      remotePlayers.set(p.id, rp);
+    }
+    socket.send(JSON.stringify({type:'setName', name:myPlayerName}));
+    document.getElementById('overlay').style.display='none';
+    started = true;
+    canvas.requestPointerLock();
+    updateMpStatus();
+    updateMatchUI();
+    flashMessage('Joined as '+myPlayerName);
+  } else if(msg.type==='playerJoined'){
+    if(msg.id!==myNetId){
+      if(remotePlayers.has(msg.id)) remotePlayers.get(msg.id).name = msg.name;
+      else remotePlayers.set(msg.id, createRemotePlayer(msg.id, msg.name));
+      updateMpStatus();
+    }
+  } else if(msg.type==='playerLeft'){
+    const rp = remotePlayers.get(msg.id);
+    if(rp) addChatMessage('System', (rp.name||'A player')+' left');
+    removeRemotePlayer(msg.id);
+    updateMpStatus();
+  } else if(msg.type==='playerMove'){
+    const rp = remotePlayers.get(msg.id);
+    if(rp){
+      rp.target = {x:msg.x,y:msg.y,z:msg.z,yaw:msg.yaw,pitch:msg.pitch||0};
+      updateRemoteHeldItem(rp, msg.heldType);
+      rp.crouching = !!msg.crouching;
+    }
+  } else if(msg.type==='block'){
+    setBlock(msg.x,msg.y,msg.z,msg.blockType);
+    rebuildMeshes();
+  } else if(msg.type==='blockBatch'){
+    if(msg.changes) for(const c of msg.changes) setBlock(c.x,c.y,c.z,c.blockType);
+    rebuildMeshes();
+  } else if(msg.type==='matchState'){
+    matchPhase = msg.phase;
+    matchCountdown = msg.countdown;
+    matchPlayersList = msg.players || [];
+    if(typeof msg.round==='number') matchRound = msg.round;
+    if(typeof msg.roundsPerSeries==='number') matchRoundsPerSeries = msg.roundsPerSeries;
+    matchRoundTimeLeft = typeof msg.roundTimeLeft==='number' ? msg.roundTimeLeft : null;
+    matchStandings = msg.standings || [];
+    const me = matchPlayersList.find(p=>p.id===myNetId);
+    const wasEliminated = myEliminated;
+    if(me){ myLives = me.lives; myEliminated = me.eliminated; }
+    if(awaitingInitialPhaseCheck){
+      awaitingInitialPhaseCheck = false;
+      if(matchPhase==='active') teleportToSpectatorBox();
+    } else if(myEliminated && !wasEliminated){
+      teleportToSpectatorBox();
+    }
+    updateMatchUI();
+  } else if(msg.type==='matchStart'){
+    if(typeof msg.round==='number') matchRound = msg.round;
+    if(typeof msg.roundsPerSeries==='number') matchRoundsPerSeries = msg.roundsPerSeries;
+    flashMessage('Round '+matchRound+' of '+matchRoundsPerSeries+' - good luck!');
+    spawnPlayer();
+    health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
+    updateHealthUI();
+    resetInventoryForNewRound();
+    sfxMatchStart();
+  } else if(msg.type==='matchEnd'){
+    sfxMatchEnd();
+    if(msg.seriesOver){
+      const standingsText = (msg.standings||[]).map(s=>s.name+': '+s.wins).join(', ');
+      flashMessage(msg.winnerName ? ('\uD83C\uDFC6 '+msg.winnerName+' wins the series! ('+standingsText+')') : 'Series ended - no winner');
+    } else {
+      flashMessage(msg.winnerName ? ('Round '+msg.round+' - '+msg.winnerName+' wins!') : 'Round '+msg.round+' ended - no winner');
+    }
+  } else if(msg.type==='mapReset'){
+    seed = msg.seed;
+    applyBiomeProfile(msg.biome || biomeMode);
+    generateWorld();
+    updateSkybox(biomeMode);
+    startAmbience(biomeMode);
+    for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
+    syncEnemiesFromServer(msg.enemies);
+    spawnPlayer();
+    health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
+    slots.forEach(s=>{ s.type=null; s.count=0; });
+    rebuildMeshes();
+    updateHotbarUI(); updateHealthUI();
+    flashMessage('New map! Fresh series starting soon.');
+  } else if(msg.type==='hitByOther'){
+    takeDamage(msg.damage);
+    flashMessage('Hit by '+msg.fromName+'!');
+  } else if(msg.type==='shot'){
+    spawnRemoteProjectile(msg);
+  } else if(msg.type==='impact'){
+    applyRemoteImpact(msg.shotId, {x:msg.x, y:msg.y, z:msg.z});
+  } else if(msg.type==='itemDropped'){
+    spawnGroundItemVisual(msg.id, msg.x, msg.y, msg.z, msg.itemType, msg.count);
+  } else if(msg.type==='itemPickedUp'){
+    removeGroundItem(msg.id);
+  } else if(msg.type==='itemGranted'){
+    if(msg.itemType===POWERUP_CRATE) applySpeedBoost();
+    else { for(let i=0;i<msg.count;i++) addToInventory(msg.itemType); sfxPickup(); }
+  } else if(msg.type==='enemyTick'){
+    updateEnemyTick(msg.enemies);
+  } else if(msg.type==='enemyHealth'){
+    applyServerEnemyHealth(msg.id, msg.health, msg.alive);
+  } else if(msg.type==='enemyRespawned'){
+    applyServerEnemyRespawn(msg.id, msg.x, msg.z);
+  } else if(msg.type==='chat'){
+    addChatMessage(msg.name, msg.text);
+  }
+}
+
+let lastNetSend=0;
+function sendNetworkUpdate(){
+  if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
+  const now = performance.now();
+  if(now-lastNetSend<100) return;
+  lastNetSend = now;
+  const heldType = slots[selectedSlot] ? slots[selectedSlot].type : null;
+  socket.send(JSON.stringify({type:'move', x:player.x, y:player.y, z:player.z, yaw, pitch, heldType, crouching:keys.crouch}));
+}
+function sendHit(targetId, damage){
+  if(!multiplayer || matchPhase!=='active' || myEliminated || inSpectatorBox) return;
+  if(!socket || socket.readyState!==WebSocket.OPEN) return;
+  socket.send(JSON.stringify({type:'hit', targetId, damage}));
+}
+let nextShotId = 1;
+function makeShotId(){ return (myNetId||0)+'-'+(nextShotId++); }
+function sendShotEvent(desc, origin, dir, shotId){
+  // Purely cosmetic broadcast - damage/hit-detection stays authoritative with whoever
+  // fired it (via sendHit) and block destruction syncs separately (via sendBlockBatch).
+  // This just lets everyone else actually SEE the dart/pebble/grenade/rocket fly.
+  if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
+  socket.send(JSON.stringify({
+    type:'shot', shotId, kind:desc.kind, speed:desc.speed, color:desc.color, radius:desc.radius,
+    ox:origin.x, oy:origin.y, oz:origin.z, dx:dir.x, dy:dir.y, dz:dir.z
+  }));
+}
+function sendImpact(shotId, pos){
+  // Tells everyone else's cosmetic copy of this specific shot to stop RIGHT HERE,
+  // instead of each client's copy independently guessing when it hit something -
+  // that guessing is what caused rockets to visibly keep flying past where they
+  // actually exploded, from everyone else's point of view.
+  if(!shotId || !multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
+  socket.send(JSON.stringify({type:'impact', shotId, x:pos.x, y:pos.y, z:pos.z}));
+}
+function sendBlockChange(x,y,z,blockType){
+  if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
+  socket.send(JSON.stringify({type:'block', x, y, z, blockType}));
+}
+function sendBlockBatch(changes){
+  if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN || !changes.length) return;
+  socket.send(JSON.stringify({type:'blockBatch', changes}));
+}
+function sendChat(text){
+  if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
+  socket.send(JSON.stringify({type:'chat', text}));
+}
+
+// ---------- Chat (only does anything useful once connected) ----------
+let chatOpen = false;
+function addChatMessage(name, text){
+  const log = document.getElementById('chatLog');
+  const line = document.createElement('div');
+  line.className='chatLine';
+  line.textContent = `${name}: ${text}`;
+  log.appendChild(line);
+  while(log.children.length>6) log.removeChild(log.firstChild);
+  setTimeout(()=>{ line.style.opacity='0'; }, 6000);
+}
+function openChat(){
+  if(!multiplayer){ flashMessage('Connect to a server to chat'); return; }
+  chatOpen = true;
+  document.exitPointerLock();
+  const wrap = document.getElementById('chatInputWrap');
+  const input = document.getElementById('chatInput');
+  wrap.style.display='block';
+  input.value='';
+  input.focus();
+}
+function closeChat(send){
+  const input = document.getElementById('chatInput');
+  if(send && input.value.trim()) sendChat(input.value.trim());
+  chatOpen = false;
+  document.getElementById('chatInputWrap').style.display='none';
+  if(started && !paused && !craftOpen && !devOpen) canvas.requestPointerLock();
+}
+document.getElementById('chatInput').addEventListener('keydown', (e)=>{
+  e.stopPropagation();
+  if(e.code==='Enter') closeChat(true);
+  else if(e.code==='Escape') closeChat(false);
+});
+
+document.getElementById('btnJoinMp').addEventListener('click', ()=>{
+  resumeAudio();
+  const url = document.getElementById('mpUrl').value.trim();
+  const name = document.getElementById('mpName').value.trim() || ('Player'+Math.floor(Math.random()*1000));
+  if(!url){ flashMessage('Enter a server address first'); return; }
+  connectMultiplayer(url, name);
+});
+document.getElementById('btnDisconnectMp').addEventListener('click', ()=>{
+  if(socket) socket.close();
+  hidePause();
+  document.getElementById('overlay').style.display='flex';
+  started = false;
+});
+document.getElementById('btnMuteTop').addEventListener('click', ()=>{
+  resumeAudio();
+  toggleAudio();
+});
+
+// ---------- Start screen ----------
+(function randomizeDefaultBiome(){
+  const select = document.getElementById('biomeSelect');
+  const options = Array.from(select.options).map(o=>o.value);
+  select.value = options[Math.floor(Math.random()*options.length)];
+})();
+let started=false;
+document.getElementById('btnStart').addEventListener('click', ()=>{
+  resumeAudio();
+  document.getElementById('overlay').style.display='none';
+  newWorld();
+  started=true;
+  canvas.requestPointerLock();
+});
+document.getElementById('btnStartLoad').addEventListener('click', async ()=>{
+  resumeAudio();
+  await loadWorld(false);
+  if(!started){
+    // no save existed - fall back to a fresh world so the button still works
+    document.getElementById('overlay').style.display='none';
+    newWorld();
+    started=true;
+  }
+  canvas.requestPointerLock();
+});
+
+// ---------- Main loop ----------
+initMeshes();
+
+let lastTime = performance.now();
+function animate(){
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  let dt = (now-lastTime)/1000;
+  dt = Math.min(dt, 0.05);
+  lastTime = now;
+
+  if(started){
+    const canAct = !paused && !craftOpen;
+    if(canAct && speedBoostTimer>0){
+      speedBoostTimer -= dt;
+      if(speedBoostTimer<=0){ speedBoostTimer=0; }
+      updateBuffUI();
+    }
+    const baseSpeed = keys.crouch ? 2.2 : (keys.sprint ? 6.0 : 4.0);
+    const speed = baseSpeed * (speedBoostTimer>0 ? SPEED_BOOST_MULT : 1);
+    const forward = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+    const right = new THREE.Vector3(Math.sin(yaw+Math.PI/2),0,Math.cos(yaw+Math.PI/2));
+    const move = new THREE.Vector3();
+    if(canAct){
+      if(keys.forward) move.sub(forward);
+      if(keys.back) move.add(forward);
+      if(keys.right) move.add(right);
+      if(keys.left) move.sub(right);
+      if(move.lengthSq()>0) move.normalize().multiplyScalar(speed*dt);
+    }
+
+    // Gravity/falling always applies, menu or no menu - a menu being open
+    // shouldn't mean you float in place while still taking damage from
+    // other players, only to have everything jump to catch up once closed.
+    velocity.y += GRAVITY*dt;
+    if(velocity.y<-40) velocity.y=-40;
+    if(canAct && onGround && keys.jump){ velocity.y = JUMP_SPEED; onGround=false; sfxJump(); }
+
+    const onGroundBefore = onGround;
+    if(onGroundBefore) airPeakY = player.y;
+    airPeakY = Math.max(airPeakY, player.y);
+
+    if(canAct){
+      tryMove(move.x,0,0);
+      tryMove(0,0,move.z);
+    }
+    tryMove(0, velocity.y*dt, 0);
+
+    if(onGround && !onGroundBefore){
+      const fallDist = airPeakY - player.y;
+      if(fallDist > SAFE_FALL_DISTANCE) takeDamage(Math.ceil(fallDist - SAFE_FALL_DISTANCE));
+      else sfxLand();
+      airPeakY = player.y;
+    }
+
+    // Falling out of the map bounds isn't specially punished beyond normal
+    // fall damage - you land on the same implicit floor everywhere (solid
+    // below y=0), can't actually dig through it (setBlock already ignores
+    // out-of-bounds coordinates), and you're just out of the fight until
+    // the round ends. Not worth an instant-death rule on top of that.
+
+    if(canAct && onGround && move.lengthSq()>0){
+      footstepTimer -= dt;
+      if(footstepTimer<=0){
+        sfxFootstep();
+        footstepTimer = keys.sprint ? 0.28 : 0.4;
+      }
+    } else {
+      footstepTimer = 0;
+    }
+
+    noDamageTimer += dt;
+    if(health<MAX_HEALTH && noDamageTimer>6){
+      regenTimer += dt;
+      if(regenTimer>=4){ health=Math.min(MAX_HEALTH,health+1); regenTimer=0; updateHealthUI(); }
+    } else {
+      regenTimer = 0;
+    }
+
+    const targetEyeHeight = keys.crouch ? CROUCH_EYE_HEIGHT : EYE_HEIGHT;
+    currentEyeHeight += (targetEyeHeight-currentEyeHeight)*Math.min(1, dt*8);
+    camera.position.set(player.x, player.y+currentEyeHeight, player.z);
+    skyMesh.position.copy(camera.position);
+    camera.rotation.order='YXZ';
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+    if(cameraShakeTimer>0){
+      cameraShakeTimer = Math.max(0, cameraShakeTimer-dt);
+      const frac = cameraShakeTimer/cameraShakeDuration;
+      camera.rotation.x += (Math.random()-0.5)*cameraShakeMag*frac;
+      camera.rotation.y += (Math.random()-0.5)*cameraShakeMag*frac;
+    }
+
+    // Enemies always keep updating too, for the same reason - otherwise
+    // they visibly freeze while a menu's open and jump to their real
+    // position (which the server kept ticking the whole time) once closed.
+    updateEnemies(dt);
+
+    if(canAct){
+      updateMining(dt);
+      if(attackHeld){
+        const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
+        const weapon = WEAPON_CONFIG[equipped];
+        if(weapon && weapon.kind==='projectile'){
+          const now = performance.now();
+          if(now-lastAttackTime >= weapon.cooldown*1000){
+            lastAttackTime = now;
+            shootProjectile(weapon);
+          }
+        } else {
+          attackHeld = false;
+        }
+      }
+    } else if(mining){
+      mining=null; updateMiningBar(); updateCrackOverlay();
+    }
+  }
+
+  updateParticles(dt);
+  updateExplosionFlashes(dt);
+  updateMuzzleFlashes(dt);
+  updateDarts(dt);
+  updateGrenades(dt);
+  updateRockets(dt);
+  updateRemoteProjectiles(dt);
+  updateGroundItems(dt);
+  updatePendingBurst(dt);
+  updateRemotePlayers(dt);
+  sendNetworkUpdate();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
