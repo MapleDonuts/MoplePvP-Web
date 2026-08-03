@@ -4823,45 +4823,55 @@ function connectMultiplayer(url, name){
 }
 function handleNetMessage(msg){
   if(msg.type==='welcome'){
-    myNetId = msg.id;
-    seed = msg.seed;
-    WORLD_X=msg.worldX; WORLD_Y=msg.worldY; WORLD_Z=msg.worldZ;
-    // the server decides the biome (so every client generates identical terrain);
-    // fall back to highlands if an older server didn't send this field
-    applyBiomeProfile(msg.biome || 'highlands');
-    generateWorld();
-    updateSkybox(biomeMode);
-    startAmbience(biomeMode);
-    if(msg.diffs) for(const d of msg.diffs) setBlock(d.x,d.y,d.z,d.blockType);
-    for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
-    if(msg.items) for(const it of msg.items) spawnGroundItemVisual(it.id, it.x, it.y, it.z, it.itemType, it.count);
-    spawnPlayer();
-    health=MAX_HEALTH; noDamageTimer=0; regenTimer=0;
-    slots.forEach(s=>{ s.type=null; s.count=0; });
-    syncEnemiesFromServer(msg.enemies);
-    rebuildMeshes(); updateHotbarUI(); updateHealthUI();
-    multiplayer = true;
-    matchPhase='waiting'; matchCountdown=0; matchPlayersList=[]; myLives=0; myEliminated=false;
-    matchRound=1; matchRoundsPerSeries=2; matchStandings=[];
-    awaitingInitialPhaseCheck = true;
-    inSpectatorBox = false;
-    for(const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id);
-    if(msg.players) for(const p of msg.players){
-      const rp = createRemotePlayer(p.id, p.name);
-      rp.group.position.set(p.x,p.y,p.z);
-      rp.target = {x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch||0};
-      updateRemoteHeldItem(rp, p.heldType);
-      rp.crouching = !!p.crouching;
-      remotePlayers.set(p.id, rp);
-    }
-    socket.send(JSON.stringify({type:'setName', name:myPlayerName}));
+    // Hide the menu FIRST, before any of the setup below - if something
+    // downstream throws (e.g. an out-of-date server sending a differently
+    // shaped message), the player should never be stuck looking at a menu
+    // that silently failed to clear. Anything that does go wrong past this
+    // point still gets caught and surfaced clearly instead of just stalling.
     document.getElementById('overlay').style.display='none';
     stopMenuBg();
-    started = true;
-    requestPointerLockSafe();
-    updateMpStatus();
-    updateMatchUI();
-    flashMessage('Joined as '+myPlayerName);
+    try{
+      myNetId = msg.id;
+      seed = msg.seed;
+      WORLD_X=msg.worldX; WORLD_Y=msg.worldY; WORLD_Z=msg.worldZ;
+      // the server decides the biome (so every client generates identical terrain);
+      // fall back to highlands if an older server didn't send this field
+      applyBiomeProfile(msg.biome || 'highlands');
+      generateWorld();
+      updateSkybox(biomeMode);
+      startAmbience(biomeMode);
+      if(msg.diffs) for(const d of msg.diffs) setBlock(d.x,d.y,d.z,d.blockType);
+      for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
+      if(msg.items) for(const it of msg.items) spawnGroundItemVisual(it.id, it.x, it.y, it.z, it.itemType, it.count);
+      spawnPlayer();
+      health=MAX_HEALTH; noDamageTimer=0; regenTimer=0;
+      slots.forEach(s=>{ s.type=null; s.count=0; });
+      syncEnemiesFromServer(msg.enemies);
+      rebuildMeshes(); updateHotbarUI(); updateHealthUI();
+      multiplayer = true;
+      matchPhase='waiting'; matchCountdown=0; matchPlayersList=[]; myLives=0; myEliminated=false;
+      matchRound=1; matchRoundsPerSeries=2; matchStandings=[];
+      awaitingInitialPhaseCheck = true;
+      inSpectatorBox = false;
+      for(const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id);
+      if(msg.players) for(const p of msg.players){
+        const rp = createRemotePlayer(p.id, p.name);
+        rp.group.position.set(p.x,p.y,p.z);
+        rp.target = {x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch||0};
+        updateRemoteHeldItem(rp, p.heldType);
+        rp.crouching = !!p.crouching;
+        remotePlayers.set(p.id, rp);
+      }
+      socket.send(JSON.stringify({type:'setName', name:myPlayerName}));
+      started = true;
+      requestPointerLockSafe();
+      updateMpStatus();
+      updateMatchUI();
+      flashMessage('Joined as '+myPlayerName);
+    }catch(e){
+      console.error('Error while joining multiplayer world:', e);
+      flashMessage('Something went wrong joining the server - check the console for details, or try again');
+    }
   } else if(msg.type==='playerJoined'){
     if(msg.id!==myNetId){
       if(remotePlayers.has(msg.id)) remotePlayers.get(msg.id).name = msg.name;
