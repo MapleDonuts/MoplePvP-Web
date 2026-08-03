@@ -544,6 +544,8 @@ const CARBINE=25;       // weapon - faster-firing rifle variant, less damage per
 const GLASS=26;         // transparent placeable block - also builds the spectator box's walls/roof
 const CLEAR_GLASS=27;   // near-invisible placeable block - the spectator box's floor, so it doesn't obscure the view down
 const SNIPER=28;        // weapon - instant hitscan, ignores terrain entirely, long cooldown to balance
+const BANDAGE=29;        // consumable - heals a modest amount over a short channel (right-click to use)
+const STIM_INJECTOR=30;  // consumable - instant full heal (right-click to use)
 const SOLID_TYPES = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, PLANKS, REEDS, RUBBLE, SNOW, METAL, GLASS, CLEAR_GLASS];
 const WORLD_ONLY_TYPES = [LOOT_CRATE, POWERUP_CRATE]; // rendered in the world but never held/placed by the player
 const ALL_RENDER_TYPES = [...SOLID_TYPES, ...WORLD_ONLY_TYPES];
@@ -554,7 +556,7 @@ const BLOCK_COLORS = {
   [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [GRENADE]:0x3a4a3a,
   [POWERUP_CRATE]:0x2a6f8a, [ROCKET_LAUNCHER]:0x555555, [RUBBLE]:0x9c8570,
   [DOUBLE_BARREL]:0x4a3520, [PUMP_SHOTGUN]:0x333333, [RIFLE]:0xc9a227, [SNOW]:0xf0f5fa, [METAL]:0x5a6570,
-  [PISTOL]:0x707070, [CARBINE]:0x8a6a45, [GLASS]:0xbfe0f0, [CLEAR_GLASS]:0xeaf7fb, [SNIPER]:0x2a3a2a
+  [PISTOL]:0x707070, [CARBINE]:0x8a6a45, [GLASS]:0xbfe0f0, [CLEAR_GLASS]:0xeaf7fb, [SNIPER]:0x2a3a2a, [BANDAGE]:0xe8ddc8, [STIM_INJECTOR]:0x5fd0ff
 };
 const BLOCK_NAMES = {
   [GRASS]:'Grass', [DIRT]:'Dirt', [STONE]:'Stone', [SAND]:'Sand',
@@ -563,14 +565,14 @@ const BLOCK_NAMES = {
   [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade',
   [POWERUP_CRATE]:'Power Crate', [ROCKET_LAUNCHER]:'Rocket Launcher', [RUBBLE]:'Rubble',
   [DOUBLE_BARREL]:'Double Barrel', [PUMP_SHOTGUN]:'Pump Shotgun', [RIFLE]:'Rifle', [SNOW]:'Snow', [METAL]:'Metal',
-  [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass', [SNIPER]:'Sniper Rifle'
+  [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass', [SNIPER]:'Sniper Rifle', [BANDAGE]:'Bandage', [STIM_INJECTOR]:'Stim Injector'
 };
 const ITEM_ICON = {
   [STONE_PICKAXE]:'\u26CF', [BLOW_PIPE]:'\u25CF', [STONE_SLING]:'\u25CF', [WAR_CLUB]:'\u2694',
   [GRENADE]:'\u2600', [ROCKET_LAUNCHER]:'\u2191', [DOUBLE_BARREL]:'\u25CF', [PUMP_SHOTGUN]:'\u25CF', [RIFLE]:'\u25CF',
-  [PISTOL]:'\u25CF', [CARBINE]:'\u25CF', [SNIPER]:'\u25CF'
+  [PISTOL]:'\u25CF', [CARBINE]:'\u25CF', [SNIPER]:'\u25CF', [BANDAGE]:'\u2795', [STIM_INJECTOR]:'\u2695'
 };
-const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER];
+const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR];
 
 // ---------- Loot table (crate drop rates) ----------
 // Each entry's "weight" controls how often it drops RELATIVE to the others -
@@ -590,7 +592,9 @@ const LOOT_TABLE = [
   { type: DOUBLE_BARREL,   weight: 6 },
   { type: PUMP_SHOTGUN,    weight: 6 },
   { type: ROCKET_LAUNCHER, weight: 4 },
-  { type: SNIPER,          weight: 2 }
+  { type: SNIPER,          weight: 2 },
+  { type: BANDAGE,         weight: 10 },
+  { type: STIM_INJECTOR,   weight: 4 }
 ];
 function pickWeightedLoot(){
   const totalWeight = LOOT_TABLE.reduce((sum,e)=>sum+e.weight, 0);
@@ -1176,6 +1180,44 @@ function buildTombstone(x,z,rand){
     if(getBlock(x-1,armY,z)===AIR) setBlock(x-1,armY,z,STONE);
   }
 }
+// Small roofed mausoleums - real overhead cover, not just walls, since a
+// ranged attacker can otherwise just shoot down/over a plain wall. The roof
+// is deliberately damaged/partial rather than fully sealed, matching the
+// "old, crumbling" theme and still letting light/movement through gaps.
+function buildMausoleum(x,z,rand){
+  const size = 4+Math.floor(rand()*2); // 4-5 footprint
+  const wallHeight = 3;
+  const doorSide = Math.floor(rand()*4);
+  for(let side=0; side<4; side++){
+    for(let i=0;i<=size;i++){
+      let wx, wz;
+      if(side===0){ wx=x+i; wz=z; }
+      else if(side===1){ wx=x+i; wz=z+size; }
+      else if(side===2){ wx=x; wz=z+i; }
+      else { wx=x+size; wz=z+i; }
+      if(wx<1||wx>=WORLD_X-1||wz<1||wz>=WORLD_Z-1) continue;
+      if(side===doorSide && i>=Math.floor(size/2)-1 && i<=Math.floor(size/2)) continue; // doorway gap
+      const h = heightMap[wx] ? heightMap[wx][wz] : null;
+      if(h===null) continue;
+      const baseY = h+1;
+      for(let dy=0; dy<wallHeight; dy++){
+        if(getBlock(wx,baseY+dy,wz)===AIR) setBlock(wx,baseY+dy,wz,STONE);
+      }
+    }
+  }
+  for(let dx=0; dx<=size; dx++){
+    for(let dz=0; dz<=size; dz++){
+      const wx=x+dx, wz=z+dz;
+      if(wx<1||wx>=WORLD_X-1||wz<1||wz>=WORLD_Z-1) continue;
+      if(rand()<0.55){ // damaged - only part of the roof actually remains
+        const h = heightMap[wx] ? heightMap[wx][wz] : null;
+        if(h===null) continue;
+        const baseY = h+1+wallHeight;
+        if(getBlock(wx,baseY,wz)===AIR) setBlock(wx,baseY,wz,STONE);
+      }
+    }
+  }
+}
 function generateGraveyardWorld(){
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
   const n1 = new Noise2D(seed);
@@ -1217,6 +1259,12 @@ function generateGraveyardWorld(){
     const x = 3+Math.floor(randTomb()*(WORLD_X-6));
     const z = 3+Math.floor(randTomb()*(WORLD_Z-6));
     buildTombstone(x,z,randTomb);
+  }
+  const randMausoleum = mulberry32(seed+444);
+  for(let i=0;i<6;i++){
+    const x = 8+Math.floor(randMausoleum()*(WORLD_X-16));
+    const z = 8+Math.floor(randMausoleum()*(WORLD_Z-16));
+    buildMausoleum(x,z,randMausoleum);
   }
   scatterLootAndPowerCrates();
   scatterCaveTunnels(3);
@@ -1588,6 +1636,10 @@ function sfxCraftSuccess(){
   playTone({freq:500, duration:0.06, type:'sine', volume:0.16});
   setTimeout(()=>playTone({freq:700, duration:0.06, type:'sine', volume:0.16}), 70);
   setTimeout(()=>playTone({freq:900, duration:0.08, type:'sine', volume:0.16}), 140);
+}
+function sfxHeal(){
+  playTone({freq:440, freqEnd:660, duration:0.25, type:'sine', volume:0.18});
+  setTimeout(()=>playTone({freq:660, freqEnd:880, duration:0.2, type:'sine', volume:0.14}), 120);
 }
 function sfxMatchStart(){
   playTone({freq:440, duration:0.1, type:'sine', volume:0.18});
@@ -2715,6 +2767,37 @@ function buildSniperMesh(){
   group.add(stock);
   return group;
 }
+function buildBandageMesh(){
+  const group = new THREE.Group();
+  const roll = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08,0.08,0.16,10),
+    new THREE.MeshLambertMaterial({color:0xe8ddc8})
+  );
+  roll.rotation.z = Math.PI/2;
+  group.add(roll);
+  const cross1 = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.02,0.1), new THREE.MeshLambertMaterial({color:0xd0463f}));
+  cross1.position.set(0,0.081,0);
+  group.add(cross1);
+  const cross2 = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.02,0.06), new THREE.MeshLambertMaterial({color:0xd0463f}));
+  cross2.position.set(0,0.081,0);
+  group.add(cross2);
+  return group;
+}
+function buildStimMesh(){
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035,0.035,0.28,10),
+    new THREE.MeshLambertMaterial({color:0x5fd0ff, transparent:true, opacity:0.75})
+  );
+  group.add(body);
+  const plunger = new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.06,10), new THREE.MeshLambertMaterial({color:0x888888}));
+  plunger.position.y = 0.17;
+  group.add(plunger);
+  const needle = new THREE.Mesh(new THREE.CylinderGeometry(0.008,0.008,0.14,6), new THREE.MeshLambertMaterial({color:0xcccccc}));
+  needle.position.y = -0.21;
+  group.add(needle);
+  return group;
+}
 function updateHeldItemMesh(){
   clearItemAnchor();
   const slot = slots[selectedSlot];
@@ -2743,6 +2826,10 @@ function updateHeldItemMesh(){
     itemAnchor.add(buildCarbineMesh());
   } else if(slot.type===SNIPER){
     itemAnchor.add(buildSniperMesh());
+  } else if(slot.type===BANDAGE){
+    itemAnchor.add(buildBandageMesh());
+  } else if(slot.type===STIM_INJECTOR){
+    itemAnchor.add(buildStimMesh());
   } else if(slot.type===REEDS){
     itemAnchor.add(new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]));
   } else if(SOLID_TYPES.includes(slot.type)){
@@ -3360,6 +3447,8 @@ function buildGroundItemMesh(type){
     case DOUBLE_BARREL: return buildDoubleBarrelMesh();
     case PUMP_SHOTGUN: return buildPumpShotgunMesh();
     case SNIPER: return buildSniperMesh();
+    case BANDAGE: return buildBandageMesh();
+    case STIM_INJECTOR: return buildStimMesh();
     case POWERUP_CRATE: return new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), materials[POWERUP_CRATE]);
     default: {
       const tex = GROUND_ICON_TEX[type];
@@ -3706,9 +3795,35 @@ function animateBossTentacles(group, time){
   if(!tentacles) return;
   for(let i=0;i<tentacles.length;i++){
     const t = tentacles[i];
-    t.rotation.z = Math.sin(time*1.5+i*0.8)*0.3;
-    t.rotation.x = Math.cos(time*1.3+i*1.1)*0.25;
+    const attacking = t.userData.attackStartTime!==undefined && (time - t.userData.attackStartTime) < 0.6;
+    if(attacking){
+      const elapsed = time - t.userData.attackStartTime;
+      const lashProgress = Math.sin(Math.min(1, elapsed/0.6)*Math.PI); // eases out to full stretch, then back
+      const angleDiff = t.userData.attackTargetAngle - t.userData.baseAngle;
+      t.rotation.y = angleDiff*lashProgress*0.9;
+      t.rotation.x = lashProgress*0.6;
+      t.scale.y = 1 + lashProgress*1.8;
+    } else {
+      t.scale.y = 1;
+      t.rotation.y = 0;
+      t.rotation.z = Math.sin(time*1.5+i*0.8)*0.3;
+      t.rotation.x = Math.cos(time*1.3+i*1.1)*0.25;
+    }
   }
+}
+function playBossAttackAnimation(targetX, targetZ){
+  if(!bossMesh || !bossState) return;
+  const tentacles = bossMesh.userData.tentacles;
+  if(!tentacles || !tentacles.length) return;
+  const dx = targetX-bossState.x, dz = targetZ-bossState.z;
+  const targetAngle = Math.atan2(dx, dz);
+  let closest = tentacles[0], closestDiff = Infinity;
+  for(const t of tentacles){
+    const diff = Math.abs(((t.userData.baseAngle - targetAngle + Math.PI*3) % (Math.PI*2)) - Math.PI);
+    if(diff<closestDiff){ closestDiff=diff; closest=t; }
+  }
+  closest.userData.attackStartTime = bossVisualTime;
+  closest.userData.attackTargetAngle = targetAngle;
 }
 // One forgiving hit sphere covering the whole cloud cluster - no head/body
 // split like regular enemies, since precisely defining "head" on an
@@ -3743,16 +3858,56 @@ function updateBossHealthUI(){
 function spawnBossAttackTelegraph(x,y,z){
   spawnBreakParticles(Math.floor(x), Math.floor(y), Math.floor(z), 0xaa2255);
 }
+function checkBossAttackLOS(bx,by,bz, tx,ty,tz){
+  const dx=tx-bx, dy=ty-by, dz=tz-bz;
+  const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+  if(dist<0.01) return {clear:true};
+  const steps = Math.max(1, Math.ceil(dist*2)); // sample roughly every 0.5 units
+  for(let i=1;i<steps;i++){
+    const t = i/steps;
+    const x = Math.floor(bx+dx*t), y = Math.floor(by+dy*t), z = Math.floor(bz+dz*t);
+    const b = getBlock(x,y,z);
+    if(isSolid(b)) return {clear:false, bx:x, by:y, bz:z};
+  }
+  return {clear:true};
+}
+function resolveBossAttackOnSelf(damage, bossX, bossY, bossZ){
+  // Walls fully block the boss's attack now - no more hitting through cover.
+  // If blocked, there's a real chance (not guaranteed) it tears straight
+  // through whatever's in the way instead, so cover isn't a permanent
+  // solution, just a real one.
+  const los = checkBossAttackLOS(bossX, bossY, bossZ, player.x, player.y+PLAYER_BODY_Y, player.z);
+  if(los.clear){
+    flashMessage('The graveyard boss lashes out at you!');
+    takeDamage(damage);
+    return;
+  }
+  flashMessage('The boss\'s tentacle slams into your cover!');
+  spawnBreakParticles(los.bx, los.by, los.bz, 0xaa2255);
+  if(Math.random()<0.4){
+    setBlock(los.bx, los.by, los.bz, AIR);
+    rebuildMeshes();
+    sendBlockChange(los.bx, los.by, los.bz, AIR);
+  }
+}
 let localBossAttackCooldown = 0;
+let localBossSpawnTimeoutId = null;
 function spawnLocalBoss(){
-  if(multiplayer || biomeMode !== 'graveyard'){ setBossState(null); return; }
-  localBossAttackCooldown = 3.2;
-  const homeX = WORLD_X/2, homeZ = WORLD_Z/2;
-  setBossState({
-    x:homeX, y:WORLD_Y-8, z:homeZ, homeX, homeZ,
-    health:200, maxHealth:200, phase:'ranged', alive:true,
-    driftAngle: Math.random()*Math.PI*2
-  });
+  if(localBossSpawnTimeoutId){ clearTimeout(localBossSpawnTimeoutId); localBossSpawnTimeoutId=null; }
+  setBossState(null);
+  if(multiplayer || biomeMode !== 'graveyard') return;
+  flashMessage('You have 15 seconds to prepare before the graveyard boss awakens...');
+  localBossSpawnTimeoutId = setTimeout(()=>{
+    localBossSpawnTimeoutId = null;
+    if(multiplayer || biomeMode !== 'graveyard') return; // world may have changed while waiting
+    localBossAttackCooldown = 6;
+    const homeX = WORLD_X/2, homeZ = WORLD_Z/2;
+    setBossState({
+      x:homeX, y:13, z:homeZ, homeX, homeZ,
+      health:200, maxHealth:200, phase:'ranged', alive:true,
+      driftAngle: Math.random()*Math.PI*2
+    });
+  }, 15000);
 }
 function updateLocalBoss(dt){
   if(multiplayer || !bossState || !bossState.alive) return;
@@ -3764,11 +3919,11 @@ function updateLocalBoss(dt){
   if(localBossAttackCooldown<=0){
     const dx=player.x-bossState.x, dz=player.z-bossState.z;
     const dist = Math.sqrt(dx*dx+dz*dz);
-    if(dist < 34){
-      localBossAttackCooldown = 3.2;
-      flashMessage('The graveyard boss lashes out at you!');
-      takeDamage(8);
-      spawnBossAttackTelegraph(bossState.x, bossState.y, bossState.z);
+    if(dist < 9){
+      localBossAttackCooldown = 6;
+      resolveBossAttackOnSelf(8, bossState.x, bossState.y, bossState.z);
+      playBossAttackAnimation(player.x, player.z);
+      spawnBossAttackTelegraph(player.x, bossState.y+0.8, player.z);
     }
   }
 }
@@ -3851,6 +4006,7 @@ function spawnEnemyAt(x,z,forceZombie){
 function spawnInitialEnemies(count){
   for(const en of enemies) scene.remove(en.group);
   enemies = [];
+  if(biomeMode==='graveyard') return; // no starting mobs here - only the boss's swarm phase spawns any
   let spawned=0, attempts=0;
   const target = count || ENEMY_SPAWN_COUNT;
   while(spawned<target && attempts<300){
@@ -4198,6 +4354,7 @@ let attackHeld = false;
 canvas.addEventListener('mousedown', (e)=>{
   if(!pointerLocked) return;
   if(respawnCountdownActive || (multiplayer && (myEliminated || inSpectatorBox))) return; // spectating - no combat or building until the next match
+  if(bandageChannelTimer>0) return; // hold still while applying a bandage
   if(e.button===0){
     const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
     const weapon = WEAPON_CONFIG[equipped];
@@ -4386,7 +4543,7 @@ function updateMiningBar(){
   bar.style.width = Math.min(100, (mining.progress/req)*100) + '%';
 }
 function updateMining(dt){
-  if(!mouseDown0 || !pointerLocked || paused || craftOpen){
+  if(!mouseDown0 || !pointerLocked || paused || craftOpen || bandageChannelTimer>0){
     if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
     return;
   }
@@ -4441,10 +4598,57 @@ function raycastVoxel(){
   }
   return null;
 }
+const BANDAGE_HEAL_AMOUNT = 8;
+const BANDAGE_CHANNEL_TIME = 1.0;
+let bandageChannelTimer = 0;
+let bandagingSlot = -1;
+function useConsumable(){
+  const slot = slots[selectedSlot];
+  if(!slot.type || slot.count<=0) return false;
+  if(slot.type===BANDAGE){
+    if(bandageChannelTimer>0) return true; // already applying one
+    if(health>=MAX_HEALTH){ flashMessage('Already at full health'); return true; }
+    bandageChannelTimer = BANDAGE_CHANNEL_TIME;
+    bandagingSlot = selectedSlot;
+    flashMessage('Applying bandage...');
+    return true;
+  }
+  if(slot.type===STIM_INJECTOR){
+    if(health>=MAX_HEALTH){ flashMessage('Already at full health'); return true; }
+    health = MAX_HEALTH;
+    noDamageTimer = 0;
+    updateHealthUI();
+    sfxHeal();
+    flashMessage('Stim injected - full health!');
+    slot.count--; if(slot.count===0) slot.type=null;
+    updateHotbarUI();
+    return true;
+  }
+  return false;
+}
+function updateBandageChannel(dt){
+  if(bandageChannelTimer<=0) return;
+  bandageChannelTimer -= dt;
+  if(bandageChannelTimer<=0){
+    bandageChannelTimer = 0;
+    const slot = slots[bandagingSlot];
+    if(slot && slot.type===BANDAGE && slot.count>0){
+      health = Math.min(MAX_HEALTH, health+BANDAGE_HEAL_AMOUNT);
+      noDamageTimer = 0;
+      updateHealthUI();
+      sfxHeal();
+      flashMessage('Bandage applied (+'+BANDAGE_HEAL_AMOUNT+' HP)');
+      slot.count--; if(slot.count===0) slot.type=null;
+      updateHotbarUI();
+    }
+    bandagingSlot = -1;
+  }
+}
 function placeBlock(){
+  const slot = slots[selectedSlot];
+  if(slot.type===BANDAGE || slot.type===STIM_INJECTOR){ useConsumable(); return; }
   const hit = raycastVoxel();
   if(!hit || !hit.prev) return;
-  const slot = slots[selectedSlot];
   if(!slot.type || slot.count<=0) return;
   if(!SOLID_TYPES.includes(slot.type)) return; // tools can't be placed as blocks
   const {x,y,z} = hit.prev;
@@ -4929,6 +5133,8 @@ function buildRemoteHeldItemMesh(type){
     case PISTOL: return buildPistolMesh();
     case CARBINE: return buildCarbineMesh();
     case SNIPER: return buildSniperMesh();
+    case BANDAGE: return buildBandageMesh();
+    case STIM_INJECTOR: return buildStimMesh();
     case REEDS: return new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]);
     default:
       if(type!==null && type!==undefined && SOLID_TYPES.includes(type)){
@@ -5280,11 +5486,18 @@ function handleNetMessage(msg){
   } else if(msg.type==='enemyRespawned'){
     applyServerEnemyRespawn(msg.id, msg.x, msg.z, msg.isZombie);
   } else if(msg.type==='bossAttack'){
+    let targetX=null, targetZ=null;
     if(msg.targetId===myNetId){
-      flashMessage('The graveyard boss lashes out at you!');
-      takeDamage(msg.damage);
+      targetX = player.x; targetZ = player.z;
+      resolveBossAttackOnSelf(msg.damage, msg.bx, msg.by, msg.bz);
+    } else {
+      const rp = remotePlayers.get(msg.targetId);
+      if(rp){ targetX = rp.group.position.x; targetZ = rp.group.position.z; }
     }
-    if(bossMesh) spawnBossAttackTelegraph(msg.bx, msg.by, msg.bz);
+    if(bossMesh && targetX!==null){
+      playBossAttackAnimation(targetX, targetZ);
+      spawnBossAttackTelegraph(targetX, (bossState?bossState.y:13)+0.8, targetZ);
+    }
   } else if(msg.type==='chat'){
     addChatMessage(msg.name, msg.text);
   }
@@ -5517,7 +5730,10 @@ function animate(){
     if(isWalking) handBobPhase += move.length()*2;
     const bobX = Math.sin(handBobPhase) * 0.01 * handBobAmount;
     const bobY = Math.abs(Math.sin(handBobPhase)) * 0.016 * handBobAmount;
-    handGroup.position.set(HAND_BASE_X+bobX, HAND_BASE_Y-bobY, HAND_BASE_Z);
+    updateBandageChannel(dt);
+    const jiggleX = bandageChannelTimer>0 ? (Math.random()-0.5)*0.025 : 0;
+    const jiggleY = bandageChannelTimer>0 ? (Math.random()-0.5)*0.025 : 0;
+    handGroup.position.set(HAND_BASE_X+bobX+jiggleX, HAND_BASE_Y-bobY+jiggleY, HAND_BASE_Z);
 
     noDamageTimer += dt;
     if(health<MAX_HEALTH && noDamageTimer>6){
@@ -5549,7 +5765,7 @@ function animate(){
 
     if(canAct){
       updateMining(dt);
-      if(attackHeld){
+      if(attackHeld && bandageChannelTimer<=0){
         const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
         const weapon = WEAPON_CONFIG[equipped];
         if(weapon && weapon.kind==='projectile'){
