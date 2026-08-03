@@ -1749,11 +1749,13 @@ function renderMenuBgFrame(){
   menuBgAnimId = requestAnimationFrame(renderMenuBgFrame);
 }
 function startMenuBg(){
+  menuBgCanvas.style.display = 'block';
   if(menuBgAnimId) return;
   renderMenuBgFrame();
 }
 function stopMenuBg(){
   if(menuBgAnimId){ cancelAnimationFrame(menuBgAnimId); menuBgAnimId=null; }
+  menuBgCanvas.style.display = 'none';
 }
 startMenuBg();
 
