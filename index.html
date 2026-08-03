@@ -62,8 +62,12 @@
   }
   .btn:hover { background:rgba(60,60,60,0.85); }
 
+  #menuBgCanvas {
+    position:fixed; inset:0; z-index:99; width:100%; height:100%;
+    image-rendering:pixelated; image-rendering:crisp-edges;
+  }
   #overlay {
-    position:fixed; inset:0; background:rgba(10,15,10,0.88); z-index:100;
+    position:fixed; inset:0; background:rgba(10,15,10,0.72); z-index:100;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     color:#fff; text-align:center;
   }
@@ -323,9 +327,10 @@
   </div>
 </div>
 
+<canvas id="menuBgCanvas"></canvas>
 <div id="overlay">
   <h1>MOPLEPVP</h1>
-  <p>A tiny voxel world with procedural terrain, block building, an inventory, simple crafting, and save/load. Click below to drop in, then click the screen to lock your mouse and look around.</p>
+  <p>"The other craft"</p>
   <label style="font-size:13px; color:#ddd; display:block; margin:6px 0;">
     Map type:
     <select id="biomeSelect" style="padding:6px; border-radius:5px; border:1px solid #555; background:#111; color:#fff; margin-left:6px;">
@@ -1702,6 +1707,55 @@ function updateSkybox(biome){
   renderer.setClearColor(theme.fog);
 }
 updateSkybox('highlands');
+
+// ---------- Menu background (procedural, no external images) ----------
+// A classic "plasma" effect - layered sine waves based on position and time,
+// mapped to a shifting rainbow - rendered at a small resolution and scaled
+// up via CSS (image-rendering:pixelated) for a chunky, retro-CRT feel.
+// Only runs while the start/menu overlay is visible, not during actual play.
+const menuBgCanvas = document.getElementById('menuBgCanvas');
+const menuBgCtx = menuBgCanvas.getContext('2d');
+const MENU_BG_W = 160, MENU_BG_H = 90;
+menuBgCanvas.width = MENU_BG_W;
+menuBgCanvas.height = MENU_BG_H;
+let menuBgAnimId = null;
+let menuBgTime = 0;
+function hueToRgb(h){
+  h = ((h%360)+360)%360;
+  const c = 1, x = 1-Math.abs((h/60)%2-1);
+  let r,g,b;
+  if(h<60){r=c;g=x;b=0;} else if(h<120){r=x;g=c;b=0;} else if(h<180){r=0;g=c;b=x;}
+  else if(h<240){r=0;g=x;b=c;} else if(h<300){r=x;g=0;b=c;} else {r=c;g=0;b=x;}
+  return [Math.round(r*255), Math.round(g*255), Math.round(b*255)];
+}
+function renderMenuBgFrame(){
+  const imgData = menuBgCtx.createImageData(MENU_BG_W, MENU_BG_H);
+  const data = imgData.data;
+  const t = menuBgTime;
+  for(let y=0;y<MENU_BG_H;y++){
+    const ny = y/MENU_BG_H;
+    for(let x=0;x<MENU_BG_W;x++){
+      const nx = x/MENU_BG_W;
+      const dx=nx-0.5, dy=ny-0.5;
+      const v = Math.sin(nx*10+t) + Math.sin(ny*8-t*1.3) + Math.sin((nx+ny)*9+t*0.7) + Math.sin(Math.sqrt(dx*dx+dy*dy)*14 - t*1.6);
+      const hue = ((v+4)/8)*360;
+      const [r,g,b] = hueToRgb(hue);
+      const idx = (y*MENU_BG_W+x)*4;
+      data[idx]=r; data[idx+1]=g; data[idx+2]=b; data[idx+3]=255;
+    }
+  }
+  menuBgCtx.putImageData(imgData,0,0);
+  menuBgTime += 0.02;
+  menuBgAnimId = requestAnimationFrame(renderMenuBgFrame);
+}
+function startMenuBg(){
+  if(menuBgAnimId) return;
+  renderMenuBgFrame();
+}
+function stopMenuBg(){
+  if(menuBgAnimId){ cancelAnimationFrame(menuBgAnimId); menuBgAnimId=null; }
+}
+startMenuBg();
 
 // ---------- Round beacon (tiebreak point, revealed only in the final minute) ----------
 const beaconBeam = new THREE.Mesh(
@@ -4486,6 +4540,7 @@ async function loadWorld(fromPause){
     updateHealthUI();
     flashMessage('World loaded!');
     document.getElementById('overlay').style.display='none';
+    stopMenuBg();
     if(fromPause){ hidePause(); requestPointerLockSafe(); }
     started = true;
   }catch(err){
@@ -4801,6 +4856,7 @@ function handleNetMessage(msg){
     }
     socket.send(JSON.stringify({type:'setName', name:myPlayerName}));
     document.getElementById('overlay').style.display='none';
+    stopMenuBg();
     started = true;
     requestPointerLockSafe();
     updateMpStatus();
@@ -5035,6 +5091,7 @@ document.getElementById('btnDisconnectMp').addEventListener('click', ()=>{
   if(socket) socket.close();
   hidePause();
   document.getElementById('overlay').style.display='flex';
+  startMenuBg();
   started = false;
 });
 document.getElementById('btnMuteTop').addEventListener('click', ()=>{
@@ -5062,6 +5119,7 @@ let started=false;
 document.getElementById('btnStart').addEventListener('click', ()=>{
   resumeAudio();
   document.getElementById('overlay').style.display='none';
+  stopMenuBg();
   newWorld();
   started=true;
   requestPointerLockSafe();
@@ -5072,6 +5130,7 @@ document.getElementById('btnStartLoad').addEventListener('click', async ()=>{
   if(!started){
     // no save existed - fall back to a fresh world so the button still works
     document.getElementById('overlay').style.display='none';
+    stopMenuBg();
     newWorld();
     started=true;
   }
