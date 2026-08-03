@@ -107,6 +107,7 @@
   }
   #craftPanel h2 { margin-top:0; font-size:18px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:8px;}
   .recipe { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .recipe.craftable .desc { color:#9effa0; }
   .recipe .desc { font-size:13px; color:#ccc; }
 
   #invGrid { display:grid; grid-template-columns: repeat(9, 1fr); gap:6px; margin:14px 0; }
@@ -711,6 +712,125 @@ function teleportToSpectatorBox(){
   flashMessage('Spectating from above until the next round starts');
 }
 
+// A simple L-shaped wood wall for open biomes that otherwise have very
+// little to hide behind - two short perpendicular arms in a random
+// orientation, low enough to shoot/duck over but enough to break line of
+// sight. Anchored per-column to the real terrain height (heightMap), same
+// as the ruins fix - not one shared reference height for the whole thing.
+function buildCoverStructure(x,z,rand){
+  const armA = 3+Math.floor(rand()*3);
+  const armB = 3+Math.floor(rand()*3);
+  const height = 2;
+  const rotate = Math.floor(rand()*4);
+  const placeWall = (dx,dz,len) => {
+    for(let i=0;i<len;i++){
+      const wx=x+dx*i, wz=z+dz*i;
+      if(wx<1||wx>=WORLD_X-1||wz<1||wz>=WORLD_Z-1) continue;
+      const h = heightMap[wx] ? heightMap[wx][wz] : null;
+      if(h===null || getBlock(wx,h,wz)===WATER) continue; // don't build over water
+      for(let dy=0;dy<height;dy++){
+        if(getBlock(wx,h+1+dy,wz)===AIR) setBlock(wx,h+1+dy,wz,WOOD);
+      }
+    }
+  };
+  if(rotate===0){ placeWall(1,0,armA); placeWall(0,1,armB); }
+  else if(rotate===1){ placeWall(0,1,armA); placeWall(-1,0,armB); }
+  else if(rotate===2){ placeWall(-1,0,armA); placeWall(0,-1,armB); }
+  else { placeWall(0,-1,armA); placeWall(1,0,armB); }
+}
+function scatterCoverStructures(count){
+  const rand = mulberry32(seed+888);
+  for(let i=0;i<count;i++){
+    const x = 6+Math.floor(rand()*(WORLD_X-12));
+    const z = 6+Math.floor(rand()*(WORLD_Z-12));
+    buildCoverStructure(x,z,rand);
+  }
+}
+// ---------- Simple underground cave tunnels ----------
+// Not true 3D noise-based caves (that needs a proper 3D noise function,
+// which is a much bigger addition) - this uses a simpler, well-established
+// technique instead: carve a wandering tunnel from a surface entrance down
+// into the rock via a randomized walk, removing a small radius of blocks
+// along the way, ending in a small loot chamber. Good enough to give "there's
+// something under this hole" without the complexity of full volumetric caves.
+function carveTunnel(startX, startZ, rand){
+  const startY = heightMap[startX] ? heightMap[startX][startZ] : null;
+  if(startY===null || startY<6) return; // needs enough rock below to tunnel into
+  for(let dx=-1;dx<=1;dx++){
+    for(let dz=-1;dz<=1;dz++){
+      const x=startX+dx, z=startZ+dz;
+      if(x<1||x>=WORLD_X-1||z<1||z>=WORLD_Z-1) continue;
+      setBlock(x,startY,z,AIR);
+      setBlock(x,startY-1,z,AIR);
+    }
+  }
+  let cx=startX, cy=startY-2, cz=startZ;
+  let dirX=(rand()-0.5), dirY=-1, dirZ=(rand()-0.5);
+  const steps = 22+Math.floor(rand()*14);
+  const carveRadius = 1;
+  for(let s=0; s<steps; s++){
+    for(let dx=-carveRadius; dx<=carveRadius; dx++){
+      for(let dy=-carveRadius; dy<=carveRadius+1; dy++){
+        for(let dz=-carveRadius; dz<=carveRadius; dz++){
+          if(dx*dx+dy*dy+dz*dz > carveRadius*carveRadius+1) continue;
+          const x=Math.round(cx+dx), y=Math.round(cy+dy), z=Math.round(cz+dz);
+          if(x<1||x>=WORLD_X-1||y<1||y>=WORLD_Y-1||z<1||z>=WORLD_Z-1) continue;
+          const t = getBlock(x,y,z);
+          if(t===STONE||t===DIRT||t===RUBBLE||t===METAL) setBlock(x,y,z,AIR);
+        }
+      }
+    }
+    dirX += (rand()-0.5)*0.6;
+    dirZ += (rand()-0.5)*0.6;
+    dirY += (rand()-0.5)*0.3;
+    if(cy > 8) dirY -= 0.15; // keep heading generally downward until reasonably deep...
+    else dirY = Math.max(-0.2, Math.min(0.2, dirY)); // ...then level off
+    const len = Math.sqrt(dirX*dirX+dirY*dirY+dirZ*dirZ)||1;
+    cx += (dirX/len)*1.6;
+    cy += (dirY/len)*1.0;
+    cz += (dirZ/len)*1.6;
+    cy = Math.max(3, Math.min(startY-2, cy));
+  }
+  const chx=Math.round(cx), chy=Math.round(cy), chz=Math.round(cz);
+  for(let dx=-2;dx<=2;dx++){
+    for(let dy=0;dy<=2;dy++){
+      for(let dz=-2;dz<=2;dz++){
+        if(dx*dx+dz*dz > 5) continue;
+        const x=chx+dx, y=chy+dy, z=chz+dz;
+        if(x<1||x>=WORLD_X-1||y<1||y>=WORLD_Y-1||z<1||z>=WORLD_Z-1) continue;
+        const t = getBlock(x,y,z);
+        if(t===STONE||t===DIRT||t===RUBBLE||t===METAL) setBlock(x,y,z,AIR);
+      }
+    }
+  }
+  if(chx>=1 && chx<WORLD_X-1 && chz>=1 && chz<WORLD_Z-1) setBlock(chx,chy,chz,LOOT_CRATE);
+  // a couple more loot crates scattered around the chamber, plus a power
+  // crate (speed boost) - worth the trip down here beyond just the one
+  const extraSpots = [{dx:1,dz:1},{dx:-1,dz:-1}];
+  for(const spot of extraSpots){
+    const ex=chx+spot.dx, ez=chz+spot.dz;
+    if(ex<1||ex>=WORLD_X-1||ez<1||ez>=WORLD_Z-1) continue;
+    if(getBlock(ex,chy,ez)===AIR) setBlock(ex,chy,ez,LOOT_CRATE);
+  }
+  const px=chx-1, pz=chz+1;
+  if(px>=1 && px<WORLD_X-1 && pz>=1 && pz<WORLD_Z-1 && getBlock(px,chy,pz)===AIR){
+    setBlock(px,chy,pz,POWERUP_CRATE);
+  }
+}
+function scatterCaveTunnels(count){
+  const rand = mulberry32(seed+999);
+  let placed=0, attempts=0;
+  while(placed<count && attempts<200){
+    attempts++;
+    const x = 6+Math.floor(rand()*(WORLD_X-12));
+    const z = 6+Math.floor(rand()*(WORLD_Z-12));
+    const h = heightMap[x] ? heightMap[x][z] : null;
+    if(h===null || h<6 || getBlock(x,h,z)===WATER) continue;
+    carveTunnel(x,z,rand);
+    placed++;
+  }
+}
+
 function scatterLootAndPowerCrates(){
   const changes = [];
   const rand3 = mulberry32(seed+321);
@@ -797,6 +917,8 @@ function generateWorld(){
     }
   }
   scatterLootAndPowerCrates();
+  if(biomeMode==='plains') scatterCoverStructures(7);
+  scatterCaveTunnels(4);
   buildSpectatorBox();
 }
 // A desert biome: mostly flat sand with a handful of carved-out water oases
@@ -865,6 +987,8 @@ function generateOasisWorld(){
   }
 
   scatterLootAndPowerCrates();
+  scatterCoverStructures(7);
+  scatterCaveTunnels(4);
 }
 // A war-torn/ruins biome: barren stone-and-dirt ground with sparse grass,
 // dotted with broken rectangular wall structures (deliberately full of gaps
@@ -904,6 +1028,11 @@ function generateRuinsWorld(){
     buildRuinStructure(cx, heightMap[cx][cz]+1, cz, rand);
   }
 
+  const randLarge = mulberry32(seed+777);
+  const lcx = 15+Math.floor(randLarge()*(WORLD_X-45));
+  const lcz = 15+Math.floor(randLarge()*(WORLD_Z-45));
+  buildLargeRuinStructure(lcx, heightMap[lcx][lcz]+1, lcz, randLarge);
+
   const rand2 = mulberry32(seed+333);
   for(let i=0;i<24;i++){
     const x = 2+Math.floor(rand2()*(WORLD_X-4));
@@ -924,17 +1053,77 @@ function buildRuinStructure(x,y,z,rand){
       else if(side===1){ wx=x+i; wz=z+w; }
       else if(side===2){ wx=x; wz=z+i; }
       else { wx=x+w; wz=z+i; }
+      if(wx<0||wx>=WORLD_X||wz<0||wz>=WORLD_Z) continue;
       if(rand()<0.35) continue; // gap in the wall - the "half wall" broken look
+      // anchor to THIS column's actual terrain height, not the structure's
+      // single reference corner - terrain height varies across the
+      // footprint, so a shared fixed height leaves parts of the wall
+      // floating over dips (or buried under rises) in the ground
+      const baseY = (heightMap[wx] ? heightMap[wx][wz] : y-1) + 1;
       const localHeight = Math.max(1, wallHeight - Math.floor(rand()*3));
       for(let dy=0; dy<localHeight; dy++){
-        if(getBlock(wx,y+dy,wz)===AIR) setBlock(wx,y+dy,wz, rand()<0.7?STONE:RUBBLE);
+        if(getBlock(wx,baseY+dy,wz)===AIR) setBlock(wx,baseY+dy,wz, rand()<0.7?STONE:RUBBLE);
       }
     }
   }
   for(let i=0;i<10;i++){
     const dx = Math.floor(rand()*(w+2))-1;
     const dz = Math.floor(rand()*(w+2))-1;
-    if(rand()<0.4 && getBlock(x+dx,y,z+dz)===AIR) setBlock(x+dx,y,z+dz,RUBBLE);
+    const wx=x+dx, wz=z+dz;
+    if(wx<0||wx>=WORLD_X||wz<0||wz>=WORLD_Z) continue;
+    const baseY = (heightMap[wx] ? heightMap[wx][wz] : y-1) + 1;
+    if(rand()<0.4 && getBlock(wx,baseY,wz)===AIR) setBlock(wx,baseY,wz,RUBBLE);
+  }
+}
+// One larger, deliberately rectangular (not square) structure per map - a
+// clear "this used to be a real building" landmark among all the smaller
+// scattered ruins. Same broken/gappy aesthetic, just bigger, taller, and
+// with an interior partition wall so it reads as more than one big empty
+// box.
+function buildLargeRuinStructure(x,y,z,rand){
+  const w = 10+Math.floor(rand()*5);  // 10-14 wide
+  const l = 16+Math.floor(rand()*8);  // 16-23 long - clearly rectangular
+  const wallHeight = 4+Math.floor(rand()*3);
+  for(let side=0; side<4; side++){
+    const len = (side===0||side===1) ? w : l;
+    for(let i=0;i<=len;i++){
+      let wx, wz;
+      if(side===0){ wx=x+i; wz=z; }
+      else if(side===1){ wx=x+i; wz=z+l; }
+      else if(side===2){ wx=x; wz=z+i; }
+      else { wx=x+w; wz=z+i; }
+      if(wx<0||wx>=WORLD_X||wz<0||wz>=WORLD_Z) continue;
+      if(rand()<0.3) continue; // a bit less gappy than the small ruins - reads as a more substantial structure
+      // anchor to THIS column's actual terrain height - critical here
+      // specifically, since a footprint this large (up to 23 blocks) can
+      // easily cross enough terrain height variation that a single shared
+      // reference height leaves whole wall sections floating
+      const baseY = (heightMap[wx] ? heightMap[wx][wz] : y-1) + 1;
+      const localHeight = Math.max(2, wallHeight - Math.floor(rand()*2));
+      for(let dy=0; dy<localHeight; dy++){
+        if(getBlock(wx,baseY+dy,wz)===AIR) setBlock(wx,baseY+dy,wz, rand()<0.75?STONE:RUBBLE);
+      }
+    }
+  }
+  // an interior partition wall roughly a third of the way down its length
+  const partitionZ = z + Math.floor(l*0.35);
+  for(let i=1;i<w;i++){
+    if(rand()<0.4) continue;
+    const wx = x+i;
+    if(wx<0||wx>=WORLD_X||partitionZ<0||partitionZ>=WORLD_Z) continue;
+    const baseY = (heightMap[wx] ? heightMap[wx][partitionZ] : y-1) + 1;
+    const localHeight = Math.max(1, wallHeight - 1 - Math.floor(rand()*2));
+    for(let dy=0; dy<localHeight; dy++){
+      if(getBlock(wx,baseY+dy,partitionZ)===AIR) setBlock(wx,baseY+dy,partitionZ, rand()<0.7?STONE:RUBBLE);
+    }
+  }
+  for(let i=0;i<28;i++){
+    const dx = Math.floor(rand()*(w+2))-1;
+    const dz = Math.floor(rand()*(l+2))-1;
+    const wx=x+dx, wz=z+dz;
+    if(wx<0||wx>=WORLD_X||wz<0||wz>=WORLD_Z) continue;
+    const baseY = (heightMap[wx] ? heightMap[wx][wz] : y-1) + 1;
+    if(rand()<0.35 && getBlock(wx,baseY,wz)===AIR) setBlock(wx,baseY,wz,RUBBLE);
   }
 }
 // An industrial/facility biome: a dense grid of Metal-walled rooms connected
@@ -959,23 +1148,49 @@ function generateIndustrialWorld(){
   const cellSize = 10;
   const wallHeight = 5;
   const wallBaseY = floorY+1;
-  const doorHalfWidth = 2;
   const rand = mulberry32(seed+444);
 
-  // walls running along Z at fixed X grid-lines, with door gaps
+  // Each wall segment (one cellSize-long stretch between two intersections)
+  // gets its own randomized plan instead of every single one repeating the
+  // same fixed-width, dead-center doorway - that repetition is exactly what
+  // made the whole map read as one uniform "+" pattern. Occasionally a
+  // segment is skipped entirely (merging two cells into one bigger room),
+  // and occasionally one is left fully solid with no doorway at all - a
+  // deliberately sealed room you have to find another way into, rather
+  // than that only happening by accident at the map's edges.
+  function planWallSegment(){
+    const roll = rand();
+    if(roll < 0.12) return {skip:true};
+    const noDoor = rand() < 0.08;
+    const doorWidth = noDoor ? 0 : 2+Math.floor(rand()*3); // 2-4 wide
+    const doorStart = noDoor ? 0 : 1+Math.floor(rand()*Math.max(1, cellSize-doorWidth-2));
+    return {skip:false, noDoor, doorWidth, doorStart};
+  }
+
+  // walls running along Z at fixed X grid-lines, with per-segment doorways
   for(let gx=cellSize; gx<WORLD_X-1; gx+=cellSize){
-    for(let z=1; z<WORLD_Z-1; z++){
-      const m = ((z%cellSize)+cellSize)%cellSize;
-      if(m>cellSize/2-doorHalfWidth && m<cellSize/2+doorHalfWidth) continue; // doorway
-      for(let y=0;y<wallHeight;y++) setBlock(gx, wallBaseY+y, z, METAL);
+    for(let cellStart=0; cellStart<WORLD_Z-1; cellStart+=cellSize){
+      const plan = planWallSegment();
+      if(plan.skip) continue;
+      for(let dz=0; dz<cellSize && cellStart+dz<WORLD_Z-1; dz++){
+        const z = cellStart+dz;
+        if(z<1) continue;
+        if(!plan.noDoor && dz>=plan.doorStart && dz<plan.doorStart+plan.doorWidth) continue; // doorway
+        for(let y=0;y<wallHeight;y++) setBlock(gx, wallBaseY+y, z, METAL);
+      }
     }
   }
-  // walls running along X at fixed Z grid-lines, with door gaps
+  // walls running along X at fixed Z grid-lines, with per-segment doorways
   for(let gz=cellSize; gz<WORLD_Z-1; gz+=cellSize){
-    for(let x=1; x<WORLD_X-1; x++){
-      const m = ((x%cellSize)+cellSize)%cellSize;
-      if(m>cellSize/2-doorHalfWidth && m<cellSize/2+doorHalfWidth) continue; // doorway
-      for(let y=0;y<wallHeight;y++) setBlock(x, wallBaseY+y, gz, METAL);
+    for(let cellStart=0; cellStart<WORLD_X-1; cellStart+=cellSize){
+      const plan = planWallSegment();
+      if(plan.skip) continue;
+      for(let dx=0; dx<cellSize && cellStart+dx<WORLD_X-1; dx++){
+        const x = cellStart+dx;
+        if(x<1) continue;
+        if(!plan.noDoor && dx>=plan.doorStart && dx<plan.doorStart+plan.doorWidth) continue; // doorway
+        for(let y=0;y<wallHeight;y++) setBlock(x, wallBaseY+y, gz, METAL);
+      }
     }
   }
 
@@ -4071,110 +4286,61 @@ function renderInventoryPanel(){
   }
   const recipesDiv = document.getElementById('recipes');
   recipesDiv.innerHTML='';
-  const recipe = document.createElement('div');
-  recipe.className='recipe';
-  recipe.innerHTML = `<div class="desc">1 Wood &rarr; 4 Planks</div>`;
-  const craftBtn = document.createElement('div');
-  craftBtn.className='btn';
-  craftBtn.textContent='Craft';
-  craftBtn.addEventListener('click', ()=>{
-    if(countOfType(WOOD)>=1){
-      removeOneOfType(WOOD);
-      addToInventory(PLANKS); addToInventory(PLANKS);
-      addToInventory(PLANKS); addToInventory(PLANKS);
-      renderInventoryPanel(); updateHotbarUI();
-      flashMessage('Crafted 4 Planks');
-    } else {
-      flashMessage('Not enough wood');
-    }
-  });
-  recipe.appendChild(craftBtn);
-  recipesDiv.appendChild(recipe);
+  for(const {r,craftable} of sortedRecipes()){
+    const recipeEl = document.createElement('div');
+    recipeEl.className = 'recipe' + (craftable ? ' craftable' : '');
+    recipeEl.innerHTML = `<div class="desc">${r.desc}</div>`;
+    const btn = document.createElement('div');
+    btn.className = 'btn';
+    btn.textContent = 'Craft';
+    btn.addEventListener('click', ()=> craftRecipe(r));
+    recipeEl.appendChild(btn);
+    recipesDiv.appendChild(recipeEl);
+  }
+}
 
-  const recipe2 = document.createElement('div');
-  recipe2.className='recipe';
-  recipe2.innerHTML = `<div class="desc">3 Stone + 1 Planks &rarr; Stone Pickaxe (mines faster)</div>`;
-  const craftBtn2 = document.createElement('div');
-  craftBtn2.className='btn';
-  craftBtn2.textContent='Craft';
-  craftBtn2.addEventListener('click', ()=>{
-    if(countOfType(STONE)>=3 && countOfType(PLANKS)>=1){
-      removeOneOfType(STONE); removeOneOfType(STONE); removeOneOfType(STONE);
-      removeOneOfType(PLANKS);
-      addToInventory(STONE_PICKAXE);
-      renderInventoryPanel(); updateHotbarUI();
-      flashMessage('Crafted a Stone Pickaxe!');
-      sfxCraftSuccess();
-    } else {
-      flashMessage('Need 3 Stone + 1 Planks');
-      sfxDenied();
-    }
-  });
-  recipe2.appendChild(craftBtn2);
-  recipesDiv.appendChild(recipe2);
-
-  const recipe3 = document.createElement('div');
-  recipe3.className='recipe';
-  recipe3.innerHTML = `<div class="desc">3 Reeds &rarr; 1 Blow Pipe (shoots little darts)</div>`;
-  const craftBtn3 = document.createElement('div');
-  craftBtn3.className='btn';
-  craftBtn3.textContent='Craft';
-  craftBtn3.addEventListener('click', ()=>{
-    if(countOfType(REEDS)>=3){
-      removeOneOfType(REEDS); removeOneOfType(REEDS); removeOneOfType(REEDS);
-      addToInventory(BLOW_PIPE);
-      renderInventoryPanel(); updateHotbarUI();
-      flashMessage('Crafted a Blow Pipe!');
-      sfxCraftSuccess();
-    } else {
-      flashMessage('Need 3 Reeds');
-      sfxDenied();
-    }
-  });
-  recipe3.appendChild(craftBtn3);
-  recipesDiv.appendChild(recipe3);
-
-  const recipe4 = document.createElement('div');
-  recipe4.className='recipe';
-  recipe4.innerHTML = `<div class="desc">2 Stone + 1 Reeds &rarr; 1 Stone Sling (heavier, slower, more damage)</div>`;
-  const craftBtn4 = document.createElement('div');
-  craftBtn4.className='btn';
-  craftBtn4.textContent='Craft';
-  craftBtn4.addEventListener('click', ()=>{
-    if(countOfType(STONE)>=2 && countOfType(REEDS)>=1){
-      removeOneOfType(STONE); removeOneOfType(STONE); removeOneOfType(REEDS);
-      addToInventory(STONE_SLING);
-      renderInventoryPanel(); updateHotbarUI();
-      flashMessage('Crafted a Stone Sling!');
-      sfxCraftSuccess();
-    } else {
-      flashMessage('Need 2 Stone + 1 Reeds');
-      sfxDenied();
-    }
-  });
-  recipe4.appendChild(craftBtn4);
-  recipesDiv.appendChild(recipe4);
-
-  const recipe5 = document.createElement('div');
-  recipe5.className='recipe';
-  recipe5.innerHTML = `<div class="desc">2 Wood + 1 Stone &rarr; 1 War Club (melee, short range, high damage)</div>`;
-  const craftBtn5 = document.createElement('div');
-  craftBtn5.className='btn';
-  craftBtn5.textContent='Craft';
-  craftBtn5.addEventListener('click', ()=>{
-    if(countOfType(WOOD)>=2 && countOfType(STONE)>=1){
-      removeOneOfType(WOOD); removeOneOfType(WOOD); removeOneOfType(STONE);
-      addToInventory(WAR_CLUB);
-      renderInventoryPanel(); updateHotbarUI();
-      flashMessage('Crafted a War Club!');
-      sfxCraftSuccess();
-    } else {
-      flashMessage('Need 2 Wood + 1 Stone');
-      sfxDenied();
-    }
-  });
-  recipe5.appendChild(craftBtn5);
-  recipesDiv.appendChild(recipe5);
+// ---------- Crafting recipes (data-driven, sorted by what you can currently make) ----------
+const RECIPES = [
+  { ingredients:[{type:WOOD,count:1}], results:[{type:PLANKS,count:4}], desc:'1 Wood &rarr; 4 Planks' },
+  { ingredients:[{type:STONE,count:3},{type:PLANKS,count:1}], results:[{type:STONE_PICKAXE,count:1}], desc:'3 Stone + 1 Planks &rarr; Stone Pickaxe (mines faster)' },
+  { ingredients:[{type:REEDS,count:3}], results:[{type:BLOW_PIPE,count:1}], desc:'3 Reeds &rarr; 1 Blow Pipe (shoots little darts)' },
+  { ingredients:[{type:STONE,count:2},{type:REEDS,count:1}], results:[{type:STONE_SLING,count:1}], desc:'2 Stone + 1 Reeds &rarr; 1 Stone Sling (heavier, slower, more damage)' },
+  { ingredients:[{type:WOOD,count:2},{type:STONE,count:1}], results:[{type:WAR_CLUB,count:1}], desc:'2 Wood + 1 Stone &rarr; 1 War Club (melee, short range, high damage)' },
+  // gun trade-up chain: turn in two of a weapon for one of the next tier up
+  { ingredients:[{type:BLOW_PIPE,count:2}], results:[{type:STONE_SLING,count:1}], desc:'2 Blow Pipes &rarr; 1 Stone Sling (trade up)' },
+  { ingredients:[{type:STONE_SLING,count:2}], results:[{type:PISTOL,count:1}], desc:'2 Stone Slings &rarr; 1 Pistol (trade up)' },
+  { ingredients:[{type:PISTOL,count:2}], results:[{type:CARBINE,count:1}], desc:'2 Pistols &rarr; 1 Carbine (trade up)' },
+  { ingredients:[{type:CARBINE,count:2}], results:[{type:RIFLE,count:1}], desc:'2 Carbines &rarr; 1 Rifle (trade up)' },
+  { ingredients:[{type:RIFLE,count:2}], results:[{type:SNIPER,count:1}], desc:'2 Rifles &rarr; 1 Sniper Rifle (trade up)' },
+];
+function isRecipeCraftable(recipe){
+  return recipe.ingredients.every(ing => countOfType(ing.type) >= ing.count);
+}
+function sortedRecipes(){
+  // craftable-right-now recipes float to the top; otherwise keep the
+  // original list order (a stable sort, not alphabetical/random) so the
+  // list doesn't feel like it's shuffling around unpredictably
+  return RECIPES.map((r,i)=>({r, i, craftable:isRecipeCraftable(r)}))
+    .sort((a,b)=> (b.craftable-a.craftable) || (a.i-b.i));
+}
+function craftedResultText(results){
+  return results.map(r => r.count===1 ? ('a '+BLOCK_NAMES[r.type]) : (r.count+' '+BLOCK_NAMES[r.type])).join(' + ');
+}
+function craftRecipe(recipe){
+  if(!isRecipeCraftable(recipe)){
+    flashMessage('Need '+recipe.ingredients.map(ing=>ing.count+' '+BLOCK_NAMES[ing.type]).join(' + '));
+    sfxDenied();
+    return;
+  }
+  for(const ing of recipe.ingredients){
+    for(let i=0;i<ing.count;i++) removeOneOfType(ing.type);
+  }
+  for(const res of recipe.results){
+    for(let i=0;i<res.count;i++) addToInventory(res.type);
+  }
+  renderInventoryPanel(); updateHotbarUI();
+  flashMessage('Crafted '+craftedResultText(recipe.results)+'!');
+  sfxCraftSuccess();
 }
 
 // ---------- Pause menu ----------
