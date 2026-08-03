@@ -205,6 +205,7 @@
   }
   #killFeed .entry .killer { color:#7fd9ff; font-weight:bold; }
   #killFeed .entry .victim { color:#ff8080; font-weight:bold; }
+  #killFeed .entry .weapon { color:#e0c060; font-style:italic; }
   #respawnCountdown {
     position:fixed; top:40%; left:50%; transform:translate(-50%,-50%);
     z-index:32; text-align:center; color:#fff; display:none;
@@ -2376,22 +2377,34 @@ function updateMuzzleFlashes(dt){
 // other projectile, this is just a brief flash along the line it hit.
 let sniperTracers = [];
 function spawnSniperTracer(origin, dir, length){
+  // A thick, lingering smoke trail rather than an instant thin line - a
+  // deliberate balance tradeoff for how good the sniper feels to use: firing
+  // now visibly marks where the shot came from for a couple of seconds
+  // afterward, Halo-1-sniper style, instead of vanishing immediately.
   const endPoint = origin.clone().addScaledVector(dir, length);
-  const geo = new THREE.BufferGeometry().setFromPoints([origin, endPoint]);
-  const mat = new THREE.LineBasicMaterial({color:0xffee88, transparent:true, opacity:0.9});
-  const line = new THREE.Line(geo, mat);
-  scene.add(line);
-  sniperTracers.push({line, life:0, maxLife:0.15});
+  const midpoint = origin.clone().lerp(endPoint, 0.5);
+  const tubeLength = origin.distanceTo(endPoint);
+  const geo = new THREE.CylinderGeometry(0.035, 0.06, tubeLength, 6, 1, true);
+  const mat = new THREE.MeshBasicMaterial({color:0xdedad0, transparent:true, opacity:0.55, side:THREE.DoubleSide, depthWrite:false});
+  const tube = new THREE.Mesh(geo, mat);
+  tube.position.copy(midpoint);
+  const up = new THREE.Vector3(0,1,0);
+  tube.quaternion.setFromUnitVectors(up, dir.clone().normalize());
+  scene.add(tube);
+  sniperTracers.push({mesh:tube, life:0, maxLife:2.2, baseOpacity:0.55});
 }
 function updateSniperTracers(dt){
   for(let i=sniperTracers.length-1;i>=0;i--){
     const tr = sniperTracers[i];
     tr.life += dt;
     const frac = Math.min(1, tr.life/tr.maxLife);
-    tr.line.material.opacity = 0.9*(1-frac);
+    tr.mesh.material.opacity = tr.baseOpacity*(1-frac);
+    const scaleFactor = 1 + frac*0.8; // slowly billows outward like dissipating smoke
+    tr.mesh.scale.x = scaleFactor;
+    tr.mesh.scale.z = scaleFactor;
     if(tr.life>=tr.maxLife){
-      scene.remove(tr.line);
-      tr.line.geometry.dispose(); tr.line.material.dispose();
+      scene.remove(tr.mesh);
+      tr.mesh.geometry.dispose(); tr.mesh.material.dispose();
       sniperTracers.splice(i,1);
     }
   }
@@ -2476,7 +2489,7 @@ function fireSniperHitscan(weapon){
       const zone = resolveRayHitZone(origin, dir, weapon.range, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
       if(zone){
         const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
-        sendHit(id, dmg);
+        sendHit(id, dmg, weapon.itemType);
         showHitMarker(zone==='head');
         if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
         triggerHitEffect(rp);
@@ -2875,6 +2888,11 @@ const WEAPON_CONFIG = {
   // Balanced against that by a long cooldown - one shot every few seconds.
   [SNIPER]:          { kind:'hitscan', damage:20, cooldown:3.5, range:60, color:0xd4af37 }
 };
+// Back-fill each weapon's own item-type constant into its config object, so
+// any code holding a `weapon` reference can identify which weapon it is
+// (used for the kill feed's "killed with X" label) without needing to
+// thread an extra parameter through every firing function.
+for(const key in WEAPON_CONFIG) WEAPON_CONFIG[key].itemType = Number(key);
 let lastAttackTime = 0;
 let pendingBurst = null; // {weapon, shotsRemaining, timer} - mid-burst shotgun state
 let darts = [];
@@ -2890,7 +2908,7 @@ function shootProjectile(weapon){
   mesh.position.copy(origin).addScaledVector(dir,0.4);
   scene.add(mesh);
   const shotId = multiplayer ? makeShotId() : null;
-  darts.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, color:weapon.color, shotId, pen:weapon.penetration||0, crateBreakRange:weapon.crateBreakRange, canBreakLeaves:weapon.canBreakLeaves, breakRange:weapon.breakRange});
+  darts.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, color:weapon.color, shotId, pen:weapon.penetration||0, crateBreakRange:weapon.crateBreakRange, canBreakLeaves:weapon.canBreakLeaves, breakRange:weapon.breakRange, itemType:weapon.itemType});
   sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:weapon.radius, sound:weapon.sound}, origin, dir, shotId);
   if(weapon.sound==='rifle') sfxShootRifle();
   else if(weapon.sound==='sling') sfxShootSling();
@@ -2915,7 +2933,7 @@ function fireShotgunPellets(weapon){
     mesh.position.copy(origin).addScaledVector(dir,0.4);
     scene.add(mesh);
     const shotId = multiplayer ? makeShotId() : null;
-    darts.push({mesh, dir, life:0, damage:weapon.pelletDamage, speed:weapon.speed, color:weapon.color, shotId, canBreakDirt:true, breakRange:weapon.breakRange, crateBreakRange:weapon.crateBreakRange});
+    darts.push({mesh, dir, life:0, damage:weapon.pelletDamage, speed:weapon.speed, color:weapon.color, shotId, canBreakDirt:true, breakRange:weapon.breakRange, crateBreakRange:weapon.crateBreakRange, itemType:weapon.itemType});
     sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:0.035, sound: i===0 ? 'shotgun' : null}, origin, dir, shotId);
   }
   sfxShotgunBlast();
@@ -2975,7 +2993,7 @@ function updateDarts(dt){
         const zone = resolveHitZone(d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
         if(zone){
           const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
-          sendHit(id, dmg);
+          sendHit(id, dmg, d.itemType);
           showHitMarker(zone==='head');
           if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
           triggerHitEffect(rp);
@@ -3083,7 +3101,7 @@ function meleeAttack(weapon){
     const aim = camera.position.clone().addScaledVector(dir, closestDist);
     const zone = resolveHitZone(aim.x,aim.y,aim.z, closestTarget.pos.x,closestTarget.pos.z, closestTarget.pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R+0.08, closestTarget.pos.y+PLAYER_BODY_Y,PLAYER_BODY_R+0.15);
     const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
-    sendHit(closestTarget.id, dmg);
+    sendHit(closestTarget.id, dmg, weapon.itemType);
     showHitMarker(zone==='head');
     if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
     triggerHitEffect(closestTarget.rp);
@@ -3148,7 +3166,7 @@ function updateGrenades(dt){
 
     const bx=Math.floor(g.mesh.position.x), by=Math.floor(g.mesh.position.y), bz=Math.floor(g.mesh.position.z);
     if(isSolid(getBlock(bx,by,bz)) || g.life>2.5){
-      triggerExplosion(g.mesh.position, g.damage, g.radius);
+      triggerExplosion(g.mesh.position, g.damage, g.radius, GRENADE);
       sendImpact(g.shotId, g.mesh.position);
       scene.remove(g.mesh);
       g.mesh.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
@@ -3156,7 +3174,7 @@ function updateGrenades(dt){
     }
   }
 }
-function triggerExplosion(pos, damage, radius){
+function triggerExplosion(pos, damage, radius, weaponType){
   let hitAnyone = false;
   for(const en of enemies){
     if(!en.alive) continue;
@@ -3190,7 +3208,7 @@ function triggerExplosion(pos, damage, radius){
       const rdist = Math.sqrt(rdx*rdx+rdy*rdy+rdz*rdz);
       if(rdist<=radius){
         const falloff = 1 - rdist/radius;
-        sendHit(id, Math.max(1, Math.ceil(damage*falloff)));
+        sendHit(id, Math.max(1, Math.ceil(damage*falloff)), weaponType);
         triggerHitEffect(rp);
         hitAnyone = true;
       }
@@ -3283,7 +3301,7 @@ function updateRockets(dt){
     }
 
     if(hit || r.life>2.5){
-      triggerExplosion(r.mesh.position, r.damage, r.radius);
+      triggerExplosion(r.mesh.position, r.damage, r.radius, ROCKET_LAUNCHER);
       sendImpact(r.shotId, r.mesh.position);
       scene.remove(r.mesh);
       r.mesh.geometry.dispose();
@@ -3624,6 +3642,7 @@ function takeDamage(amount){
 }
 let lastAttackerName = null;
 let lastAttackerId = null;
+let lastAttackerWeapon = null;
 let lastAttackerTime = 0;
 const RESPAWN_COUNTDOWN_SECONDS = 3;
 let respawnCountdownActive = false;
@@ -3636,8 +3655,9 @@ function respawnFromDeath(){
   const recentHit = lastAttackerName && (performance.now()-lastAttackerTime) < 4000;
   const killerName = recentHit ? lastAttackerName : null;
   const killerId = recentHit ? lastAttackerId : null;
+  const killerWeapon = recentHit ? lastAttackerWeapon : null;
   if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
-    socket.send(JSON.stringify({type:'died', killerName, killerId}));
+    socket.send(JSON.stringify({type:'died', killerName, killerId, killerWeapon}));
   }
   flashMessage(killerName ? ('Eliminated by '+killerName+' - respawning...') : 'You died - respawning...');
   startRespawnCountdown();
@@ -3911,9 +3931,18 @@ function spawnLocalBoss(){
 }
 function updateLocalBoss(dt){
   if(multiplayer || !bossState || !bossState.alive) return;
-  bossState.driftAngle += dt*0.4;
-  bossState.x = bossState.homeX + Math.cos(bossState.driftAngle)*5;
-  bossState.z = bossState.homeZ + Math.sin(bossState.driftAngle)*5;
+  const dxp = player.x-bossState.x, dzp = player.z-bossState.z;
+  const distToPlayer = Math.sqrt(dxp*dxp+dzp*dzp);
+  const approachRange = 5; // stops closing once this near - keeps a little hover distance
+  if(distToPlayer > approachRange){
+    bossState.x += (dxp/distToPlayer)*2.6*dt;
+    bossState.z += (dzp/distToPlayer)*2.6*dt;
+  }
+  bossState.driftAngle += dt*0.8;
+  bossState.x += Math.cos(bossState.driftAngle)*0.6*dt;
+  bossState.z += Math.sin(bossState.driftAngle)*0.6*dt;
+  bossState.x = Math.max(2, Math.min(WORLD_X-2, bossState.x));
+  bossState.z = Math.max(2, Math.min(WORLD_Z-2, bossState.z));
   if(bossMesh) bossMesh.position.set(bossState.x, bossState.y, bossState.z);
   localBossAttackCooldown -= dt;
   if(localBossAttackCooldown<=0){
@@ -4337,7 +4366,7 @@ canvas.addEventListener('click', ()=>{
 });
 document.addEventListener('pointerlockchange', ()=>{
   pointerLocked = document.pointerLockElement===canvas;
-  if(!pointerLocked && !craftOpen && !devOpen){
+  if(!pointerLocked && !craftOpen && !devOpen && !chatOpen){
     showPause();
   }
 });
@@ -4934,7 +4963,7 @@ function showHitMarker(isHeadshot){
 }
 
 // ---------- Kill feed (top-right log of eliminations) ----------
-function addKillFeedEntry(killerName, victimName){
+function addKillFeedEntry(killerName, victimName, killerWeapon){
   const feed = document.getElementById('killFeed');
   const entry = document.createElement('div');
   entry.className = 'entry';
@@ -4943,11 +4972,19 @@ function addKillFeedEntry(killerName, victimName){
     killerSpan.className = 'killer';
     killerSpan.textContent = killerName;
     entry.appendChild(killerSpan);
+    const weaponName = (typeof killerWeapon==='number' && BLOCK_NAMES[killerWeapon]) ? BLOCK_NAMES[killerWeapon] : null;
     entry.appendChild(document.createTextNode(' eliminated '));
     const victimSpan = document.createElement('span');
     victimSpan.className = 'victim';
     victimSpan.textContent = victimName;
     entry.appendChild(victimSpan);
+    if(weaponName){
+      entry.appendChild(document.createTextNode(' with '));
+      const weaponSpan = document.createElement('span');
+      weaponSpan.className = 'weapon';
+      weaponSpan.textContent = weaponName;
+      entry.appendChild(weaponSpan);
+    }
   } else {
     const victimSpan = document.createElement('span');
     victimSpan.className = 'victim';
@@ -5460,10 +5497,11 @@ function handleNetMessage(msg){
     updateHotbarUI(); updateHealthUI();
     flashMessage('New map! Fresh series starting soon.');
   } else if(msg.type==='playerEliminated'){
-    addKillFeedEntry(msg.killerName, msg.victimName);
+    addKillFeedEntry(msg.killerName, msg.victimName, msg.killerWeapon);
   } else if(msg.type==='hitByOther'){
     lastAttackerName = msg.fromName;
     lastAttackerId = msg.from;
+    lastAttackerWeapon = msg.weaponType;
     lastAttackerTime = performance.now();
     takeDamage(msg.damage);
     flashMessage('Hit by '+msg.fromName+'!');
@@ -5512,10 +5550,10 @@ function sendNetworkUpdate(){
   const heldType = slots[selectedSlot] ? slots[selectedSlot].type : null;
   socket.send(JSON.stringify({type:'move', x:player.x, y:player.y, z:player.z, yaw, pitch, heldType, crouching:keys.crouch}));
 }
-function sendHit(targetId, damage){
+function sendHit(targetId, damage, weaponType){
   if(!multiplayer || matchPhase!=='active' || myEliminated || inSpectatorBox) return;
   if(!socket || socket.readyState!==WebSocket.OPEN) return;
-  socket.send(JSON.stringify({type:'hit', targetId, damage}));
+  socket.send(JSON.stringify({type:'hit', targetId, damage, weaponType}));
 }
 let nextShotId = 1;
 function makeShotId(){ return (myNetId||0)+'-'+(nextShotId++); }
