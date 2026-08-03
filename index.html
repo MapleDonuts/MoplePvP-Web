@@ -246,6 +246,19 @@
   #healthBar .heart {
     font-size:20px; color:#e0313a; text-shadow:1px 1px 1px #000, -1px -1px 1px #000;
   }
+  #bossHealthBar {
+    position:fixed; top:16px; left:50%; transform:translateX(-50%);
+    width:420px; z-index:15; display:none; text-align:center;
+  }
+  #bossHealthLabel {
+    color:#e0a8ff; font-size:13px; font-weight:bold; text-shadow:1px 1px 2px #000; margin-bottom:3px;
+  }
+  #bossHealthTrack {
+    width:100%; height:14px; background:rgba(0,0,0,0.55); border:1px solid rgba(224,168,255,0.4); border-radius:3px; overflow:hidden;
+  }
+  #bossHealthFill {
+    height:100%; background:linear-gradient(90deg,#7a2a8a,#c04ad0); width:100%; transition:width 0.3s ease-out;
+  }
   #buffIndicator {
     position:fixed; bottom:106px; left:50%; transform:translateX(-50%);
     color:#5fd0ff; font-size:13px; font-weight:bold; text-shadow:1px 1px 2px #000;
@@ -264,6 +277,10 @@
 <div id="crosshair"></div>
 <div id="miningBarWrap"><div id="miningBar"></div></div>
 <div id="healthBar"></div>
+<div id="bossHealthBar">
+  <div id="bossHealthLabel">Graveyard Boss</div>
+  <div id="bossHealthTrack"><div id="bossHealthFill"></div></div>
+</div>
 <div id="buffIndicator"></div>
 <div id="matchBanner"></div>
 <div id="hotbar"></div>
@@ -340,6 +357,7 @@
       <option value="ruins">Ruins - broken walls &amp; rubble</option>
       <option value="industrial">Industrial - dense rooms &amp; corridors</option>
       <option value="snow">Snow - frosty hills &amp; forest</option>
+      <option value="graveyard">Graveyard - tombstones &amp; a boss</option>
     </select>
   </label>
   <div class="btn" id="btnStart">Start New World</div>
@@ -667,7 +685,8 @@ const BIOME_PROFILES = {
   snow:      { amplitude:9,  octave2Weight:0.25, treeDensity:0.006, baseHeight:11, surfaceBlock:SNOW },
   oasis:     { amplitude:4,  octave2Weight:0.08, treeDensity:0,     baseHeight:9,  surfaceBlock:SAND },  // uses its own generator entirely
   ruins:     { amplitude:4,  octave2Weight:0.1,  treeDensity:0,     baseHeight:10, surfaceBlock:STONE }, // uses its own generator entirely
-  industrial:{ amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:8,  surfaceBlock:METAL }  // uses its own generator entirely
+  industrial:{ amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:8,  surfaceBlock:METAL }, // uses its own generator entirely
+  graveyard: { amplitude:5,  octave2Weight:0.1,  treeDensity:0,     baseHeight:9,  surfaceBlock:DIRT }   // uses its own generator entirely
 };
 function applyBiomeProfile(mode){
   biomeMode = BIOME_PROFILES[mode] ? mode : 'highlands';
@@ -874,6 +893,7 @@ function generateWorld(){
   if(biomeMode==='oasis'){ generateOasisWorld(); buildSpectatorBox(); return; }
   if(biomeMode==='ruins'){ generateRuinsWorld(); buildSpectatorBox(); return; }
   if(biomeMode==='industrial'){ generateIndustrialWorld(); buildSpectatorBox(); return; }
+  if(biomeMode==='graveyard'){ generateGraveyardWorld(); buildSpectatorBox(); return; }
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
   const n1 = new Noise2D(seed);
   const n2 = new Noise2D(seed+7777);
@@ -1138,6 +1158,69 @@ function buildLargeRuinStructure(x,y,z,rand){
 // ceiling would break that assumption across the whole codebase. Heavy walls
 // and tight, maze-like sightlines still give it a strong "inside a building"
 // feel even without a literal roof overhead.
+// A dead, barren graveyard - mostly bare dirt with sparse dead grass,
+// densely scattered tombstones (much more numerous than any other
+// biome's structures, since that density is what actually reads as a
+// graveyard), and a few bare/dead trees for atmosphere. Also home to the
+// server-driven boss encounter (see the boss system below).
+function buildTombstone(x,z,rand){
+  const h = heightMap[x] ? heightMap[x][z] : null;
+  if(h===null) return;
+  const height = 1+Math.floor(rand()*2);
+  for(let dy=0; dy<height; dy++){
+    if(getBlock(x,h+1+dy,z)===AIR) setBlock(x,h+1+dy,z,STONE);
+  }
+  if(rand()<0.5){
+    const armY = h+height;
+    if(getBlock(x+1,armY,z)===AIR) setBlock(x+1,armY,z,STONE);
+    if(getBlock(x-1,armY,z)===AIR) setBlock(x-1,armY,z,STONE);
+  }
+}
+function generateGraveyardWorld(){
+  blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
+  const n1 = new Noise2D(seed);
+  heightMap = [];
+  const baseHeight = 9;
+  const randSurface = mulberry32(seed+111);
+  for(let x=0;x<WORLD_X;x++){
+    heightMap[x]=[];
+    for(let z=0;z<WORLD_Z;z++){
+      const n = n1.noise(x*0.05, z*0.05);
+      let h = Math.floor(baseHeight + n*5);
+      h = Math.max(4, Math.min(WORLD_Y-8, h));
+      heightMap[x][z]=h;
+      for(let y=0;y<=h;y++){
+        let t;
+        if(y===h) t = (randSurface()<0.12) ? GRASS : DIRT; // sparse dead grass on mostly-bare dirt
+        else if(y>h-2) t = DIRT;
+        else t = STONE;
+        setBlock(x,y,z,t);
+      }
+    }
+  }
+  const randTree = mulberry32(seed+222);
+  for(let i=0;i<10;i++){
+    const x = 4+Math.floor(randTree()*(WORLD_X-8));
+    const z = 4+Math.floor(randTree()*(WORLD_Z-8));
+    const h = heightMap[x][z];
+    const trunkH = 3+Math.floor(randTree()*3);
+    for(let dy=0; dy<trunkH; dy++){
+      if(getBlock(x,h+1+dy,z)===AIR) setBlock(x,h+1+dy,z,WOOD);
+    }
+    if(randTree()<0.6){
+      const lx = x+(randTree()<0.5?1:-1);
+      if(getBlock(lx,h+trunkH,z)===AIR) setBlock(lx,h+trunkH,z,LEAVES);
+    }
+  }
+  const randTomb = mulberry32(seed+333);
+  for(let i=0;i<50;i++){
+    const x = 3+Math.floor(randTomb()*(WORLD_X-6));
+    const z = 3+Math.floor(randTomb()*(WORLD_Z-6));
+    buildTombstone(x,z,randTomb);
+  }
+  scatterLootAndPowerCrates();
+  scatterCaveTunnels(3);
+}
 function generateIndustrialWorld(){
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
   heightMap = [];
@@ -1662,7 +1745,8 @@ const SKY_THEMES = {
   oasis:     { top:0x5f9fe0, horizon:0xf0d9a0, cloud:0xfff2d0, cloudAlpha:0.2,  cloudDensity:6,  fog:0xe8cf95, seed:503 },
   snow:      { top:0x8fb8e0, horizon:0xeaf3fb, cloud:0xffffff, cloudAlpha:0.35, cloudDensity:9,  fog:0xd8e8f5, seed:504 },
   ruins:     { top:0x2a0d0d, horizon:0xaa3a1a, cloud:0x1a0a0a, cloudAlpha:0.45, cloudDensity:18, fog:0x5a2a1a, seed:505 },
-  industrial:{ top:0x3a4048, horizon:0x6a7178, cloud:0x2a2f36, cloudAlpha:0.5,  cloudDensity:20, fog:0x5a6068, seed:506 }
+  industrial:{ top:0x3a4048, horizon:0x6a7178, cloud:0x2a2f36, cloudAlpha:0.5,  cloudDensity:20, fog:0x5a6068, seed:506 },
+  graveyard: { top:0x1a0d20, horizon:0x3a4a2e, cloud:0x1f2518, cloudAlpha:0.5,  cloudDensity:16, fog:0x384530, seed:507 }
 };
 function makeSkyTexture(theme){
   const w=512, h=256;
@@ -2322,6 +2406,18 @@ function fireSniperHitscan(weapon){
       spawnBreakParticles(Math.floor(en.x),Math.floor(en.y+0.5),Math.floor(en.z), 0xff5555);
     }
   }
+  if(bossState && bossState.alive){
+    // the sniper pierces everything, so check a few points along its beam
+    // rather than just the origin, matching its "ignores obstacles" identity
+    for(let t=0; t<=weapon.range; t+=2){
+      const px = origin.x+dir.x*t, py = origin.y+dir.y*t, pz = origin.z+dir.z*t;
+      if(checkBossHit(px,py,pz)){
+        damageBoss(weapon.damage);
+        spawnBreakParticles(Math.floor(px),Math.floor(py),Math.floor(pz), 0xaa2255);
+        break;
+      }
+    }
+  }
   if(multiplayer){
     for(const [id,rp] of remotePlayers){
       const pos = rp.group.position;
@@ -2777,6 +2873,14 @@ function updateDarts(dt){
       }
     }
 
+    // the boss, if present
+    if(!hitSomething && checkBossHit(d.mesh.position.x,d.mesh.position.y,d.mesh.position.z)){
+      damageBoss(d.damage);
+      showHitMarker(false);
+      spawnBreakParticles(Math.floor(d.mesh.position.x),Math.floor(d.mesh.position.y),Math.floor(d.mesh.position.z), 0xaa2255);
+      hitSomething = true;
+    }
+
     // then remote players (PvP)
     if(!hitSomething && multiplayer){
       for(const [id,rp] of remotePlayers){
@@ -2872,6 +2976,14 @@ function meleeAttack(weapon){
       if(toP.dot(dir)>0.55 && dist<closestDist){ closestDist=dist; closestTarget={id,pos,rp}; closestKind='player'; }
     }
   }
+  if(bossState && bossState.alive){
+    const toBoss = new THREE.Vector3(bossState.x-player.x, (bossState.y+BOSS_HIT_Y)-(player.y+currentEyeHeight), bossState.z-player.z);
+    const dist = toBoss.length();
+    if(dist<=weapon.range){
+      toBoss.normalize();
+      if(toBoss.dot(dir)>0.55 && dist<closestDist){ closestDist=dist; closestTarget=null; closestKind='boss'; }
+    }
+  }
   if(closestKind==='enemy'){
     const aim = camera.position.clone().addScaledVector(dir, closestDist);
     const zone = resolveHitZone(aim.x,aim.y,aim.z, closestTarget.x,closestTarget.z, closestTarget.y+ENEMY_HEAD_Y,ENEMY_HEAD_R+0.08, closestTarget.y+ENEMY_BODY_Y,ENEMY_BODY_R+0.15);
@@ -2889,6 +3001,10 @@ function meleeAttack(weapon){
     if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
     triggerHitEffect(closestTarget.rp);
     spawnBreakParticles(Math.floor(closestTarget.pos.x),Math.floor(closestTarget.pos.y+0.5),Math.floor(closestTarget.pos.z), 0xff5555);
+  } else if(closestKind==='boss'){
+    damageBoss(weapon.damage);
+    showHitMarker(false);
+    spawnBreakParticles(Math.floor(bossState.x),Math.floor(bossState.y+BOSS_HIT_Y),Math.floor(bossState.z), 0xaa2255);
   } else {
     flashMessage('Swing missed');
   }
@@ -2962,6 +3078,15 @@ function triggerExplosion(pos, damage, radius){
     if(dist<=radius){
       const falloff = 1 - dist/radius;
       hitEnemy(en, Math.max(1, Math.ceil(damage*falloff)));
+      hitAnyone = true;
+    }
+  }
+  if(bossState && bossState.alive){
+    const bdx=bossState.x-pos.x, bdy=(bossState.y+BOSS_HIT_Y)-pos.y, bdz=bossState.z-pos.z;
+    const bdist = Math.sqrt(bdx*bdx+bdy*bdy+bdz*bdz);
+    if(bdist<=radius+BOSS_HIT_R){ // a bit more forgiving given how large the boss actually is
+      const falloff = 1 - Math.min(1, bdist/(radius+BOSS_HIT_R));
+      damageBoss(Math.max(1, Math.ceil(damage*falloff)));
       hitAnyone = true;
     }
   }
@@ -3054,6 +3179,9 @@ function updateRockets(dt){
       if(!en.alive) continue;
       const dx=r.mesh.position.x-en.x, dy=r.mesh.position.y-(en.y+0.6), dz=r.mesh.position.z-en.z;
       if(dx*dx+dy*dy+dz*dz < 0.5*0.5){ hit=true; break; }
+    }
+    if(!hit && bossState && bossState.alive && checkBossHit(r.mesh.position.x,r.mesh.position.y,r.mesh.position.z)){
+      hit = true;
     }
     if(!hit && multiplayer){
       for(const rp of remotePlayers.values()){
@@ -3532,6 +3660,118 @@ function makeEnemyMesh(isZombie){
   const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.09,1.18,0.2); group.add(eyeR);
   return group;
 }
+// ---------- Boss (Graveyard biome) ----------
+// A "weird gray cloud with tentacles" - body is a cluster of overlapping
+// semi-transparent gray spheres (a nebula-ish silhouette), with several
+// tentacle chains hanging below that gently writhe, and a couple of glowing
+// eyes for a menacing focal point. Much bigger than a regular enemy - meant
+// to read as a genuine boss on sight.
+function makeBossMesh(){
+  const group = new THREE.Group();
+  const cloudMat = new THREE.MeshLambertMaterial({color:0x6a6a72, transparent:true, opacity:0.78});
+  const cloudBlobs = [
+    [0,1.6,0,1.1], [0.7,1.3,0.4,0.75], [-0.7,1.3,-0.3,0.75],
+    [0.4,1.9,-0.5,0.65], [-0.5,1.8,0.5,0.6], [0,1.1,0.6,0.6]
+  ];
+  for(const [x,y,z,r] of cloudBlobs){
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(r,10,8), cloudMat);
+    sphere.position.set(x,y,z);
+    group.add(sphere);
+  }
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xff2a4a});
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.13,6,6), eyeMat); eyeL.position.set(-0.35,1.65,0.9); group.add(eyeL);
+  const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.13,6,6), eyeMat); eyeR.position.set(0.35,1.65,0.9); group.add(eyeR);
+  const tentacleMat = new THREE.MeshLambertMaterial({color:0x3a3a42});
+  const tentacles = [];
+  const tentacleCount = 6;
+  for(let i=0;i<tentacleCount;i++){
+    const angle = (i/tentacleCount)*Math.PI*2;
+    const tentacle = new THREE.Group();
+    tentacle.position.set(Math.cos(angle)*1.0, 0.6, Math.sin(angle)*1.0);
+    const segCount = 4;
+    for(let s=0;s<segCount;s++){
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(0.03,0.13-s*0.03), Math.max(0.04,0.15-s*0.03), 0.5, 6), tentacleMat);
+      seg.position.y = -0.5*(s+0.5);
+      tentacle.add(seg);
+    }
+    tentacle.userData.baseAngle = angle;
+    tentacles.push(tentacle);
+    group.add(tentacle);
+  }
+  group.userData.tentacles = tentacles;
+  return group;
+}
+function animateBossTentacles(group, time){
+  const tentacles = group.userData.tentacles;
+  if(!tentacles) return;
+  for(let i=0;i<tentacles.length;i++){
+    const t = tentacles[i];
+    t.rotation.z = Math.sin(time*1.5+i*0.8)*0.3;
+    t.rotation.x = Math.cos(time*1.3+i*1.1)*0.25;
+  }
+}
+// One forgiving hit sphere covering the whole cloud cluster - no head/body
+// split like regular enemies, since precisely defining "head" on an
+// amorphous cloud doesn't make much thematic sense.
+const BOSS_HIT_Y = 1.5, BOSS_HIT_R = 2.1;
+let bossState = null; // {x,y,z,health,maxHealth,phase,alive} - null when this map has no boss
+let bossMesh = null;
+let bossVisualTime = 0;
+function ensureBossMesh(){
+  if(!bossMesh){
+    bossMesh = makeBossMesh();
+    bossMesh.visible = false;
+    scene.add(bossMesh);
+  }
+}
+function setBossState(data){
+  bossState = data;
+  if(!bossState){ if(bossMesh) bossMesh.visible = false; updateBossHealthUI(); return; }
+  ensureBossMesh();
+  bossMesh.visible = !!bossState.alive;
+  bossMesh.position.set(bossState.x, bossState.y, bossState.z);
+  updateBossHealthUI();
+}
+function updateBossHealthUI(){
+  const bar = document.getElementById('bossHealthBar');
+  if(!bossState || !bossState.alive){ bar.style.display='none'; return; }
+  bar.style.display='block';
+  const pct = Math.max(0, bossState.health/bossState.maxHealth*100);
+  document.getElementById('bossHealthFill').style.width = pct+'%';
+  document.getElementById('bossHealthLabel').textContent = 'Graveyard Boss - '+Math.ceil(bossState.health)+' / '+bossState.maxHealth+(bossState.phase==='swarm' ? ' - SWARM!' : '');
+}
+function spawnBossAttackTelegraph(x,y,z){
+  spawnBreakParticles(Math.floor(x), Math.floor(y), Math.floor(z), 0xaa2255);
+}
+let localBossAttackCooldown = 0;
+function spawnLocalBoss(){
+  if(multiplayer || biomeMode !== 'graveyard'){ setBossState(null); return; }
+  localBossAttackCooldown = 3.2;
+  const homeX = WORLD_X/2, homeZ = WORLD_Z/2;
+  setBossState({
+    x:homeX, y:WORLD_Y-8, z:homeZ, homeX, homeZ,
+    health:200, maxHealth:200, phase:'ranged', alive:true,
+    driftAngle: Math.random()*Math.PI*2
+  });
+}
+function updateLocalBoss(dt){
+  if(multiplayer || !bossState || !bossState.alive) return;
+  bossState.driftAngle += dt*0.4;
+  bossState.x = bossState.homeX + Math.cos(bossState.driftAngle)*5;
+  bossState.z = bossState.homeZ + Math.sin(bossState.driftAngle)*5;
+  if(bossMesh) bossMesh.position.set(bossState.x, bossState.y, bossState.z);
+  localBossAttackCooldown -= dt;
+  if(localBossAttackCooldown<=0){
+    const dx=player.x-bossState.x, dz=player.z-bossState.z;
+    const dist = Math.sqrt(dx*dx+dz*dz);
+    if(dist < 34){
+      localBossAttackCooldown = 3.2;
+      flashMessage('The graveyard boss lashes out at you!');
+      takeDamage(8);
+      spawnBossAttackTelegraph(bossState.x, bossState.y, bossState.z);
+    }
+  }
+}
 // Brief red emissive flash + a little scale "punch" whenever an enemy or
 // remote player takes a hit - works on anything with a .group of meshes.
 // ---------- Headshot zones ----------
@@ -3646,6 +3886,42 @@ function hitEnemy(enemy, amount){
     damageEnemy(enemy, amount);
   }
 }
+function checkBossHit(px,py,pz){
+  if(!bossState || !bossState.alive) return false;
+  const dx=px-bossState.x, dy=py-(bossState.y+BOSS_HIT_Y), dz=pz-bossState.z;
+  return (dx*dx+dy*dy+dz*dz) < BOSS_HIT_R*BOSS_HIT_R;
+}
+function damageBoss(amount){
+  // Same routing idea as hitEnemy - report and wait for sync in multiplayer
+  // (server is authoritative, -1 is the reserved boss sentinel ID), apply
+  // and resolve everything locally in singleplayer.
+  if(!bossState || !bossState.alive) return;
+  if(multiplayer){
+    if(socket && socket.readyState===WebSocket.OPEN){
+      socket.send(JSON.stringify({type:'hitEnemy', enemyId:-1, damage:amount}));
+    }
+    return;
+  }
+  bossState.health = Math.max(0, bossState.health-amount);
+  if(bossState.phase==='ranged' && bossState.health <= bossState.maxHealth*0.3){
+    bossState.phase = 'swarm';
+    for(let i=0;i<10;i++){
+      const ex = bossState.x+(Math.random()-0.5)*8, ez = bossState.z+(Math.random()-0.5)*8;
+      const en = spawnEnemyAt(ex, ez, true);
+      en.swarmMode = true;
+    }
+    flashMessage('The graveyard boss is calling its dead - a swarm is coming!');
+  }
+  if(bossState.health<=0){
+    bossState.alive = false;
+    bossMesh.visible = false;
+    for(const t of [21,17,28,15]){ // Rifle, Rocket Launcher, Sniper, Grenade
+      dropItemOnGround(bossState.x+(Math.random()-0.5)*3, bossState.y, bossState.z+(Math.random()-0.5)*3, t, 1);
+    }
+    flashMessage('The graveyard boss has fallen!');
+  }
+  updateBossHealthUI();
+}
 function respawnEnemy(enemy){
   const x = 4+Math.floor(Math.random()*(WORLD_X-8));
   const z = 4+Math.floor(Math.random()*(WORLD_Z-8));
@@ -3757,7 +4033,7 @@ function updateEnemies(dt){
 
     const pdx = player.x-en.x, pdz = player.z-en.z;
     const distToPlayer = Math.sqrt(pdx*pdx+pdz*pdz);
-    const aggroed = distToPlayer < ENEMY_AGGRO_RANGE;
+    const aggroed = en.swarmMode || distToPlayer < ENEMY_AGGRO_RANGE;
 
     if(aggroed){
       en.wanderDir = Math.atan2(pdx, pdz);
@@ -4562,6 +4838,7 @@ function newWorld(){
   noDamageTimer=0; regenTimer=0;
   for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
   spawnInitialEnemies();
+  spawnLocalBoss();
   rebuildMeshes();
   updateHotbarUI();
   updateHealthUI();
@@ -4849,6 +5126,7 @@ function handleNetMessage(msg){
       health=MAX_HEALTH; noDamageTimer=0; regenTimer=0;
       slots.forEach(s=>{ s.type=null; s.count=0; });
       syncEnemiesFromServer(msg.enemies);
+      setBossState(msg.boss || null);
       rebuildMeshes(); updateHotbarUI(); updateHealthUI();
       multiplayer = true;
       matchPhase='waiting'; matchCountdown=0; matchPlayersList=[]; myLives=0; myEliminated=false;
@@ -4951,6 +5229,7 @@ function handleNetMessage(msg){
     sfxMatchStart();
   } else if(msg.type==='enemiesReset'){
     syncEnemiesFromServer(msg.enemies);
+    setBossState(msg.boss || null);
   } else if(msg.type==='matchEnd'){
     sfxMatchEnd();
     if(msg.seriesOver){
@@ -4967,6 +5246,7 @@ function handleNetMessage(msg){
     startAmbience(biomeMode);
     for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
     syncEnemiesFromServer(msg.enemies);
+    setBossState(msg.boss || null);
     spawnPlayer();
     health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
     slots.forEach(s=>{ s.type=null; s.count=0; });
@@ -4994,10 +5274,17 @@ function handleNetMessage(msg){
     else { for(let i=0;i<msg.count;i++) addToInventory(msg.itemType); sfxPickup(); }
   } else if(msg.type==='enemyTick'){
     updateEnemyTick(msg.enemies);
+    if(msg.boss !== undefined) setBossState(msg.boss || null);
   } else if(msg.type==='enemyHealth'){
     applyServerEnemyHealth(msg.id, msg.health, msg.alive);
   } else if(msg.type==='enemyRespawned'){
     applyServerEnemyRespawn(msg.id, msg.x, msg.z, msg.isZombie);
+  } else if(msg.type==='bossAttack'){
+    if(msg.targetId===myNetId){
+      flashMessage('The graveyard boss lashes out at you!');
+      takeDamage(msg.damage);
+    }
+    if(bossMesh) spawnBossAttackTelegraph(msg.bx, msg.by, msg.bz);
   } else if(msg.type==='chat'){
     addChatMessage(msg.name, msg.text);
   }
@@ -5285,6 +5572,8 @@ function animate(){
   updateMuzzleFlashes(dt);
   updateSniperTracers(dt);
   if(beaconRing.visible) beaconRing.rotation.z += dt*0.3;
+  if(bossMesh && bossMesh.visible){ bossVisualTime += dt; animateBossTentacles(bossMesh, bossVisualTime); }
+  updateLocalBoss(dt);
   updateDarts(dt);
   updateGrenades(dt);
   updateRockets(dt);
