@@ -392,7 +392,7 @@
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
-  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.28</div>
+  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.281</div>
 </div>
 
 <div id="chatLog"></div>
@@ -1268,20 +1268,24 @@ function buildMausoleum(x,z,rand){
     }
   }
 }
-// A fully underground map - close-quarters dirt tunnels and rooms,
-// deliberately shotgun-and-stim-only (see pickWeightedLoot/openMedCrate).
-// Connectivity is guaranteed by construction: every tunnel branches off a
-// point on an already-carved path, rather than starting independent
-// random walks and hoping they happen to connect.
-const TUNNEL_CEILING_Y = 18; // everything above this stays open air, same as every other biome's spectator box
+// A fully underground map - close-quarters dirt tunnels and rooms across
+// two connected floors, deliberately shotgun-and-stim-only (see
+// pickWeightedLoot/openMedCrate). Connectivity within a floor is
+// guaranteed by construction: every tunnel branches off a point on an
+// already-carved path, rather than starting independent random walks and
+// hoping they happen to connect. The two floors are linked by a handful
+// of vertical connector shafts.
+const TUNNEL_CEILING_Y = 17; // everything above this stays open air, same as every other biome's spectator box
+const TUNNEL_FLOOR1_Y = 5;
+const TUNNEL_FLOOR2_Y = 12;
 let tunnelSpawnPoints = [];
 function carveTunnelBranch(x, y, z, angle, steps, rand, depth){
-  const carveRadius = 1.8;
+  const carveRadius = 1.3; // narrower than before - tighter, more shotgun-appropriate corridors
   for(let s=0; s<steps; s++){
     for(let dx=-2; dx<=2; dx++){
       for(let dy=-1; dy<=2; dy++){
         for(let dz=-2; dz<=2; dz++){
-          if(dx*dx+dz*dz > carveRadius*carveRadius+1.5) continue;
+          if(dx*dx+dz*dz > carveRadius*carveRadius+1) continue;
           const bx=Math.round(x+dx), by=Math.round(y+dy), bz=Math.round(z+dz);
           if(bx<1||bx>=WORLD_X-1||by<1||by>=TUNNEL_CEILING_Y||bz<1||bz>=WORLD_Z-1) continue;
           setBlock(bx,by,bz,AIR);
@@ -1298,7 +1302,7 @@ function carveTunnelBranch(x, y, z, angle, steps, rand, depth){
       carveTunnelBranch(x, y, z, angle + (rand()<0.5?1:-1)*(Math.PI/2+(rand()-0.5)), Math.floor(steps*0.6), rand, depth+1);
     }
     if(s%12===7){
-      const roomR = 3+Math.floor(rand()*2);
+      const roomR = 2+Math.floor(rand()*2); // slightly smaller too, matching the narrower tunnels
       for(let dx=-roomR;dx<=roomR;dx++){
         for(let dy=-1;dy<=2;dy++){
           for(let dz=-roomR;dz<=roomR;dz++){
@@ -1312,23 +1316,49 @@ function carveTunnelBranch(x, y, z, angle, steps, rand, depth){
     }
   }
 }
+function carveConnectorShaft(x, z, fromY, toY){
+  const shaftRadius = 1.3;
+  for(let y=fromY; y<=toY; y++){
+    for(let dx=-2; dx<=2; dx++){
+      for(let dz=-2; dz<=2; dz++){
+        if(dx*dx+dz*dz > shaftRadius*shaftRadius+1) continue;
+        const bx=x+dx, bz=z+dz;
+        if(bx<1||bx>=WORLD_X-1||bz<1||bz>=WORLD_Z-1||y<1||y>=TUNNEL_CEILING_Y) continue;
+        setBlock(bx,y,bz,AIR);
+      }
+    }
+  }
+}
+// The tracked point is the exact carve center, and the carve always clears
+// straight through dy=-1..+2 relative to it - so the block directly below
+// a tracked point is itself part of the carved-out air, not solid ground.
+// This searches properly downward from above the point for the real
+// air-to-solid transition instead of naively assuming y-1 is the floor.
+function findTunnelFloorY(x, startY, z){
+  for(let checkY=startY; checkY>1; checkY--){
+    if(getBlock(x,checkY,z)===AIR && getBlock(x,checkY-1,z)!==AIR) return checkY;
+  }
+  return null;
+}
 function scatterTunnelLoot(){
   const rand = mulberry32(seed+555);
   if(tunnelSpawnPoints.length===0) return;
   let lootPlaced=0, lootAttempts=0;
-  while(lootPlaced<10 && lootAttempts<300){
+  while(lootPlaced<10 && lootAttempts<400){
     lootAttempts++;
     const p = tunnelSpawnPoints[Math.floor(rand()*tunnelSpawnPoints.length)];
-    if(getBlock(p.x,p.y,p.z)!==AIR || getBlock(p.x,p.y-1,p.z)===AIR) continue; // needs solid footing, open space
-    setBlock(p.x,p.y,p.z,LOOT_CRATE);
+    const floorY = findTunnelFloorY(p.x, p.y+2, p.z);
+    if(floorY===null || getBlock(p.x,floorY,p.z)!==AIR) continue;
+    setBlock(p.x,floorY,p.z,LOOT_CRATE);
     lootPlaced++;
   }
   let medPlaced=0, medAttempts=0;
-  while(medPlaced<6 && medAttempts<300){
+  while(medPlaced<6 && medAttempts<400){
     medAttempts++;
     const p = tunnelSpawnPoints[Math.floor(rand()*tunnelSpawnPoints.length)];
-    if(getBlock(p.x,p.y,p.z)!==AIR || getBlock(p.x,p.y-1,p.z)===AIR) continue;
-    setBlock(p.x,p.y,p.z,MED_CRATE);
+    const floorY = findTunnelFloorY(p.x, p.y+2, p.z);
+    if(floorY===null || getBlock(p.x,floorY,p.z)!==AIR) continue;
+    setBlock(p.x,floorY,p.z,MED_CRATE);
     medPlaced++;
   }
 }
@@ -1352,7 +1382,13 @@ function generateTunnelsWorld(){
   }
   tunnelSpawnPoints = [];
   const rand = mulberry32(seed+222);
-  carveTunnelBranch(WORLD_X/2, 9, WORLD_Z/2, rand()*Math.PI*2, 55, rand, 0);
+  carveTunnelBranch(WORLD_X/2, TUNNEL_FLOOR1_Y, WORLD_Z/2, rand()*Math.PI*2, 50, rand, 0);
+  carveTunnelBranch(WORLD_X/2+10, TUNNEL_FLOOR2_Y, WORLD_Z/2-10, rand()*Math.PI*2, 45, rand, 0);
+  const floor1Points = tunnelSpawnPoints.filter(p=>p.y===TUNNEL_FLOOR1_Y);
+  for(let i=0;i<4;i++){
+    const p1 = floor1Points[Math.floor(rand()*floor1Points.length)];
+    if(p1) carveConnectorShaft(p1.x, p1.z, TUNNEL_FLOOR1_Y-1, TUNNEL_FLOOR2_Y+3);
+  }
   scatterTunnelLoot();
 }
 function generateGraveyardWorld(){
