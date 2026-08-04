@@ -240,6 +240,15 @@
   #seriesEndOverlay .trophy { font-size:52px; margin-bottom:6px; }
   #seriesEndOverlay .winnerLine { font-size:30px; font-weight:bold; color:#ffdd55; text-shadow:2px 2px 6px #000; margin-bottom:18px; }
   #seriesEndOverlay .subLine { font-size:15px; color:#aaa; margin-top:14px; }
+  .voteBtn {
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding:10px 16px; border-radius:6px; border:1px solid rgba(255,255,255,0.25);
+    background:rgba(255,255,255,0.08); color:#fff; cursor:pointer; font-size:14px;
+    min-width:110px; transition:background 0.15s, border-color 0.15s;
+  }
+  .voteBtn:hover { background:rgba(255,255,255,0.16); }
+  .voteBtn.voted { border-color:#7fd9ff; background:rgba(127,217,255,0.18); }
+  .voteBtn .voteCount { font-size:12px; color:#aaa; }
   #healthBar {
     position:fixed; bottom:82px; left:50%; transform:translateX(-50%);
     display:flex; gap:2px; z-index:10;
@@ -300,6 +309,10 @@
   <div class="trophy">\uD83C\uDFC6</div>
   <div class="winnerLine" id="seriesWinnerLine"></div>
   <table><thead><tr><th style="text-align:left;color:#888;font-weight:normal;padding:4px 10px;">Player</th><th style="color:#888;font-weight:normal;padding:4px 10px;">K</th><th style="color:#888;font-weight:normal;padding:4px 10px;">D</th><th style="color:#888;font-weight:normal;padding:4px 10px;">Wins</th></tr></thead><tbody id="seriesEndBody" style="font-size:15px;"></tbody></table>
+  <div id="mapVoteSection" style="display:none; margin-top:16px;">
+    <div style="font-size:14px; color:#ccc; margin-bottom:8px;">Vote for the next map:</div>
+    <div id="mapVoteButtons" style="display:flex; gap:8px; justify-content:center;"></div>
+  </div>
   <div class="subLine" id="seriesEndSubLine"></div>
 </div>
 <div id="hint">WASD move · Space jump · C crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · ~ dev tools · T chat · Esc close/pause</div>
@@ -364,6 +377,7 @@
       <option value="industrial">Industrial - dense rooms &amp; corridors</option>
       <option value="snow">Snow - frosty hills &amp; forest</option>
       <option value="graveyard">Graveyard - tombstones &amp; a boss</option>
+      <option value="tunnels">Tunnels - dirt maze, shotguns &amp; stims only</option>
     </select>
   </label>
   <div class="btn" id="btnStart">Start New World</div>
@@ -378,6 +392,7 @@
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
+  <div id="versionLabel" style="position:fixed; bottom:10px; right:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.28</div>
 </div>
 
 <div id="chatLog"></div>
@@ -604,6 +619,10 @@ const LOOT_TABLE = [
   { type: STIM_INJECTOR,   weight: 4 }
 ];
 function pickWeightedLoot(){
+  if(biomeMode==='tunnels'){
+    // this biome is deliberately shotgun-only, close-quarters by design
+    return Math.random()<0.5 ? DOUBLE_BARREL : PUMP_SHOTGUN;
+  }
   const totalWeight = LOOT_TABLE.reduce((sum,e)=>sum+e.weight, 0);
   let roll = Math.random()*totalWeight;
   for(const entry of LOOT_TABLE){
@@ -697,7 +716,8 @@ const BIOME_PROFILES = {
   oasis:     { amplitude:4,  octave2Weight:0.08, treeDensity:0,     baseHeight:9,  surfaceBlock:SAND },  // uses its own generator entirely
   ruins:     { amplitude:4,  octave2Weight:0.1,  treeDensity:0,     baseHeight:10, surfaceBlock:STONE }, // uses its own generator entirely
   industrial:{ amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:8,  surfaceBlock:METAL }, // uses its own generator entirely
-  graveyard: { amplitude:5,  octave2Weight:0.1,  treeDensity:0,     baseHeight:9,  surfaceBlock:DIRT }   // uses its own generator entirely
+  graveyard: { amplitude:5,  octave2Weight:0.1,  treeDensity:0,     baseHeight:9,  surfaceBlock:DIRT },  // uses its own generator entirely
+  tunnels:   { amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:9,  surfaceBlock:DIRT }   // uses its own generator entirely
 };
 function applyBiomeProfile(mode){
   biomeMode = BIOME_PROFILES[mode] ? mode : 'highlands';
@@ -927,6 +947,7 @@ function generateWorld(){
   if(biomeMode==='ruins'){ generateRuinsWorld(); buildSpectatorBox(); return; }
   if(biomeMode==='industrial'){ generateIndustrialWorld(); buildSpectatorBox(); return; }
   if(biomeMode==='graveyard'){ generateGraveyardWorld(); buildSpectatorBox(); return; }
+  if(biomeMode==='tunnels'){ generateTunnelsWorld(); buildSpectatorBox(); return; }
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
   const n1 = new Noise2D(seed);
   const n2 = new Noise2D(seed+7777);
@@ -1246,6 +1267,93 @@ function buildMausoleum(x,z,rand){
       }
     }
   }
+}
+// A fully underground map - close-quarters dirt tunnels and rooms,
+// deliberately shotgun-and-stim-only (see pickWeightedLoot/openMedCrate).
+// Connectivity is guaranteed by construction: every tunnel branches off a
+// point on an already-carved path, rather than starting independent
+// random walks and hoping they happen to connect.
+const TUNNEL_CEILING_Y = 18; // everything above this stays open air, same as every other biome's spectator box
+let tunnelSpawnPoints = [];
+function carveTunnelBranch(x, y, z, angle, steps, rand, depth){
+  const carveRadius = 1.8;
+  for(let s=0; s<steps; s++){
+    for(let dx=-2; dx<=2; dx++){
+      for(let dy=-1; dy<=2; dy++){
+        for(let dz=-2; dz<=2; dz++){
+          if(dx*dx+dz*dz > carveRadius*carveRadius+1.5) continue;
+          const bx=Math.round(x+dx), by=Math.round(y+dy), bz=Math.round(z+dz);
+          if(bx<1||bx>=WORLD_X-1||by<1||by>=TUNNEL_CEILING_Y||bz<1||bz>=WORLD_Z-1) continue;
+          setBlock(bx,by,bz,AIR);
+        }
+      }
+    }
+    if(s%4===0) tunnelSpawnPoints.push({x:Math.round(x), y:Math.round(y), z:Math.round(z)});
+    angle += (rand()-0.5)*0.5;
+    x += Math.sin(angle)*1.4;
+    z += Math.cos(angle)*1.4;
+    x = Math.max(3, Math.min(WORLD_X-4, x));
+    z = Math.max(3, Math.min(WORLD_Z-4, z));
+    if(depth<2 && s>4 && s%9===0 && rand()<0.55){
+      carveTunnelBranch(x, y, z, angle + (rand()<0.5?1:-1)*(Math.PI/2+(rand()-0.5)), Math.floor(steps*0.6), rand, depth+1);
+    }
+    if(s%12===7){
+      const roomR = 3+Math.floor(rand()*2);
+      for(let dx=-roomR;dx<=roomR;dx++){
+        for(let dy=-1;dy<=2;dy++){
+          for(let dz=-roomR;dz<=roomR;dz++){
+            if(dx*dx+dz*dz>roomR*roomR) continue;
+            const bx=Math.round(x+dx), by=Math.round(y+dy), bz=Math.round(z+dz);
+            if(bx<1||bx>=WORLD_X-1||by<1||by>=TUNNEL_CEILING_Y||bz<1||bz>=WORLD_Z-1) continue;
+            setBlock(bx,by,bz,AIR);
+          }
+        }
+      }
+    }
+  }
+}
+function scatterTunnelLoot(){
+  const rand = mulberry32(seed+555);
+  if(tunnelSpawnPoints.length===0) return;
+  let lootPlaced=0, lootAttempts=0;
+  while(lootPlaced<10 && lootAttempts<300){
+    lootAttempts++;
+    const p = tunnelSpawnPoints[Math.floor(rand()*tunnelSpawnPoints.length)];
+    if(getBlock(p.x,p.y,p.z)!==AIR || getBlock(p.x,p.y-1,p.z)===AIR) continue; // needs solid footing, open space
+    setBlock(p.x,p.y,p.z,LOOT_CRATE);
+    lootPlaced++;
+  }
+  let medPlaced=0, medAttempts=0;
+  while(medPlaced<6 && medAttempts<300){
+    medAttempts++;
+    const p = tunnelSpawnPoints[Math.floor(rand()*tunnelSpawnPoints.length)];
+    if(getBlock(p.x,p.y,p.z)!==AIR || getBlock(p.x,p.y-1,p.z)===AIR) continue;
+    setBlock(p.x,p.y,p.z,MED_CRATE);
+    medPlaced++;
+  }
+}
+function generateTunnelsWorld(){
+  blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
+  const randFill = mulberry32(seed+111);
+  for(let x=0;x<WORLD_X;x++){
+    for(let z=0;z<WORLD_Z;z++){
+      for(let y=1;y<TUNNEL_CEILING_Y;y++){
+        setBlock(x,y,z, randFill()<0.12 ? STONE : DIRT);
+      }
+    }
+  }
+  // heightMap isn't really meaningful here (there's no rolling surface),
+  // but several shared helpers expect it to exist - fill with a flat
+  // reference at the ceiling height
+  heightMap = [];
+  for(let x=0;x<WORLD_X;x++){
+    heightMap[x] = [];
+    for(let z=0;z<WORLD_Z;z++) heightMap[x][z] = TUNNEL_CEILING_Y-1;
+  }
+  tunnelSpawnPoints = [];
+  const rand = mulberry32(seed+222);
+  carveTunnelBranch(WORLD_X/2, 9, WORLD_Z/2, rand()*Math.PI*2, 55, rand, 0);
+  scatterTunnelLoot();
 }
 function generateGraveyardWorld(){
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
@@ -1835,7 +1943,8 @@ const SKY_THEMES = {
   snow:      { top:0x8fb8e0, horizon:0xeaf3fb, cloud:0xffffff, cloudAlpha:0.35, cloudDensity:9,  fog:0xd8e8f5, seed:504 },
   ruins:     { top:0x2a0d0d, horizon:0xaa3a1a, cloud:0x1a0a0a, cloudAlpha:0.45, cloudDensity:18, fog:0x5a2a1a, seed:505 },
   industrial:{ top:0x3a4048, horizon:0x6a7178, cloud:0x2a2f36, cloudAlpha:0.5,  cloudDensity:20, fog:0x5a6068, seed:506 },
-  graveyard: { top:0x1a0d20, horizon:0x3a4a2e, cloud:0x1f2518, cloudAlpha:0.5,  cloudDensity:16, fog:0x384530, seed:507 }
+  graveyard: { top:0x1a0d20, horizon:0x3a4a2e, cloud:0x1f2518, cloudAlpha:0.5,  cloudDensity:16, fog:0x384530, seed:507 },
+  tunnels:   { top:0x14100c, horizon:0x2a2018, cloud:0x1a1510, cloudAlpha:0.4,  cloudDensity:10, fog:0x241d15, seed:508 }
 };
 function makeSkyTexture(theme){
   const w=512, h=256;
@@ -3858,6 +3967,31 @@ const SPAWN_OFFSETS = [
 ];
 let lastSpawnIndex = -1;
 function spawnPlayer(){
+  if(biomeMode==='tunnels' && tunnelSpawnPoints.length>0){
+    const MIN_SPAWN_DIST = 8; // tighter than the open-world default, since tunnels are naturally closer quarters
+    let chosen=null, bestChosen=null, bestMinDist=-1;
+    for(let attempt=0; attempt<15; attempt++){
+      const p = tunnelSpawnPoints[Math.floor(Math.random()*tunnelSpawnPoints.length)];
+      if(getBlock(p.x,p.y,p.z)!==AIR) continue;
+      let minDist = Infinity;
+      if(multiplayer){
+        for(const [id,rp] of remotePlayers){
+          const dx=rp.group.position.x-p.x, dz=rp.group.position.z-p.z;
+          const d = Math.sqrt(dx*dx+dz*dz);
+          if(d<minDist) minDist = d;
+        }
+      }
+      if(minDist>=MIN_SPAWN_DIST){ chosen=p; break; }
+      if(minDist>bestMinDist){ bestMinDist=minDist; bestChosen=p; }
+    }
+    const final = chosen || bestChosen || tunnelSpawnPoints[0];
+    player.x = final.x+0.5; player.z = final.z+0.5;
+    player.y = final.y+0.1;
+    velocity.y=0; yaw=Math.random()*Math.PI*2; pitch=0;
+    airPeakY = player.y;
+    inSpectatorBox = false;
+    return;
+  }
   const margin = 6;
   const MIN_SPAWN_DIST_FROM_OTHERS = 12; // try to avoid dropping players right next to each other
   let chosen = null, chosenIndex = -1, bestChosen = null, bestIndex = -1, bestMinDist = -1;
@@ -4618,8 +4752,9 @@ function openLootCrate(x,y,z){
 function openMedCrate(x,y,z){
   // weighted toward Bandages over Stims, matching the main loot table's
   // own ratio (10 vs 4) so a med crate doesn't feel like a guaranteed
-  // free full-heal every time
-  const item = Math.random()<0.7 ? BANDAGE : STIM_INJECTOR;
+  // free full-heal every time - except in Tunnels, which is deliberately
+  // stim-only by design (no bandages there at all)
+  const item = biomeMode==='tunnels' ? STIM_INJECTOR : (Math.random()<0.7 ? BANDAGE : STIM_INJECTOR);
   dropItemOnGround(x,y,z,item,1);
   flashMessage('Med crate! A '+BLOCK_NAMES[item]+' dropped');
   sfxCrateOpen();
@@ -5468,14 +5603,56 @@ function updateLiveScoreboard(){
   body.innerHTML = '';
   for(const tr of buildScoreboardRows(matchStandings)) body.appendChild(tr);
 }
-function showSeriesEndOverlay(winnerName, standings){
+const BIOME_LABELS = {
+  highlands:'Highlands', plains:'Plains', oasis:'Oasis', ruins:'Ruins',
+  snow:'Snow', industrial:'Industrial', graveyard:'Graveyard', tunnels:'Tunnels'
+};
+let myVoteChoice = null;
+function showSeriesEndOverlay(winnerName, standings, voteOpts){
   const el = document.getElementById('seriesEndOverlay');
   document.getElementById('seriesWinnerLine').textContent = winnerName ? (winnerName+' wins the series!') : 'Series ended';
   const body = document.getElementById('seriesEndBody');
   body.innerHTML = '';
   for(const tr of buildScoreboardRows(standings)) body.appendChild(tr);
-  document.getElementById('seriesEndSubLine').textContent = 'A new map is coming up shortly...';
+  myVoteChoice = null;
+  const voteSection = document.getElementById('mapVoteSection');
+  const voteButtons = document.getElementById('mapVoteButtons');
+  voteButtons.innerHTML = '';
+  if(voteOpts && voteOpts.length===3){
+    voteSection.style.display = 'block';
+    voteOpts.forEach((opt, i)=>{
+      const btn = document.createElement('div');
+      btn.className = 'voteBtn';
+      const label = document.createElement('div');
+      label.textContent = opt==='keep' ? 'Keep This Map' : (BIOME_LABELS[opt] || opt);
+      btn.appendChild(label);
+      const count = document.createElement('div');
+      count.className = 'voteCount';
+      count.textContent = '0 votes';
+      count.id = 'voteCount'+i;
+      btn.appendChild(count);
+      btn.addEventListener('click', ()=>{
+        myVoteChoice = i;
+        for(const b of voteButtons.children) b.classList.remove('voted');
+        btn.classList.add('voted');
+        if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
+          socket.send(JSON.stringify({type:'mapVote', choice:i}));
+        }
+      });
+      voteButtons.appendChild(btn);
+    });
+    document.getElementById('seriesEndSubLine').textContent = 'Vote above - most votes wins, ties broken randomly';
+  } else {
+    voteSection.style.display = 'none';
+    document.getElementById('seriesEndSubLine').textContent = 'A new map is coming up shortly...';
+  }
   el.style.display = 'flex';
+}
+function updateVoteTally(tally){
+  for(let i=0;i<3;i++){
+    const el = document.getElementById('voteCount'+i);
+    if(el) el.textContent = (tally[i]||0)+' vote'+(tally[i]===1?'':'s');
+  }
 }
 function hideSeriesEndOverlay(){
   document.getElementById('seriesEndOverlay').style.display = 'none';
@@ -5671,10 +5848,26 @@ function handleNetMessage(msg){
   } else if(msg.type==='matchEnd'){
     sfxMatchEnd();
     if(msg.seriesOver){
-      showSeriesEndOverlay(msg.winnerName, msg.standings||[]);
+      showSeriesEndOverlay(msg.winnerName, msg.standings||[], msg.voteOptions);
     } else {
       showTimeWarning(msg.winnerName ? ('\uD83C\uDFC1 Round '+msg.round+' - '+msg.winnerName+' wins!') : ('Round '+msg.round+' ended - no winner'));
     }
+  } else if(msg.type==='voteUpdate'){
+    updateVoteTally(msg.tally);
+  } else if(msg.type==='mapKept'){
+    hideSeriesEndOverlay();
+    // deliberately does NOT touch blocks/blockDiffs/seed - the whole point
+    // is that all the destruction from the last series stays exactly as it
+    // was. Just re-sync enemies/boss and respawn normally, same as a
+    // regular round would.
+    for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
+    syncEnemiesFromServer(msg.enemies);
+    setBossState(msg.boss || null);
+    spawnPlayer();
+    health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
+    slots.forEach(s=>{ s.type=null; s.count=0; });
+    rebuildMeshes(); updateHotbarUI(); updateHealthUI();
+    flashMessage('Keeping this map - same destruction, fresh round!');
   } else if(msg.type==='mapReset'){
     hideSeriesEndOverlay();
     seed = msg.seed;
