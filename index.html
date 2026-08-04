@@ -2605,6 +2605,20 @@ function getMuzzleOrigin(){
     .addScaledVector(downVec, 0.18)
     .addScaledVector(fwdVec, 0.45);
 }
+// The muzzle sits offset from the camera (to the side and slightly below,
+// for the held-weapon visual), so a shot fired merely parallel to the
+// camera's forward vector never actually converges back onto the
+// crosshair - the offset stays constant at any range. That's negligible
+// far away, but at close range it reads as a real miss unless you
+// compensate by aiming to the side. This aims every shot at a point far
+// down the camera's actual sightline instead, so it always converges
+// exactly where the crosshair is pointing, at any distance.
+function getAimedDirection(origin){
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+  const targetPoint = camera.position.clone().addScaledVector(camDir, 100);
+  return targetPoint.sub(origin).normalize();
+}
 let muzzleFlashes = [];
 function spawnMuzzleFlash(pos){
   const mesh = new THREE.Mesh(
@@ -2711,9 +2725,8 @@ function sniperDestroyTerrain(origin, dir, maxRange){
   }
 }
 function fireSniperHitscan(weapon){
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
   const origin = getMuzzleOrigin();
+  const dir = getAimedDirection(origin);
   spawnMuzzleFlash(origin);
   spawnSniperTracer(origin, dir, weapon.range);
   sfxShootSniper();
@@ -3163,9 +3176,8 @@ let meleeSwingTimer = 0;
 let pendingBurst = null; // {weapon, shotsRemaining, timer} - mid-burst shotgun state
 let darts = [];
 function shootProjectile(weapon){
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
   const origin = getMuzzleOrigin();
+  const dir = getAimedDirection(origin);
   spawnMuzzleFlash(origin);
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(weapon.radius,6,6),
@@ -3182,9 +3194,8 @@ function shootProjectile(weapon){
   else sfxShootLight();
 }
 function fireShotgunPellets(weapon){
-  const baseDir = new THREE.Vector3();
-  camera.getWorldDirection(baseDir);
   const origin = getMuzzleOrigin();
+  const baseDir = getAimedDirection(origin);
   spawnMuzzleFlash(origin);
   for(let i=0;i<weapon.pelletCount;i++){
     const dir = baseDir.clone();
@@ -3427,9 +3438,8 @@ const BLAST_RESISTANCE = {
 };
 let grenades = [];
 function throwGrenade(weapon){
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
   const origin = getMuzzleOrigin();
+  const dir = getAimedDirection(origin);
   const mesh = buildGrenadeMesh();
   mesh.position.copy(origin).addScaledVector(dir, 0.5);
   scene.add(mesh);
@@ -3550,9 +3560,8 @@ function triggerExplosion(pos, damage, radius, weaponType){
 // ---------- Rocket launcher: fast straight-line flight, explodes on impact ----------
 let rockets = [];
 function fireRocket(weapon){
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
   const origin = getMuzzleOrigin();
+  const dir = getAimedDirection(origin);
   spawnMuzzleFlash(origin);
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.09,8,8),
