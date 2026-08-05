@@ -256,6 +256,13 @@
   #healthBar .heart {
     font-size:20px; color:#e0313a; text-shadow:1px 1px 1px #000, -1px -1px 1px #000;
   }
+  #armorBar {
+    position:fixed; bottom:106px; left:50%; transform:translateX(-50%);
+    display:flex; gap:2px; z-index:10;
+  }
+  #armorBar .shield {
+    font-size:18px; color:#b8bec4; text-shadow:1px 1px 1px #000, -1px -1px 1px #000;
+  }
   #bossHealthBar {
     position:fixed; top:16px; left:50%; transform:translateX(-50%);
     width:420px; z-index:15; display:none; text-align:center;
@@ -291,6 +298,7 @@
     stroke-dasharray="69.12" stroke-dashoffset="0" transform="rotate(-90 14 14)" style="transition:stroke-dashoffset 0.05s linear;"/>
 </svg>
 <div id="miningBarWrap"><div id="miningBar"></div></div>
+<div id="armorBar"></div>
 <div id="healthBar"></div>
 <div id="bossHealthBar">
   <div id="bossHealthLabel">Graveyard Boss</div>
@@ -315,7 +323,7 @@
   </div>
   <div class="subLine" id="seriesEndSubLine"></div>
 </div>
-<div id="hint">WASD move · Space jump · C crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · ~ dev tools · T chat · Esc close/pause</div>
+<div id="hint">WASD move · Space jump · C crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · F interact · Tab scoreboard · ~ dev tools · T chat · Esc close/pause</div>
 <div id="message"></div>
 <div id="topButtons">
   <div class="btn" id="btnSaveTop">Save</div>
@@ -392,7 +400,7 @@
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
-  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.29</div>
+  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.30</div>
 </div>
 
 <div id="chatLog"></div>
@@ -568,13 +576,17 @@ const SNIPER=28;        // weapon - instant hitscan, ignores terrain entirely, l
 const BANDAGE=29;        // consumable - heals a modest amount over a short channel (right-click to use)
 const STIM_INJECTOR=30;  // consumable - instant full heal (right-click to use)
 const MED_CRATE=31;      // world object only - like a loot crate, but only ever drops Bandage/Stim, rarer than normal crates
-const SOLID_TYPES = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, PLANKS, REEDS, RUBBLE, SNOW, METAL, GLASS, CLEAR_GLASS];
+const METAL_ORE=32;      // minable terrain block - spawns underground in deep stone, smelt at a Furnace for Metal Bars
+const METAL_BAR=33;      // smelted resource - inventory item, no direct combat use yet
+const ARMOR_HELMET=34;   // crafted from Metal Bars - reduces damage 40% while it has durability left
+const SOLID_TYPES = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, PLANKS, REEDS, RUBBLE, SNOW, METAL, GLASS, CLEAR_GLASS, METAL_ORE];
 const WORLD_ONLY_TYPES = [LOOT_CRATE, POWERUP_CRATE, MED_CRATE]; // rendered in the world but never held/placed by the player
 const ALL_RENDER_TYPES = [...SOLID_TYPES, ...WORLD_ONLY_TYPES];
 const BLOCK_COLORS = {
   [GRASS]:0x5a9b3c, [DIRT]:0x6b4a2c, [STONE]:0x8a8a8a, [SAND]:0xdccb86,
   [WOOD]:0x6b4423, [LEAVES]:0x3c6b2a, [WATER]:0x3a6fd8, [PLANKS]:0xba8a54,
   [STONE_PICKAXE]:0xb0b0b0, [REEDS]:0x8fae4a, [BLOW_PIPE]:0x9c7a4a,
+  [METAL_ORE]:0x8a8a8a, [METAL_BAR]:0xd9d9d9,
   [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [GRENADE]:0x3a4a3a,
   [POWERUP_CRATE]:0x2a6f8a, [ROCKET_LAUNCHER]:0x555555, [RUBBLE]:0x9c8570,
   [DOUBLE_BARREL]:0x4a3520, [PUMP_SHOTGUN]:0x333333, [RIFLE]:0xc9a227, [SNOW]:0xf0f5fa, [METAL]:0x5a6570,
@@ -584,7 +596,7 @@ const BLOCK_NAMES = {
   [GRASS]:'Grass', [DIRT]:'Dirt', [STONE]:'Stone', [SAND]:'Sand',
   [WOOD]:'Wood', [LEAVES]:'Leaves', [WATER]:'Water', [PLANKS]:'Planks',
   [STONE_PICKAXE]:'Stone Pickaxe', [REEDS]:'Reeds', [BLOW_PIPE]:'Blow Pipe',
-  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade', [MED_CRATE]:'Med Crate',
+  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade', [MED_CRATE]:'Med Crate', [-1]:'Fists', [METAL_ORE]:'Metal Ore', [METAL_BAR]:'Metal Bar', [ARMOR_HELMET]:'Armor Helmet',
   [POWERUP_CRATE]:'Power Crate', [ROCKET_LAUNCHER]:'Rocket Launcher', [RUBBLE]:'Rubble',
   [DOUBLE_BARREL]:'Double Barrel', [PUMP_SHOTGUN]:'Pump Shotgun', [RIFLE]:'Rifle', [SNOW]:'Snow', [METAL]:'Metal',
   [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass', [SNIPER]:'Sniper Rifle', [BANDAGE]:'Bandage', [STIM_INJECTOR]:'Stim Injector'
@@ -594,7 +606,7 @@ const ITEM_ICON = {
   [GRENADE]:'\u2600', [ROCKET_LAUNCHER]:'\u2191', [DOUBLE_BARREL]:'\u25CF', [PUMP_SHOTGUN]:'\u25CF', [RIFLE]:'\u25CF',
   [PISTOL]:'\u25CF', [CARBINE]:'\u25CF', [SNIPER]:'\u25CF', [BANDAGE]:'\u2795', [STIM_INJECTOR]:'\u2695'
 };
-const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR];
+const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR,METAL_ORE,METAL_BAR,ARMOR_HELMET];
 
 // ---------- Loot table (crate drop rates) ----------
 // Each entry's "weight" controls how often it drops RELATIVE to the others -
@@ -943,14 +955,15 @@ function scatterLootAndPowerCrates(){
   return changes;
 }
 function generateWorld(){
-  if(biomeMode==='oasis'){ generateOasisWorld(); buildSpectatorBox(); return; }
-  if(biomeMode==='ruins'){ generateRuinsWorld(); buildSpectatorBox(); return; }
-  if(biomeMode==='industrial'){ generateIndustrialWorld(); buildSpectatorBox(); return; }
-  if(biomeMode==='graveyard'){ generateGraveyardWorld(); buildSpectatorBox(); return; }
-  if(biomeMode==='tunnels'){ generateTunnelsWorld(); buildSpectatorBox(); return; }
+  if(biomeMode==='oasis'){ generateOasisWorld(); buildSpectatorBox(); scatterFurnaces(); return; }
+  if(biomeMode==='ruins'){ generateRuinsWorld(); buildSpectatorBox(); scatterFurnaces(); return; }
+  if(biomeMode==='industrial'){ generateIndustrialWorld(); buildSpectatorBox(); scatterFurnaces(); return; }
+  if(biomeMode==='graveyard'){ generateGraveyardWorld(); buildSpectatorBox(); scatterFurnaces(); return; }
+  if(biomeMode==='tunnels'){ generateTunnelsWorld(); buildSpectatorBox(); return; } // no conventional surface here - furnaces would end up embedded in rock
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
   const n1 = new Noise2D(seed);
   const n2 = new Noise2D(seed+7777);
+  const oreRand = mulberry32(seed+777);
   heightMap = [];
   for(let x=0;x<WORLD_X;x++){
     heightMap[x]=[];
@@ -964,7 +977,7 @@ function generateWorld(){
         let t;
         if(y===h) t = (h<=WATER_LEVEL+1) ? SAND : terrainSurfaceBlock;
         else if(y>h-3) t = (h<=WATER_LEVEL+1) ? SAND : DIRT;
-        else t = STONE;
+        else t = (oreRand()<0.05) ? METAL_ORE : STONE;
         setBlock(x,y,z,t);
       }
       if(h<WATER_LEVEL){
@@ -999,12 +1012,14 @@ function generateWorld(){
   if(biomeMode==='plains') scatterCoverStructures(7);
   scatterCaveTunnels(4);
   buildSpectatorBox();
+  scatterFurnaces();
 }
 // A desert biome: mostly flat sand with a handful of carved-out water oases
 // instead of a general height-based water table, plus greenery around each one.
 function generateOasisWorld(){
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
   const n1 = new Noise2D(seed);
+  const oreRand = mulberry32(seed+778);
   heightMap = [];
   const baseHeight = 9;
   for(let x=0;x<WORLD_X;x++){
@@ -1015,7 +1030,7 @@ function generateOasisWorld(){
       h = Math.max(4, Math.min(WORLD_Y-6, h));
       heightMap[x][z] = h;
       for(let y=0;y<=h;y++){
-        setBlock(x,y,z, y>h-3 ? SAND : STONE);
+        setBlock(x,y,z, y>h-3 ? SAND : (oreRand()<0.05 ? METAL_ORE : STONE));
       }
     }
   }
@@ -1075,6 +1090,7 @@ function generateOasisWorld(){
 function generateRuinsWorld(){
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
   const n1 = new Noise2D(seed);
+  const oreRand = mulberry32(seed+779);
   heightMap = [];
   const baseHeight = 10;
   for(let x=0;x<WORLD_X;x++){
@@ -1085,7 +1101,7 @@ function generateRuinsWorld(){
       h = Math.max(4, Math.min(WORLD_Y-8, h));
       heightMap[x][z] = h;
       for(let y=0;y<=h;y++){
-        setBlock(x,y,z, y===h ? STONE : (y>h-2 ? DIRT : STONE));
+        setBlock(x,y,z, y===h ? STONE : (y>h-2 ? DIRT : (oreRand()<0.05 ? METAL_ORE : STONE)));
       }
     }
   }
@@ -1365,10 +1381,11 @@ function scatterTunnelLoot(){
 function generateTunnelsWorld(){
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
   const randFill = mulberry32(seed+111);
+  const oreRand = mulberry32(seed+781);
   for(let x=0;x<WORLD_X;x++){
     for(let z=0;z<WORLD_Z;z++){
       for(let y=1;y<TUNNEL_CEILING_Y;y++){
-        setBlock(x,y,z, randFill()<0.12 ? STONE : DIRT);
+        setBlock(x,y,z, oreRand()<0.04 ? METAL_ORE : (randFill()<0.12 ? STONE : DIRT));
       }
     }
   }
@@ -1409,6 +1426,7 @@ function generateGraveyardWorld(){
   heightMap = [];
   const baseHeight = 9;
   const randSurface = mulberry32(seed+111);
+  const oreRand = mulberry32(seed+780);
   for(let x=0;x<WORLD_X;x++){
     heightMap[x]=[];
     for(let z=0;z<WORLD_Z;z++){
@@ -1420,7 +1438,7 @@ function generateGraveyardWorld(){
         let t;
         if(y===h) t = (randSurface()<0.12) ? GRASS : DIRT; // sparse dead grass on mostly-bare dirt
         else if(y>h-2) t = DIRT;
-        else t = STONE;
+        else t = (oreRand()<0.05) ? METAL_ORE : STONE;
         setBlock(x,y,z,t);
       }
     }
@@ -2369,9 +2387,32 @@ function clearGlassTexture(){
   return toTexture(canvas);
 }
 
+function metalOreTexture(seedNum){
+  const size=16;
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexCss(0x7d7d7d);
+  ctx.fillRect(0,0,size,size);
+  const rand = mulberry32(seedNum);
+  for(let y=0;y<size;y++){
+    for(let x=0;x<size;x++){
+      const r = rand();
+      if(r<0.18) ctx.fillStyle = hexCss(0x656565);
+      else if(r<0.35) ctx.fillStyle = hexCss(0x8f8f8f);
+      else continue;
+      ctx.fillRect(x,y,1,1);
+    }
+  }
+  for(let i=0;i<7;i++){
+    ctx.fillStyle = hexCss(rand()<0.5 ? 0xc07830 : 0xd99245);
+    ctx.fillRect(Math.floor(rand()*size), Math.floor(rand()*size), rand()<0.4?2:1, rand()<0.4?2:1);
+  }
+  return toTexture(canvas);
+}
 const TEX = {
   dirt: speckleTexture(11, 0x6b4a2c, 0x55381f, 0x7d5636, 0.35),
   stone: speckleTexture(22, 0x8a8a8a, 0x707070, 0x9d9d9d, 0.35),
+  metalOre: metalOreTexture(23),
   sand: speckleTexture(33, 0xdccb86, 0xc9b56d, 0xe8dba0, 0.3),
   leaves: speckleTexture(44, 0x3c6b2a, 0x2e5620, 0x4d8138, 0.45),
   grassTop: speckleTexture(55, 0x5a9b3c, 0x487a30, 0x6cae4a, 0.35),
@@ -2394,13 +2435,12 @@ const TEX = {
 // ---------- Instanced meshes ----------
 const boxGeo = new THREE.BoxGeometry(1,1,1);
 const reedsGeo = new THREE.BoxGeometry(0.3,1,0.3); // thin stalk instead of a full cube
-const crateGeo = new THREE.BoxGeometry(0.75,0.75,0.75); // a bit smaller than a full block, still grid-aligned
-const powerCrateGeo = new THREE.BoxGeometry(0.7,0.7,0.7);
-const GEOM_FOR_TYPE = { [REEDS]: reedsGeo, [LOOT_CRATE]: crateGeo, [POWERUP_CRATE]: powerCrateGeo };
+const GEOM_FOR_TYPE = { [REEDS]: reedsGeo };
 const materials = {};
 function litMat(map, opts){ return new THREE.MeshLambertMaterial(Object.assign({map}, opts||{})); }
 materials[DIRT]   = litMat(TEX.dirt);
 materials[STONE]  = litMat(TEX.stone);
+materials[METAL_ORE] = litMat(TEX.metalOre);
 materials[SAND]   = litMat(TEX.sand);
 materials[LEAVES] = litMat(TEX.leaves, {transparent:true, opacity:0.95});
 materials[WATER]  = litMat(TEX.water, {transparent:true, opacity:0.65});
@@ -2846,8 +2886,9 @@ scene.add(camera); // needed so objects parented to the camera get rendered
 const handGroup = new THREE.Group();
 const HAND_BASE_X = 0.32, HAND_BASE_Y = -0.24, HAND_BASE_Z = -0.55;
 // Realistic human skin tones - declared early since the first-person arm
-// mesh below needs it immediately at load time, well before skinToneForId
-// (used for remote players) is defined further down.
+// mesh below needs it immediately at load time. Indices into this array
+// are now assigned server-side per persistent player identity (see the
+// 'identified' handler) rather than derived from the ephemeral session ID.
 const SKIN_TONES = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x6b4423, 0x4a2c17];
 handGroup.position.set(HAND_BASE_X, HAND_BASE_Y, HAND_BASE_Z);
 handGroup.rotation.set(0.2, -0.08, 0.15);
@@ -2855,9 +2896,10 @@ camera.add(handGroup);
 let handBobPhase = 0;
 let handBobAmount = 0;
 
+const myArmSkinTone = SKIN_TONES[Math.floor(Math.random()*SKIN_TONES.length)];
 const arm = new THREE.Mesh(
   new THREE.BoxGeometry(0.16,0.16,0.55),
-  new THREE.MeshLambertMaterial({color:SKIN_TONES[Math.floor(Math.random()*SKIN_TONES.length)]})
+  new THREE.MeshLambertMaterial({color:myArmSkinTone})
 );
 arm.position.set(0,0,0.15);
 handGroup.add(arm);
@@ -3057,6 +3099,136 @@ function buildSniperMesh(){
   group.add(stock);
   return group;
 }
+function buildMetalBarMesh(){
+  const group = new THREE.Group();
+  const bar = new THREE.Mesh(
+    new THREE.BoxGeometry(0.28,0.08,0.1),
+    new THREE.MeshStandardMaterial({color:0xd9d9d9, metalness:0.7, roughness:0.35})
+  );
+  group.add(bar);
+  return group;
+}
+// ---------- Furnace: smelts Metal Ore into Metal Bars ----------
+// A compact custom structure (not part of the voxel block grid) - roughly
+// matches a 2-wide x 2-deep x 3-tall footprint in proportion, but built
+// smaller than that, closer to furniture-sized than filling multiple full
+// grid cells. Furnace smelting state is tracked client-locally rather
+// than synced through the server - in multiplayer, each player sees their
+// own interactions with a furnace independently rather than everyone
+// watching the same glow together. A reasonable first version given the
+// complexity a fully server-authoritative version would add, but worth
+// knowing about.
+const FURNACE_SMELT_TIME = 8; // seconds
+function buildFurnaceMesh(){
+  const group = new THREE.Group();
+  const stoneMat = new THREE.MeshLambertMaterial({color:0x6f6f6f});
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.7,1.3,1.7), stoneMat);
+  base.position.y = 0.65;
+  group.add(base);
+  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.75,0.95,0.75), stoneMat);
+  chimney.position.y = 1.3+0.475;
+  group.add(chimney);
+  const mouthMatOff = new THREE.MeshLambertMaterial({color:0x2a2420});
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.55,0.1), mouthMatOff);
+  mouth.position.set(0, 0.5, 0.85+0.001);
+  group.add(mouth);
+  group.userData.mouth = mouth;
+  group.userData.mouthMatOff = mouthMatOff;
+  group.userData.mouthMatOn = new THREE.MeshStandardMaterial({color:0xff6a1f, emissive:0xff5010, emissiveIntensity:1.1});
+  return group;
+}
+const FURNACE_INTERACT_RANGE = 3.6;
+function findNearbyIdleFurnace(){
+  let closest = null, closestDist = Infinity;
+  for(const f of furnaces){
+    if(f.state!=='idle') continue;
+    const dx=f.x-player.x, dy=f.y-player.y, dz=f.z-player.z;
+    const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(dist<=FURNACE_INTERACT_RANGE && dist<closestDist){ closestDist=dist; closest=f; }
+  }
+  return closest;
+}
+function tryInteract(){
+  const furnace = findNearbyIdleFurnace();
+  if(furnace){
+    if(countOfType(METAL_ORE)>0){
+      startSmelting(furnace);
+    } else {
+      flashMessage('Need Metal Ore to smelt');
+    }
+  }
+}
+function startSmelting(furnace){
+  removeOneOfType(METAL_ORE);
+  updateHotbarUI();
+  updateHeldItemMesh();
+  furnace.state = 'smelting';
+  furnace.progress = 0;
+  furnace.smokeTimer = 0;
+  furnace.mesh.userData.mouth.material = furnace.mesh.userData.mouthMatOn;
+  flashMessage('Smelting Metal Ore...');
+}
+function spawnFurnaceSmoke(x,y,z){
+  const count = 6;
+  const positions = new Float32Array(count*3);
+  const velocities = [];
+  for(let i=0;i<count;i++){
+    positions[i*3]   = x+(Math.random()-0.5)*0.3;
+    positions[i*3+1] = y+(Math.random()-0.5)*0.2;
+    positions[i*3+2] = z+(Math.random()-0.5)*0.3;
+    velocities.push({
+      x:(Math.random()-0.5)*0.4,
+      y:Math.random()*0.8+0.4,
+      z:(Math.random()-0.5)*0.4
+    });
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  const mat = new THREE.PointsMaterial({color:0xaaaaaa, size:0.25, transparent:true, opacity:0.6, depthWrite:false});
+  const points = new THREE.Points(geo, mat);
+  scene.add(points);
+  particleSystems.push({points, velocities, life:0, maxLife:1.2});
+}
+function updateFurnaces(dt){
+  for(const f of furnaces){
+    if(f.state!=='smelting') continue;
+    f.progress += dt;
+    f.smokeTimer -= dt;
+    if(f.smokeTimer<=0){
+      f.smokeTimer = 0.6;
+      spawnFurnaceSmoke(f.x, f.y+2.3, f.z);
+    }
+    if(f.progress>=FURNACE_SMELT_TIME){
+      f.state = 'idle';
+      f.progress = 0;
+      f.mesh.userData.mouth.material = f.mesh.userData.mouthMatOff;
+      dropItemOnGround(f.x, f.y, f.z+1.1, METAL_BAR, 1);
+      flashMessage('Smelting complete - Metal Bar ready!');
+    }
+  }
+}
+let furnaces = [];
+function scatterFurnaces(){
+  for(const f of furnaces) scene.remove(f.mesh);
+  furnaces = [];
+  const rand = mulberry32(seed+888);
+  let placed=0, attempts=0;
+  while(placed<3 && attempts<200){
+    attempts++;
+    const x = 6+Math.floor(rand()*(WORLD_X-12));
+    const z = 6+Math.floor(rand()*(WORLD_Z-12));
+    const h = heightMap[x] ? heightMap[x][z] : undefined;
+    if(h===undefined) continue;
+    const surfaceType = getBlock(x,h,z);
+    if(surfaceType===AIR || surfaceType===WATER) continue;
+    if(getBlock(x,h+1,z)!==AIR) continue;
+    const mesh = buildFurnaceMesh();
+    mesh.position.set(x+0.5, h+1, z+0.5);
+    scene.add(mesh);
+    furnaces.push({x:x+0.5, y:h+1, z:z+0.5, mesh, state:'idle', progress:0, smokeTimer:0});
+    placed++;
+  }
+}
 function buildBandageMesh(){
   const group = new THREE.Group();
   const roll = new THREE.Mesh(
@@ -3120,6 +3292,8 @@ function updateHeldItemMesh(){
     itemAnchor.add(buildBandageMesh());
   } else if(slot.type===STIM_INJECTOR){
     itemAnchor.add(buildStimMesh());
+  } else if(slot.type===METAL_BAR){
+    itemAnchor.add(buildMetalBarMesh());
   } else if(slot.type===REEDS){
     itemAnchor.add(new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]));
   } else if(SOLID_TYPES.includes(slot.type)){
@@ -3173,6 +3347,8 @@ for(const key in WEAPON_CONFIG) WEAPON_CONFIG[key].itemType = Number(key);
 let lastAttackTime = 0;
 const MELEE_SWING_DURATION = 0.25;
 let meleeSwingTimer = 0;
+const PUNCH_SWING_DURATION = 0.25;
+let punchSwingTimer = 0;
 let pendingBurst = null; // {weapon, shotsRemaining, timer} - mid-burst shotgun state
 let darts = [];
 function shootProjectile(weapon){
@@ -3336,6 +3512,79 @@ function updateDarts(dt){
     rebuildMeshes();
     sendBlockBatch(brokenDirt);
   }
+}
+const FIST_DAMAGE = 2;
+const FIST_RANGE = 2.0;
+const FIST_COOLDOWN = 0.5;
+const FIST_KNOCKBACK = 1.3;
+let lastPunchTime = 0;
+// A bare-handed punch - weaker and shorter-ranged than any weapon, and
+// deliberately doesn't break blocks the way the War Club does (that's
+// what holding left-click to mine is for). Returns false if there was
+// nothing to punch, so the caller can fall through to normal mining
+// instead of swallowing the click.
+function tryPunchAttack(){
+  const now = performance.now();
+  if(now-lastPunchTime < FIST_COOLDOWN*1000) return false;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  let closestKind=null, closestTarget=null, closestDist=Infinity;
+  for(const en of enemies){
+    if(!en.alive) continue;
+    const toEnemy = new THREE.Vector3(en.x-player.x, (en.y+0.6)-(player.y+currentEyeHeight), en.z-player.z);
+    const dist = toEnemy.length();
+    if(dist>FIST_RANGE) continue;
+    toEnemy.normalize();
+    if(toEnemy.dot(dir)>0.6 && dist<closestDist){ closestDist=dist; closestTarget=en; closestKind='enemy'; }
+  }
+  if(multiplayer){
+    for(const [id,rp] of remotePlayers){
+      const pos = rp.group.position;
+      const toP = new THREE.Vector3(pos.x-player.x, (pos.y+0.8)-(player.y+currentEyeHeight), pos.z-player.z);
+      const dist = toP.length();
+      if(dist>FIST_RANGE) continue;
+      toP.normalize();
+      if(toP.dot(dir)>0.6 && dist<closestDist){ closestDist=dist; closestTarget={id,pos,rp}; closestKind='player'; }
+    }
+  }
+  if(bossState && bossState.alive){
+    const toBoss = new THREE.Vector3(bossState.x-player.x, (bossState.y+BOSS_HIT_Y)-(player.y+currentEyeHeight), bossState.z-player.z);
+    const dist = toBoss.length();
+    if(dist<=FIST_RANGE){
+      toBoss.normalize();
+      if(toBoss.dot(dir)>0.6 && dist<closestDist){ closestDist=dist; closestTarget=null; closestKind='boss'; }
+    }
+  }
+  if(!closestKind) return false;
+  lastPunchTime = now;
+  sfxSwing();
+  punchSwingTimer = PUNCH_SWING_DURATION;
+  if(closestKind==='enemy'){
+    hitEnemy(closestTarget, FIST_DAMAGE);
+    showHitMarker(false);
+    spawnBreakParticles(Math.floor(closestTarget.x),Math.floor(closestTarget.y+0.5),Math.floor(closestTarget.z), 0xff5555);
+    // enemies recompute their own position from AI each frame, so a smooth
+    // decaying push would just get overwritten immediately - an instant
+    // shove reads clearly instead
+    closestTarget.x += dir.x*FIST_KNOCKBACK;
+    closestTarget.z += dir.z*FIST_KNOCKBACK;
+  } else if(closestKind==='player'){
+    sendHit(closestTarget.id, FIST_DAMAGE, -1); // -1 = the reserved "Fists" sentinel for the kill feed
+    showHitMarker(false);
+    triggerHitEffect(closestTarget.rp);
+    spawnBreakParticles(Math.floor(closestTarget.pos.x),Math.floor(closestTarget.pos.y+0.5),Math.floor(closestTarget.pos.z), 0xff5555);
+    // can't move a remote player's position ourselves - ask their own
+    // client to apply the knockback to themselves, same trust model as
+    // every other bit of combat in this game
+    if(socket && socket.readyState===WebSocket.OPEN){
+      socket.send(JSON.stringify({type:'punchKnockback', targetId:closestTarget.id, dx:dir.x*FIST_KNOCKBACK, dz:dir.z*FIST_KNOCKBACK}));
+    }
+  } else if(closestKind==='boss'){
+    damageBoss(FIST_DAMAGE);
+    showHitMarker(false);
+    spawnBreakParticles(Math.floor(bossState.x),Math.floor(bossState.y+BOSS_HIT_Y),Math.floor(bossState.z), 0xaa2255);
+  }
+  return true;
 }
 function meleeAttack(weapon){
   const dir = new THREE.Vector3();
@@ -3751,7 +4000,7 @@ let nextLocalItemId = 1;
 const GROUND_ICON_TEX = {
   [DIRT]: TEX.dirt, [STONE]: TEX.stone, [SAND]: TEX.sand, [LEAVES]: TEX.leaves,
   [WATER]: TEX.water, [PLANKS]: TEX.planks, [REEDS]: TEX.reeds, [RUBBLE]: TEX.rubble,
-  [GRASS]: TEX.grassTop, [WOOD]: TEX.woodRing
+  [GRASS]: TEX.grassTop, [WOOD]: TEX.woodRing, [METAL_ORE]: TEX.metalOre
 };
 function buildGroundItemMesh(type){
   switch(type){
@@ -3769,6 +4018,7 @@ function buildGroundItemMesh(type){
     case SNIPER: return buildSniperMesh();
     case BANDAGE: return buildBandageMesh();
     case STIM_INJECTOR: return buildStimMesh();
+    case METAL_BAR: return buildMetalBarMesh();
     case POWERUP_CRATE: return new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), materials[POWERUP_CRATE]);
     default: {
       const tex = GROUND_ICON_TEX[type];
@@ -3920,6 +4170,24 @@ function updateCooldownRing(){
   ring.setAttribute('stroke-dashoffset', COOLDOWN_RING_CIRCUMFERENCE*(1-progress));
   ring.setAttribute('stroke', progress>=1 ? '#5fe07a' : '#ffdd55');
 }
+function updateArmorUI(){
+  const wrap = document.getElementById('armorBar');
+  wrap.innerHTML = '';
+  if(!hasArmor || armorHealth<=0){ wrap.style.display='none'; return; }
+  wrap.style.display='flex';
+  const shieldCount = 5, perShield = ARMOR_MAX_HEALTH/shieldCount; // 4 armor HP per shield
+  const fullShields = Math.floor(armorHealth/perShield);
+  const partial = (armorHealth%perShield)/perShield;
+  for(let i=0;i<shieldCount;i++){
+    const span = document.createElement('span');
+    span.className='shield';
+    span.textContent='\u{1F6E1}';
+    if(i<fullShields) span.style.opacity='1';
+    else if(i===fullShields && partial>0) span.style.opacity=String(Math.max(0.3,partial));
+    else span.style.opacity='0.15';
+    wrap.appendChild(span);
+  }
+}
 function updateHealthUI(){
   const wrap = document.getElementById('healthBar');
   wrap.innerHTML = '';
@@ -3944,10 +4212,29 @@ function flashDamageOverlay(){
     el.style.opacity='0';
   });
 }
+function sendArmorStateIfMultiplayer(){
+  if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
+    socket.send(JSON.stringify({type:'armorState', hasArmor}));
+  }
+}
+const ARMOR_MAX_HEALTH = 20;
+const ARMOR_DAMAGE_REDUCTION = 0.4;
+let hasArmor = false;
+let armorHealth = 0;
 function takeDamage(amount){
   if(amount<=0 || health<=0) return;
   if(respawnCountdownActive) return; // invulnerable while waiting to respawn
   if(multiplayer && (myEliminated || inSpectatorBox)) return; // already out of the match - no more damage until reset
+  if(hasArmor && armorHealth>0){
+    armorHealth = Math.max(0, armorHealth - amount); // the hit hurts the armor at full force, not the reduced amount
+    amount = amount * (1-ARMOR_DAMAGE_REDUCTION);
+    if(armorHealth<=0){
+      hasArmor = false;
+      flashMessage('Your armor broke!');
+      sendArmorStateIfMultiplayer();
+    }
+    updateArmorUI();
+  }
   health = Math.max(0, health-amount);
   noDamageTimer = 0;
   flashDamageOverlay();
@@ -4024,6 +4311,7 @@ function startRespawnCountdown(){
         spawnPlayer();
       }
       health = MAX_HEALTH;
+      hasArmor = false; armorHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
       updateHealthUI();
     } else {
       updateRespawnCountdownUI();
@@ -4734,6 +5022,7 @@ document.addEventListener('keydown', (e)=>{
       }
       break;
     case 'KeyE': toggleCraft(); break;
+    case 'KeyF': tryInteract(); break;
     case 'Backquote': toggleDev(); break;
     case 'KeyT': openChat(); break;
     case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
@@ -4780,7 +5069,7 @@ let attackHeld = false;
 canvas.addEventListener('mousedown', (e)=>{
   if(!pointerLocked) return;
   if(respawnCountdownActive || (multiplayer && (myEliminated || inSpectatorBox))) return; // spectating - no combat or building until the next match
-  if(bandageChannelTimer>0) return; // hold still while applying a bandage
+  if(bandageChannelTimer>0 || armorCraftTimer>0) return; // hold still while applying a bandage or crafting
   if(e.button===0){
     const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
     const weapon = WEAPON_CONFIG[equipped];
@@ -4797,7 +5086,7 @@ canvas.addEventListener('mousedown', (e)=>{
       }
       if(weapon.kind==='projectile') attackHeld = true; // hold the mouse down to keep firing
     } else {
-      mouseDown0=true;
+      if(!tryPunchAttack()) mouseDown0=true;
     }
   }
   if(e.button===2){
@@ -4914,6 +5203,22 @@ function spawnEnemyNearPlayer(){
   spawnEnemyAt(x,z);
   flashMessage('Spawned an enemy nearby');
 }
+function spawnFurnaceNearPlayer(){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const x = Math.floor(player.x + dir.x*3);
+  const z = Math.floor(player.z + dir.z*3);
+  const h = findSurfaceY(x,z);
+  if(getBlock(x,h+1,z)!==AIR){
+    flashMessage('No clear space there to place a furnace');
+    return;
+  }
+  const mesh = buildFurnaceMesh();
+  mesh.position.set(x+0.5, h+1, z+0.5);
+  scene.add(mesh);
+  furnaces.push({x:x+0.5, y:h+1, z:z+0.5, mesh, state:'idle', progress:0, smokeTimer:0});
+  flashMessage('Spawned a furnace nearby');
+}
 function countOfType(type){
   return slots.reduce((sum,s)=> s.type===type ? sum+s.count : sum, 0);
 }
@@ -4969,7 +5274,7 @@ function resetInventoryForNewRound(){
 const MINE_TIME = {
   [GRASS]:0.3, [DIRT]:0.25, [SAND]:0.25, [LEAVES]:0.2,
   [WOOD]:0.6, [PLANKS]:0.5, [STONE]:1.1, [REEDS]:0.15, [WATER]:0.2, [LOOT_CRATE]:0.6, [POWERUP_CRATE]:0.4, [MED_CRATE]:0.4,
-  [RUBBLE]:0.5, [SNOW]:0.2, [METAL]:1.4, [GLASS]:0.2, [CLEAR_GLASS]:0.2
+  [RUBBLE]:0.5, [SNOW]:0.2, [METAL]:1.4, [GLASS]:0.2, [CLEAR_GLASS]:0.2, [METAL_ORE]:1.6
 };
 const PICKAXE_SPEED_MULT = 2.5;
 function effectiveMineTime(type){
@@ -4987,7 +5292,7 @@ function updateMiningBar(){
   bar.style.width = Math.min(100, (mining.progress/req)*100) + '%';
 }
 function updateMining(dt){
-  if(!mouseDown0 || !pointerLocked || paused || craftOpen || bandageChannelTimer>0){
+  if(!mouseDown0 || !pointerLocked || paused || craftOpen || bandageChannelTimer>0 || armorCraftTimer>0){
     if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
     return;
   }
@@ -5222,7 +5527,9 @@ function renderDevPanel(){
   powerBtn.addEventListener('click', ()=>{ spawnPowerCrateNearPlayer(); });
   const enemyBtn = document.createElement('div'); enemyBtn.className='btn'; enemyBtn.textContent='Enemy';
   enemyBtn.addEventListener('click', ()=>{ spawnEnemyNearPlayer(); });
-  spawnBtns.appendChild(crateBtn); spawnBtns.appendChild(powerBtn); spawnBtns.appendChild(enemyBtn);
+  const furnaceBtn = document.createElement('div'); furnaceBtn.className='btn'; furnaceBtn.textContent='Furnace';
+  furnaceBtn.addEventListener('click', ()=>{ spawnFurnaceNearPlayer(); });
+  spawnBtns.appendChild(crateBtn); spawnBtns.appendChild(powerBtn); spawnBtns.appendChild(enemyBtn); spawnBtns.appendChild(furnaceBtn);
   spawnRow.appendChild(spawnBtns);
   list.appendChild(spawnRow);
 
@@ -5329,6 +5636,7 @@ const RECIPES = [
   { ingredients:[{type:CARBINE,count:2}], results:[{type:RIFLE,count:1}], desc:'2 Carbines &rarr; 1 Rifle (trade up)' },
   { ingredients:[{type:RIFLE,count:2}], results:[{type:SNIPER,count:1}], desc:'2 Rifles &rarr; 1 Sniper Rifle (trade up)' },
   { ingredients:[{type:WAR_CLUB,count:2}], results:[{type:ROCKET_LAUNCHER,count:1}], desc:'2 War Clubs &rarr; 1 Rocket Launcher (trade up)' },
+  { ingredients:[{type:METAL_BAR,count:5}], results:[{type:ARMOR_HELMET,count:1}], desc:'5 Metal Bars &rarr; 1 Armor Helmet (40% damage reduction until it breaks)', craftTime:1.0 },
 ];
 function isRecipeCraftable(recipe){
   return recipe.ingredients.every(ing => countOfType(ing.type) >= ing.count);
@@ -5349,6 +5657,17 @@ function craftRecipe(recipe){
     sfxDenied();
     return;
   }
+  if(recipe.craftTime){
+    if(armorCraftTimer>0 || bandageChannelTimer>0){ flashMessage('Already busy'); return; }
+    for(const ing of recipe.ingredients){
+      for(let i=0;i<ing.count;i++) removeOneOfType(ing.type);
+    }
+    armorCraftTimer = recipe.craftTime;
+    pendingCraftResults = recipe.results;
+    renderInventoryPanel(); updateHotbarUI();
+    flashMessage('Crafting '+craftedResultText(recipe.results)+'...');
+    return;
+  }
   for(const ing of recipe.ingredients){
     for(let i=0;i<ing.count;i++) removeOneOfType(ing.type);
   }
@@ -5358,6 +5677,30 @@ function craftRecipe(recipe){
   renderInventoryPanel(); updateHotbarUI();
   flashMessage('Crafted '+craftedResultText(recipe.results)+'!');
   sfxCraftSuccess();
+}
+let armorCraftTimer = 0;
+let pendingCraftResults = null;
+function updateArmorCraft(dt){
+  if(armorCraftTimer<=0) return;
+  armorCraftTimer = Math.max(0, armorCraftTimer-dt);
+  if(armorCraftTimer<=0 && pendingCraftResults){
+    let equippedArmor = false;
+    for(const res of pendingCraftResults){
+      if(res.type===ARMOR_HELMET){
+        hasArmor = true;
+        armorHealth = ARMOR_MAX_HEALTH;
+        updateArmorUI();
+        equippedArmor = true;
+        sendArmorStateIfMultiplayer();
+      } else {
+        for(let i=0;i<res.count;i++) addToInventory(res.type);
+      }
+    }
+    renderInventoryPanel(); updateHotbarUI();
+    flashMessage(equippedArmor ? 'Armor equipped!' : ('Crafted '+craftedResultText(pendingCraftResults)+'!'));
+    sfxCraftSuccess();
+    pendingCraftResults = null;
+  }
 }
 
 // ---------- Pause menu ----------
@@ -5528,6 +5871,7 @@ function newWorld(){
   spawnPlayer();
   slots.forEach(s=>{ s.type=null; s.count=0; });
   health = MAX_HEALTH;
+  hasArmor = false; armorHealth = 0; updateArmorUI();
   noDamageTimer=0; regenTimer=0;
   for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
   spawnInitialEnemies();
@@ -5544,6 +5888,24 @@ let socket = null;
 let myNetId = null;
 let multiplayer = false;
 let myPlayerName = 'Player';
+// Tier 1 persistent identity: a random ID stored in localStorage, kept
+// across sessions on this browser. No password, no server-side account -
+// just enough to let the server remember a skin tone and lifetime stats
+// for "this browser" between visits. Clearing site data loses it, same as
+// any localStorage-based identity.
+function getOrCreatePersistentId(){
+  try{
+    let id = localStorage.getItem('moplepvp_playerId');
+    if(!id){
+      id = 'p-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+      localStorage.setItem('moplepvp_playerId', id);
+    }
+    return id;
+  }catch(e){
+    return null; // localStorage unavailable (privacy mode, etc.) - play without persistence rather than crashing
+  }
+}
+const myPersistentId = getOrCreatePersistentId();
 const remotePlayers = new Map(); // id -> {group, name, target:{x,y,z,yaw}}
 
 // Match state is server-authoritative - the client just displays whatever
@@ -5582,14 +5944,8 @@ function colorForId(id){
   const palette=[0xe05353,0x53a0e0,0x5be07a,0xe0c353,0xb057e0,0xe0834f,0x53d9e0];
   return palette[id % palette.length];
 }
-// Randomized but per-player-consistent skin tones (same player looks the
-// same to everyone) - a real, realistic range of human skin tones, until
-// there's an actual account/login system to let people pick their own.
-function skinToneForId(id){
-  return SKIN_TONES[(id*3+1) % SKIN_TONES.length]; // offset so it doesn't just mirror colorForId's own pattern
-}
 const NAME_TAG_RANGE = 5; // name only visible this close, and never at all while crouched
-function createRemotePlayer(id,name){
+function createRemotePlayer(id,name,skinToneIndex){
   const group = new THREE.Group();
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(0.5,1.1,0.3),
@@ -5599,10 +5955,17 @@ function createRemotePlayer(id,name){
   group.add(body);
   const head = new THREE.Mesh(
     new THREE.BoxGeometry(0.38,0.38,0.38),
-    new THREE.MeshLambertMaterial({color:skinToneForId(id)})
+    new THREE.MeshLambertMaterial({color:SKIN_TONES[typeof skinToneIndex==='number' ? skinToneIndex : (id*3+1)%SKIN_TONES.length]})
   );
   head.position.y=1.5;
   group.add(head);
+  const helmetMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.42,0.22,0.42),
+    new THREE.MeshLambertMaterial({color:0x8f8f8f})
+  );
+  helmetMesh.position.y = 0.28; // relative to the head, sits on top of it
+  helmetMesh.visible = false;
+  head.add(helmetMesh);
   const heldAnchor = new THREE.Group();
   heldAnchor.position.set(0.32, 1.02, -0.15);
   group.add(heldAnchor);
@@ -5610,7 +5973,7 @@ function createRemotePlayer(id,name){
   group.add(nameSprite);
   scene.add(group);
   return {
-    group, name, heldAnchor, nameSprite, heldType:null, crouching:false, targetScaleY:1,
+    id, group, name, heldAnchor, nameSprite, helmetMesh, heldType:null, crouching:false, targetScaleY:1,
     target:{x:group.position.x,y:0,z:group.position.z,yaw:0}, flashTimer:0, bumpTimer:0
   };
 }
@@ -5630,6 +5993,7 @@ function buildRemoteHeldItemMesh(type){
     case SNIPER: return buildSniperMesh();
     case BANDAGE: return buildBandageMesh();
     case STIM_INJECTOR: return buildStimMesh();
+    case METAL_BAR: return buildMetalBarMesh();
     case REEDS: return new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]);
     default:
       if(type!==null && type!==undefined && SOLID_TYPES.includes(type)){
@@ -5878,14 +6242,15 @@ function handleNetMessage(msg){
       inSpectatorBox = false;
       for(const id of Array.from(remotePlayers.keys())) removeRemotePlayer(id);
       if(msg.players) for(const p of msg.players){
-        const rp = createRemotePlayer(p.id, p.name);
+        const rp = createRemotePlayer(p.id, p.name, p.skinToneIndex);
         rp.group.position.set(p.x,p.y,p.z);
         rp.target = {x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch||0};
         updateRemoteHeldItem(rp, p.heldType);
         rp.crouching = !!p.crouching;
+        if(rp.helmetMesh) rp.helmetMesh.visible = !!p.hasArmor;
         remotePlayers.set(p.id, rp);
       }
-      socket.send(JSON.stringify({type:'setName', name:myPlayerName}));
+      socket.send(JSON.stringify({type:'setName', name:myPlayerName, persistentId:myPersistentId}));
       started = true;
       requestPointerLockSafe();
       updateMpStatus();
@@ -5895,10 +6260,20 @@ function handleNetMessage(msg){
       console.error('Error while joining multiplayer world:', e);
       flashMessage('Something went wrong joining the server - check the console for details, or try again');
     }
+  } else if(msg.type==='armorState'){
+    const rp = remotePlayers.get(msg.id);
+    if(rp && rp.helmetMesh) rp.helmetMesh.visible = !!msg.hasArmor;
+  } else if(msg.type==='identified'){
+    if(typeof msg.skinToneIndex==='number'){
+      arm.material.color.set(SKIN_TONES[msg.skinToneIndex]);
+    }
+    if(myPersistentId){
+      flashMessage('Welcome back! Lifetime: '+msg.lifetimeKills+' kills, '+msg.lifetimeDeaths+' deaths, '+msg.lifetimeWins+' round wins');
+    }
   } else if(msg.type==='playerJoined'){
     if(msg.id!==myNetId){
       if(remotePlayers.has(msg.id)) remotePlayers.get(msg.id).name = msg.name;
-      else remotePlayers.set(msg.id, createRemotePlayer(msg.id, msg.name));
+      else remotePlayers.set(msg.id, createRemotePlayer(msg.id, msg.name, msg.skinToneIndex));
       updateMpStatus();
     }
   } else if(msg.type==='playerLeft'){
@@ -5954,6 +6329,7 @@ function handleNetMessage(msg){
     flashMessage('Round '+matchRound+' of '+matchRoundsPerSeries+' - good luck!');
     spawnPlayer();
     health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
+    hasArmor = false; armorHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
     updateHealthUI();
     resetInventoryForNewRound();
     // Safe to compute independently on every client, no extra network
@@ -5993,6 +6369,7 @@ function handleNetMessage(msg){
     setBossState(msg.boss || null);
     spawnPlayer();
     health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
+    hasArmor = false; armorHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
     slots.forEach(s=>{ s.type=null; s.count=0; });
     rebuildMeshes(); updateHotbarUI(); updateHealthUI();
     flashMessage('Keeping this map - same destruction, fresh round!');
@@ -6008,6 +6385,7 @@ function handleNetMessage(msg){
     setBossState(msg.boss || null);
     spawnPlayer();
     health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
+    hasArmor = false; armorHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
     slots.forEach(s=>{ s.type=null; s.count=0; });
     rebuildMeshes();
     updateHotbarUI(); updateHealthUI();
@@ -6017,6 +6395,9 @@ function handleNetMessage(msg){
     if(msg.killerName && typeof msg.x==='number'){
       spawnBloodBurst(msg.x, msg.y+0.9, msg.z);
     }
+  } else if(msg.type==='punchKnockback'){
+    player.x += msg.dx;
+    player.z += msg.dz;
   } else if(msg.type==='hitByOther'){
     lastAttackerName = msg.fromName;
     lastAttackerId = msg.from;
@@ -6290,6 +6671,8 @@ function animate(){
     const bobX = Math.sin(handBobPhase) * 0.01 * handBobAmount;
     const bobY = Math.abs(Math.sin(handBobPhase)) * 0.016 * handBobAmount;
     updateBandageChannel(dt);
+    updateArmorCraft(dt);
+    updateFurnaces(dt);
     updateCooldownRing();
     const targetFOV = isAiming ? getZoomFOV() : BASE_FOV;
     if(Math.abs(camera.fov-targetFOV) > 0.01){
@@ -6309,6 +6692,14 @@ function animate(){
     } else {
       itemAnchor.rotation.x = 0;
       itemAnchor.rotation.z = 0;
+    }
+    if(punchSwingTimer>0){
+      punchSwingTimer = Math.max(0, punchSwingTimer-dt);
+      const punchFrac = 1 - (punchSwingTimer/PUNCH_SWING_DURATION);
+      const punchArc = Math.sin(punchFrac*Math.PI); // small dip-and-return, on top of the hand's normal resting tilt
+      handGroup.rotation.x = 0.2 - punchArc*0.35;
+    } else {
+      handGroup.rotation.x = 0.2;
     }
 
     noDamageTimer += dt;
@@ -6341,7 +6732,7 @@ function animate(){
 
     if(canAct){
       updateMining(dt);
-      if(attackHeld && bandageChannelTimer<=0){
+      if(attackHeld && bandageChannelTimer<=0 && armorCraftTimer<=0){
         const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
         const weapon = WEAPON_CONFIG[equipped];
         if(weapon && weapon.kind==='projectile'){
