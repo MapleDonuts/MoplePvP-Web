@@ -181,6 +181,19 @@
     position:fixed; inset:0; background:#a00000; opacity:0;
     pointer-events:none; z-index:30;
   }
+  #lowHealthVignette {
+    position:fixed; inset:0; pointer-events:none; z-index:29; opacity:0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(150,0,0,0.65) 100%);
+    transition: opacity 0.3s;
+  }
+  #killConfirm {
+    position:fixed; top:38%; left:50%; transform:translate(-50%,-50%) scale(0.85);
+    color:#ffcf4d; font-size:22px; font-weight:bold; letter-spacing:1.5px;
+    text-shadow: 0 0 10px rgba(255,70,0,0.85), 2px 2px 2px #000;
+    z-index:22; opacity:0; pointer-events:none;
+    transition: opacity 0.25s, transform 0.25s;
+  }
+  #killConfirm.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
   #hitMarker {
     position:fixed; top:50%; left:50%; width:28px; height:28px;
     transform:translate(-50%,-50%); pointer-events:none; z-index:31;
@@ -261,7 +274,7 @@
     display:flex; gap:2px; z-index:10;
   }
   #armorBar .shield {
-    font-size:18px; color:#b8bec4; text-shadow:1px 1px 1px #000, -1px -1px 1px #000;
+    display:inline-flex; filter: drop-shadow(1px 1px 1px #000) drop-shadow(-1px -1px 1px #000);
   }
   #bossHealthBar {
     position:fixed; top:16px; left:50%; transform:translateX(-50%);
@@ -308,6 +321,8 @@
 <div id="matchBanner"></div>
 <div id="hotbar"></div>
 <div id="damageFlash"></div>
+<div id="lowHealthVignette"></div>
+<div id="killConfirm"></div>
 <div id="hitMarker"></div>
 <div id="killFeed"></div>
 <div id="respawnCountdown"><div class="big"></div><div class="label">Respawning...</div></div>
@@ -400,7 +415,7 @@
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
-  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.30</div>
+  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.31</div>
 </div>
 
 <div id="chatLog"></div>
@@ -586,7 +601,7 @@ const BLOCK_COLORS = {
   [GRASS]:0x5a9b3c, [DIRT]:0x6b4a2c, [STONE]:0x8a8a8a, [SAND]:0xdccb86,
   [WOOD]:0x6b4423, [LEAVES]:0x3c6b2a, [WATER]:0x3a6fd8, [PLANKS]:0xba8a54,
   [STONE_PICKAXE]:0xb0b0b0, [REEDS]:0x8fae4a, [BLOW_PIPE]:0x9c7a4a,
-  [METAL_ORE]:0x8a8a8a, [METAL_BAR]:0xd9d9d9,
+  [METAL_ORE]:0x8a8a8a, [METAL_BAR]:0xd9d9d9, [ARMOR_HELMET]:0x8f8f8f,
   [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [GRENADE]:0x3a4a3a,
   [POWERUP_CRATE]:0x2a6f8a, [ROCKET_LAUNCHER]:0x555555, [RUBBLE]:0x9c8570,
   [DOUBLE_BARREL]:0x4a3520, [PUMP_SHOTGUN]:0x333333, [RIFLE]:0xc9a227, [SNOW]:0xf0f5fa, [METAL]:0x5a6570,
@@ -1783,15 +1798,15 @@ function sfxShootPistol(pos){
   playTone({freq:595, freqEnd:212, duration:0.07, type:'square', volume:0.16, pos});
 }
 function sfxShootRifle(pos){
-  playNoise({duration:0.09, volume:0.34, filterType:'highpass', filterFreq:1275, pos});
-  playTone({freq:765, duration:0.05, type:'square', volume:0.17, pos});
+  playNoise({duration:0.09, volume:0.46, filterType:'highpass', filterFreq:1275, pos});
+  playTone({freq:765, duration:0.05, type:'square', volume:0.24, pos});
 }
 function sfxShootSniper(pos){
   // heavier and bassier than the other guns on purpose - this one weapon
   // should sound like it's actually punching through things
-  playNoise({duration:0.18, volume:0.4, filterType:'lowpass', filterFreq:550, pos});
-  playTone({freq:65, freqEnd:28, duration:0.28, type:'sine', volume:0.32, attack:0.002, pos});
-  playNoise({duration:0.05, volume:0.15, filterType:'highpass', filterFreq:2200, pos});
+  playNoise({duration:0.18, volume:0.52, filterType:'lowpass', filterFreq:550, pos});
+  playTone({freq:65, freqEnd:28, duration:0.28, type:'sine', volume:0.42, attack:0.002, pos});
+  playNoise({duration:0.05, volume:0.2, filterType:'highpass', filterFreq:2200, pos});
 }
 function sfxShotgunBlast(pos){
   playNoise({duration:0.2, volume:0.4, filterType:'lowpass', filterFreq:1530, pos});
@@ -4179,13 +4194,27 @@ function updateArmorUI(){
   const fullShields = Math.floor(armorHealth/perShield);
   const partial = (armorHealth%perShield)/perShield;
   for(let i=0;i<shieldCount;i++){
+    let fillOpacity;
+    if(i<fullShields) fillOpacity = 1;
+    else if(i===fullShields && partial>0) fillOpacity = Math.max(0.3, partial);
+    else fillOpacity = 0.12;
     const span = document.createElement('span');
     span.className='shield';
-    span.textContent='\u{1F6E1}';
-    if(i<fullShields) span.style.opacity='1';
-    else if(i===fullShields && partial>0) span.style.opacity=String(Math.max(0.3,partial));
-    else span.style.opacity='0.15';
+    span.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20">'
+      + '<path d="M12 2 L4 5 V11 C4 16.5 7.5 20 12 22 C16.5 20 20 16.5 20 11 V5 Z" '
+      + 'fill="rgba(200,206,212,'+fillOpacity+')" stroke="#1c1c1c" stroke-width="1.3"/></svg>';
     wrap.appendChild(span);
+  }
+}
+function updateLowHealthVignette(){
+  const el = document.getElementById('lowHealthVignette');
+  const frac = health/MAX_HEALTH;
+  const threshold = 0.5; // starts appearing below 50% health
+  if(frac >= threshold){
+    el.style.opacity = '0';
+  } else {
+    const intensity = 1 - (frac/threshold);
+    el.style.opacity = String(Math.min(0.85, intensity*0.85));
   }
 }
 function updateHealthUI(){
@@ -4202,6 +4231,7 @@ function updateHealthUI(){
     else span.style.opacity='0.15';
     wrap.appendChild(span);
   }
+  updateLowHealthVignette();
 }
 function flashDamageOverlay(){
   const el = document.getElementById('damageFlash');
@@ -4417,9 +4447,10 @@ const ENEMY_SPAWN_COUNT = 14;
 const ENEMY_TOUCH_DAMAGE = 3;
 const ZOMBIE_TOUCH_DAMAGE = 4.5;
 const ENEMY_TOUCH_INTERVAL = 1.2;
+const ENEMY_TOUCH_KNOCKBACK = 0.9; // a physical shove away from whatever hit you, horizontal only
 const ENEMY_RESPAWN_DELAY = [15000, 25000]; // ms range
 const ENEMY_HALF_W = 0.28, ENEMY_HEIGHT = 0.9;
-const ENEMY_GRAVITY = -24, ENEMY_JUMP_SPEED = 7.2, ENEMY_SPEED = 1.3;
+const ENEMY_GRAVITY = -24, ENEMY_JUMP_SPEED = JUMP_SPEED*1.15, ENEMY_SPEED = 1.3;
 const ENEMY_AGGRO_RANGE = 10; // within this distance, an enemy stops wandering and chases the player
 const ZOMBIE_CHANCE = 0.25;
 const ZOMBIE_MAX_HEALTH = 20; // set directly rather than as a multiplier, for exact tuning
@@ -4730,7 +4761,7 @@ function damageEnemy(enemy, amount){
   if(enemy.health<=0){
     enemy.alive=false;
     scene.remove(enemy.group);
-    flashMessage('Enemy defeated!');
+    showKillConfirm('ENEMY DEFEATED');
     sfxEnemyDeath();
     const delay = ENEMY_RESPAWN_DELAY[0] + Math.random()*(ENEMY_RESPAWN_DELAY[1]-ENEMY_RESPAWN_DELAY[0]);
     setTimeout(()=>respawnEnemy(enemy), delay);
@@ -4827,7 +4858,6 @@ function syncEnemiesFromServer(list){
       serverX: e.x, serverZ: e.z,
       health: e.health, alive: e.alive, isZombie: !!e.isZombie,
       flashTimer: 0, bumpTimer: 0, touchCooldown: 0,
-      // unused in multiplayer, kept so nothing else has to special-case the shape:
       velY: 0, onGround: true, wanderDir: 0, wanderTimer: 0
     });
   }
@@ -4846,7 +4876,7 @@ function applyServerEnemyHealth(id, health, alive){
   en.alive = alive;
   if(wasAlive){
     triggerHitEffect(en);
-    if(!alive){ scene.remove(en.group); flashMessage('Enemy defeated!'); sfxEnemyDeath(); }
+    if(!alive){ scene.remove(en.group); showKillConfirm('ENEMY DEFEATED'); sfxEnemyDeath(); }
   }
 }
 function applyServerEnemyRespawn(id, x, z, isZombie){
@@ -4879,10 +4909,26 @@ function updateEnemies(dt){
       const posLerp = Math.min(1, dt*4);
       en.x += (en.serverX-en.x)*posLerp;
       en.z += (en.serverZ-en.z)*posLerp;
-      const groundY = findSurfaceY(Math.floor(en.x), Math.floor(en.z));
-      const vLerpDelta = (groundY-en.y)*Math.min(1, dt*6);
-      const maxVerticalStep = 4*dt; // caps how fast it can glide up/down a steep face
-      en.y += Math.max(-maxVerticalStep, Math.min(maxVerticalStep, vLerpDelta));
+      // Horizontal position still comes from the server (it owns the AI
+      // decision of where to go), but vertical movement is local, real jump
+      // physics now - the same collision-based approach singleplayer already
+      // used. No more smoothly gliding up/down terrain: if the horizontal
+      // lerp above pushes them against a step, that shows up as a collision
+      // right here, and they have to actually jump to clear it.
+      if(en.onGround && checkCollisionBox(en.x, en.y, en.z, ENEMY_HALF_W, ENEMY_HEIGHT)){
+        const canJump = !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
+        if(canJump){ en.velY = ENEMY_JUMP_SPEED; en.onGround = false; }
+      }
+      en.velY += ENEMY_GRAVITY*dt;
+      if(en.velY < -30) en.velY = -30;
+      const newY = en.y + en.velY*dt;
+      if(checkCollisionBox(en.x, newY, en.z, ENEMY_HALF_W, ENEMY_HEIGHT)){
+        if(en.velY<0) en.onGround = true;
+        en.velY = 0;
+      } else {
+        en.y = newY;
+        en.onGround = false;
+      }
       const dx=en.serverX-en.x, dz=en.serverZ-en.z;
       if(Math.abs(dx)>0.02 || Math.abs(dz)>0.02) en.group.rotation.y = Math.atan2(dx,dz);
       en.group.position.set(en.x, en.y, en.z);
@@ -4893,6 +4939,9 @@ function updateEnemies(dt){
       if(dist<0.9 && en.touchCooldown<=0){
         takeDamage(en.isZombie ? ZOMBIE_TOUCH_DAMAGE : ENEMY_TOUCH_DAMAGE);
         en.touchCooldown = ENEMY_TOUCH_INTERVAL;
+        const pushDist = Math.sqrt(tdx*tdx+tdz*tdz) || 1;
+        player.x -= (tdx/pushDist)*ENEMY_TOUCH_KNOCKBACK;
+        player.z -= (tdz/pushDist)*ENEMY_TOUCH_KNOCKBACK;
       }
     }
     return;
@@ -4954,10 +5003,25 @@ function updateEnemies(dt){
     if(dist<0.9 && en.touchCooldown<=0){
       takeDamage(en.isZombie ? ZOMBIE_TOUCH_DAMAGE : ENEMY_TOUCH_DAMAGE);
       en.touchCooldown = ENEMY_TOUCH_INTERVAL;
+      const pushDist = Math.sqrt(tdx*tdx+tdz*tdz) || 1;
+      player.x -= (tdx/pushDist)*ENEMY_TOUCH_KNOCKBACK;
+      player.z -= (tdz/pushDist)*ENEMY_TOUCH_KNOCKBACK;
     }
   }
 }
 
+const FURNACE_COLLISION_HALF_W = 0.85; // matches the visual base's ~1.7-wide footprint
+const FURNACE_COLLISION_HEIGHT = 2.25; // matches base+chimney height
+function checkFurnaceCollision(px,py,pz,halfW,height){
+  for(const f of furnaces){
+    if(Math.abs(px-f.x) < halfW+FURNACE_COLLISION_HALF_W &&
+       Math.abs(pz-f.z) < halfW+FURNACE_COLLISION_HALF_W &&
+       py < f.y+FURNACE_COLLISION_HEIGHT && py+height > f.y){
+      return true;
+    }
+  }
+  return false;
+}
 function checkCollisionBox(px,py,pz,halfW,height){
   const minX=Math.floor(px-halfW), maxX=Math.floor(px+halfW);
   const minY=Math.floor(py), maxY=Math.floor(py+height);
@@ -4966,6 +5030,7 @@ function checkCollisionBox(px,py,pz,halfW,height){
     for(let y=minY;y<=maxY;y++)
       for(let z=minZ;z<=maxZ;z++)
         if(isSolid(getBlock(x,y,z))) return true;
+  if(checkFurnaceCollision(px,py,pz,halfW,height)) return true;
   return false;
 }
 function checkCollision(px,py,pz){
@@ -5737,6 +5802,17 @@ document.getElementById('btnNew').addEventListener('click', ()=>{
 
 // ---------- Messages ----------
 let msgTimeout=null;
+let killConfirmTimeout = null;
+function showKillConfirm(text){
+  const el = document.getElementById('killConfirm');
+  el.textContent = text;
+  el.classList.remove('show');
+  requestAnimationFrame(()=>{
+    el.classList.add('show');
+    if(killConfirmTimeout) clearTimeout(killConfirmTimeout);
+    killConfirmTimeout = setTimeout(()=> el.classList.remove('show'), 1200);
+  });
+}
 function flashMessage(text){
   const el = document.getElementById('message');
   el.textContent = text;
@@ -6394,6 +6470,9 @@ function handleNetMessage(msg){
     addKillFeedEntry(msg.killerName, msg.victimName, msg.killerWeapon);
     if(msg.killerName && typeof msg.x==='number'){
       spawnBloodBurst(msg.x, msg.y+0.9, msg.z);
+    }
+    if(msg.killerId===myNetId){
+      showKillConfirm('KILLED '+msg.victimName.toUpperCase());
     }
   } else if(msg.type==='punchKnockback'){
     player.x += msg.dx;
