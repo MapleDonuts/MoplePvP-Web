@@ -392,7 +392,7 @@
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
-  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.282</div>
+  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.29</div>
 </div>
 
 <div id="chatLog"></div>
@@ -3963,7 +3963,29 @@ const RESPAWN_COUNTDOWN_SECONDS = 3;
 let respawnCountdownActive = false;
 let respawnCountdownRemaining = 0;
 let respawnCountdownTimerId = null;
+function dropHalfInventoryOnDeath(){
+  const filledSlots = [];
+  for(let i=0;i<slots.length;i++){
+    if(slots[i].type && slots[i].count>0) filledSlots.push(i);
+  }
+  if(filledSlots.length===0) return;
+  for(let i=filledSlots.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [filledSlots[i],filledSlots[j]] = [filledSlots[j],filledSlots[i]];
+  }
+  const dropCount = Math.max(1, Math.ceil(filledSlots.length/2));
+  const toDrop = filledSlots.slice(0, dropCount);
+  for(const i of toDrop){
+    const s = slots[i];
+    const dx = (Math.random()-0.5)*1.5, dz = (Math.random()-0.5)*1.5;
+    dropItemOnGround(player.x+dx, player.y+0.3, player.z+dz, s.type, s.count);
+    s.type = null; s.count = 0;
+  }
+  updateHotbarUI();
+  if(craftOpen) renderInventoryPanel();
+}
 function respawnFromDeath(){
+  dropHalfInventoryOnDeath();
   // credit whoever hit us most recently, but only if it was recent enough
   // that it's plausibly what actually killed us (not, say, someone who
   // grazed us 20 seconds ago before we fell off a cliff)
@@ -5144,6 +5166,38 @@ function toggleDev(){
 function renderDevPanel(){
   const list = document.getElementById('devList');
   list.innerHTML='';
+  const adminRow = document.createElement('div');
+  adminRow.className='devRow';
+  adminRow.innerHTML = `<div class="desc">Admin (multiplayer only)${multiplayer?'':' - connect to a server first'}</div>`;
+  const adminBtns = document.createElement('div');
+  adminBtns.className='btns';
+  const skipBtn = document.createElement('div'); skipBtn.className='btn'; skipBtn.textContent='Skip Phase';
+  skipBtn.addEventListener('click', ()=>{ sendChat('/skip'); });
+  const restartBtn = document.createElement('div'); restartBtn.className='btn'; restartBtn.textContent='Restart Round';
+  restartBtn.addEventListener('click', ()=>{ sendChat('/restart'); });
+  adminBtns.appendChild(skipBtn); adminBtns.appendChild(restartBtn);
+  adminRow.appendChild(adminBtns);
+  list.appendChild(adminRow);
+
+  const mapRow = document.createElement('div');
+  mapRow.className='devRow';
+  mapRow.innerHTML = `<div class="desc">New map</div>`;
+  const mapBtns = document.createElement('div');
+  mapBtns.className='btns';
+  const mapSelect = document.createElement('select');
+  mapSelect.style.cssText = 'padding:4px; border-radius:4px; border:1px solid #555; background:#111; color:#fff; margin-right:4px;';
+  const randomOpt = document.createElement('option'); randomOpt.value=''; randomOpt.textContent='Random';
+  mapSelect.appendChild(randomOpt);
+  for(const b of Object.keys(BIOME_LABELS)){
+    const opt = document.createElement('option'); opt.value=b; opt.textContent=BIOME_LABELS[b];
+    mapSelect.appendChild(opt);
+  }
+  const newMapBtn = document.createElement('div'); newMapBtn.className='btn'; newMapBtn.textContent='New Map';
+  newMapBtn.addEventListener('click', ()=>{ sendChat('/newmap'+(mapSelect.value?(' '+mapSelect.value):'')); });
+  mapBtns.appendChild(mapSelect); mapBtns.appendChild(newMapBtn);
+  mapRow.appendChild(mapBtns);
+  list.appendChild(mapRow);
+
   const healthRow = document.createElement('div');
   healthRow.className='devRow';
   healthRow.innerHTML = `<div class="desc">Health (${health}/${MAX_HEALTH})</div>`;
