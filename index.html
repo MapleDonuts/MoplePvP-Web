@@ -102,6 +102,16 @@
     width:100%; box-sizing:border-box; padding:8px; border-radius:5px;
     border:1px solid #666; background:rgba(0,0,0,0.75); color:#fff; font-size:13px;
   }
+  #chatHistoryPanel {
+    position:fixed; left:16px; bottom:152px; width:320px; max-height:280px;
+    overflow-y:auto; z-index:60; display:none;
+    background:rgba(10,10,15,0.88); border:1px solid rgba(255,255,255,0.2);
+    border-radius:6px; padding:6px 8px;
+  }
+  .chatHistLine {
+    color:#ddd; font-size:12px; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.06);
+    word-wrap:break-word;
+  }
 
   #craftPanel {
     position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -429,10 +439,11 @@
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
-  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.31</div>
+  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.34</div>
 </div>
 
 <div id="chatLog"></div>
+<div id="chatHistoryPanel"></div>
 <div id="chatInputWrap"><input id="chatInput" type="text" maxlength="200" placeholder="Press Enter to send, Esc to cancel"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -3048,18 +3059,39 @@ function buildSlingMesh(){
 }
 function buildSwordMesh(){
   const group = new THREE.Group();
-  const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.16,0.05), new THREE.MeshLambertMaterial({color:0x5a3a20}));
-  hilt.position.set(0,-0.05,0);
-  group.add(hilt);
-  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.03,0.03), new THREE.MeshLambertMaterial({color:0x8a7a3a}));
-  guard.position.set(0,0.04,0);
+  const pommelMat = new THREE.MeshLambertMaterial({color:0x3a2a18});
+  const gripMat = new THREE.MeshLambertMaterial({color:0x5a3a20});
+  const guardMat = new THREE.MeshLambertMaterial({color:0x9a8340});
+  const bladeMat = new THREE.MeshStandardMaterial({color:0xd9d9d9, metalness:0.6, roughness:0.3});
+  // Built as a simple stack from bottom (pommel) to top (blade tip) - each
+  // piece just sits at its own Y position, no combined rotations to get
+  // wrong the way the pickaxe head did earlier.
+  const pommel = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.05,0.06), pommelMat);
+  pommel.position.set(0,-0.375,0);
+  group.add(pommel);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.045,0.22,0.045), gripMat);
+  grip.position.set(0,-0.24,0);
+  group.add(grip);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.035,0.035), guardMat);
+  guard.position.set(0,-0.1125,0);
   group.add(guard);
-  const blade = new THREE.Mesh(
-    new THREE.BoxGeometry(0.06,0.48,0.025),
-    new THREE.MeshStandardMaterial({color:0xd9d9d9, metalness:0.6, roughness:0.3})
-  );
-  blade.position.set(0,0.29,0);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.65,0.03), bladeMat);
+  blade.position.set(0,0.23,0);
   group.add(blade);
+  const tipShape = new THREE.Shape();
+  tipShape.moveTo(-0.035,0);
+  tipShape.lineTo(0.035,0);
+  tipShape.lineTo(0,0.18);
+  tipShape.lineTo(-0.035,0);
+  const tipGeo = new THREE.ExtrudeGeometry(tipShape, {depth:0.03, bevelEnabled:false});
+  const bladeTip = new THREE.Mesh(tipGeo, bladeMat);
+  // The shape's own origin sits at the base of the triangle, not its
+  // center, so this mesh is positioned directly at the blade's top
+  // (y=0.555) rather than at a center-offset position like the cone
+  // version needed. The z-offset centers the extruded depth to match the
+  // blade's own centered depth.
+  bladeTip.position.set(0,0.555,-0.015);
+  group.add(bladeTip);
   group.rotation.z = 0.5; // held at a natural angle, matching the club/pickaxe convention
   group.rotation.y = Math.PI/2; // point forward, away from the player, instead of out to the side
   return group;
@@ -3518,8 +3550,8 @@ const WEAPON_CONFIG = {
   // crateBreakRange: any gun can shatter a crate open at close range - short
   // on purpose, so you have to actually walk up to one rather than sniping
   // it from across the map.
-  [BLOW_PIPE]:       { kind:'projectile', damage:1.35, speed:23,   cooldown:0.15, radius:0.045, color:0x4a3520, sound:'light', crateBreakRange:3 },
-  [STONE_SLING]:     { kind:'projectile', damage:3, speed:34.5, cooldown:0.3,  radius:0.06,  color:0x8a8a8a, sound:'sling', crateBreakRange:3 },
+  [BLOW_PIPE]:       { kind:'projectile', damage:1.35, speed:23,   cooldown:0.15, radius:0.045, color:0x4a3520, sound:'light' },
+  [STONE_SLING]:     { kind:'projectile', damage:3, speed:34.5, cooldown:0.3,  radius:0.06,  color:0x8a8a8a, sound:'sling' },
   [PISTOL]:          { kind:'projectile', damage:6, speed:60,   cooldown:0.4,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3, canBreakLeaves:true, breakRange:10 },
   [WAR_CLUB]:        { kind:'melee', damage:5, cooldown:0.6, range:2.6, crateBreakRange:3 },
   [METAL_SWORD]:     { kind:'melee', damage:4, cooldown:0.45, range:2.8, crateBreakRange:3 },
@@ -5395,13 +5427,31 @@ let selectedSlot = 0;
 let heldSlotIndex = null; // index of slot currently "picked up" with the mouse in the inventory screen
 
 function addToInventory(type){
-  // stack onto an existing pile of the same type first
+  // stack onto an existing pile of the same type first, anywhere
   for(const s of slots){
     if(s.type===type){ s.count++; updateHotbarUI(); if(craftOpen) renderInventoryPanel(); return; }
   }
-  // otherwise use the first empty slot
-  for(const s of slots){
-    if(s.type===null){ s.type=type; s.count=1; updateHotbarUI(); if(craftOpen) renderInventoryPanel(); return; }
+  function tryFill(indices){
+    for(const i of indices){
+      if(slots[i].type===null){ slots[i].type=type; slots[i].count=1; updateHotbarUI(); if(craftOpen) renderInventoryPanel(); return true; }
+    }
+    return false;
+  }
+  const backpackIndices = [];
+  for(let i=HOTBAR_SIZE; i<TOTAL_SLOTS; i++) backpackIndices.push(i);
+  if(SOLID_TYPES.includes(type)){
+    // blocks specifically go to hotbar slots 8-9 (index 7-8), never 1-7 -
+    // those are reserved for weapons. Falls back to the backpack, not
+    // the weapon slots, if both 8 and 9 are already taken.
+    if(tryFill([7,8])) return;
+    if(tryFill(backpackIndices)) return;
+  } else {
+    // weapons (and everything else) prioritize hotbar slots 1-7 (index
+    // 0-6) first, falling back to 8-9 and then the backpack if those
+    // are full too.
+    if(tryFill([0,1,2,3,4,5,6])) return;
+    if(tryFill([7,8])) return;
+    if(tryFill(backpackIndices)) return;
   }
   flashMessage('Inventory full!');
 }
@@ -5519,10 +5569,102 @@ function selectSlot(i){
   updateHotbarUI();
 }
 
+const blockIconCache = {};
+const ITEM_MESH_BUILDERS = {
+  [STONE_PICKAXE]: ()=>buildPickaxeMesh(),
+  [BLOW_PIPE]: buildBlowPipeMesh,
+  [STONE_SLING]: buildSlingMesh,
+  [METAL_SWORD]: buildSwordMesh,
+  [WAR_CLUB]: buildClubMesh,
+  [GRENADE]: buildGrenadeMesh,
+  [ROCKET_LAUNCHER]: buildRocketLauncherMesh,
+  [DOUBLE_BARREL]: buildDoubleBarrelMesh,
+  [PUMP_SHOTGUN]: buildPumpShotgunMesh,
+  [RIFLE]: buildRifleMesh,
+  [PISTOL]: buildPistolMesh,
+  [CARBINE]: buildCarbineMesh,
+  [SNIPER]: buildSniperMesh,
+  [METAL_BAR]: buildMetalBarMesh,
+  [BANDAGE]: buildBandageMesh,
+  [STIM_INJECTOR]: buildStimMesh,
+};
+let iconRenderer=null, iconScene=null, iconCamera=null;
+function initIconRenderer(){
+  if(iconRenderer) return;
+  iconRenderer = new THREE.WebGLRenderer({antialias:true, alpha:true, preserveDrawingBuffer:true});
+  iconRenderer.setSize(96,96);
+  iconScene = new THREE.Scene();
+  iconCamera = new THREE.PerspectiveCamera(35, 1, 0.02, 20);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+  keyLight.position.set(1,1.6,2);
+  iconScene.add(keyLight);
+  iconScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+}
+function renderItemMeshIcon(type){
+  const builder = ITEM_MESH_BUILDERS[type];
+  if(!builder) return null;
+  initIconRenderer();
+  const mesh = builder();
+  mesh.rotation.set(0,0,0); // undo the built-in "point forward" orientation most weapon meshes apply for first-person holding - a natural angled view reads better as a small icon
+  iconScene.add(mesh);
+  const box = new THREE.Box3().setFromObject(mesh);
+  const size = new THREE.Vector3(); box.getSize(size);
+  const center = new THREE.Vector3(); box.getCenter(center);
+  // Framing computed from each item's actual bounding-sphere radius (half
+  // the box diagonal - the true worst-case distance from center to any
+  // corner, regardless of viewing angle) rather than a single fixed
+  // multiplier. A fixed multiplier has to stay conservative enough to
+  // avoid clipping square-ish items (like a grenade), which then leaves
+  // elongated items (like a rifle) with far more empty space than they
+  // actually need. This gives each item its own tightest safe framing.
+  const boundingRadius = size.length()/2 || 0.05;
+  const fovRad = iconCamera.fov*Math.PI/180;
+  const dist = (boundingRadius/Math.tan(fovRad/2))*1.08; // 8% margin for safety
+  iconCamera.position.set(center.x+dist*0.55, center.y+dist*0.5, center.z+dist*0.65);
+  iconCamera.lookAt(center);
+  iconRenderer.render(iconScene, iconCamera);
+  const url = iconRenderer.domElement.toDataURL();
+  iconScene.remove(mesh);
+  mesh.traverse(o=>{
+    if(o.geometry) o.geometry.dispose();
+    if(o.material){ if(Array.isArray(o.material)) o.material.forEach(m=>m.dispose()); else o.material.dispose(); }
+  });
+  return url;
+}
+const itemMeshIconCache = {};
+function getItemMeshIconDataURL(type){
+  if(itemMeshIconCache[type]!==undefined) return itemMeshIconCache[type];
+  const url = renderItemMeshIcon(type);
+  itemMeshIconCache[type] = url;
+  return url;
+}
+function getBlockIconDataURL(type){
+  if(blockIconCache[type]!==undefined) return blockIconCache[type];
+  let mat = materials[type];
+  if(Array.isArray(mat)){
+    // grass/wood use a different texture per face - pick the most
+    // recognizable one for the icon (grass top, wood bark side)
+    mat = type===GRASS ? mat[2] : mat[0];
+  }
+  const canvas = mat && mat.map && mat.map.image;
+  const url = (canvas && canvas.toDataURL) ? canvas.toDataURL() : null;
+  blockIconCache[type] = url;
+  return url;
+}
 function slotInnerHTML(s){
   if(!s.type) return '';
-  const icon = ITEM_ICON[s.type];
-  return `<div class="swatch" style="background:#${BLOCK_COLORS[s.type].toString(16).padStart(6,'0')}">${icon?'<span class="toolIcon">'+icon+'</span>':''}</div><div class="count">${s.count>1?s.count:''}</div>`;
+  const meshIconUrl = ITEM_MESH_BUILDERS[s.type] ? getItemMeshIconDataURL(s.type) : null;
+  const blockIconUrl = (!meshIconUrl && SOLID_TYPES.includes(s.type)) ? getBlockIconDataURL(s.type) : null;
+  const icon = (meshIconUrl || blockIconUrl) ? null : ITEM_ICON[s.type]; // emoji fallback only when there's no real image to show
+  let bgStyle;
+  if(meshIconUrl){
+    bgStyle = `background-image:url(${meshIconUrl}); background-size:contain; background-position:center; background-repeat:no-repeat;`;
+  } else if(blockIconUrl){
+    bgStyle = `background-image:url(${blockIconUrl}); background-size:cover; image-rendering:pixelated;`;
+  } else {
+    bgStyle = `background:#${BLOCK_COLORS[s.type].toString(16).padStart(6,'0')};`;
+  }
+  return `<div class="swatch" style="${bgStyle}">${icon?'<span class="toolIcon">'+icon+'</span>':''}</div><div class="count">${s.count>1?s.count:''}</div>`;
 }
 function buildHotbarDOM(){
   const bar = document.getElementById('hotbar');
@@ -5801,6 +5943,36 @@ function renderDevPanel(){
   adminBtns.appendChild(skipBtn); adminBtns.appendChild(restartBtn);
   adminRow.appendChild(adminBtns);
   list.appendChild(adminRow);
+
+  const tpRow = document.createElement('div');
+  tpRow.className='devRow';
+  tpRow.innerHTML = `<div class="desc">Teleport to player${multiplayer?'':' (connect to a server first)'}</div>`;
+  const tpBtns = document.createElement('div');
+  tpBtns.className='btns';
+  const tpSelect = document.createElement('select');
+  tpSelect.style.cssText = 'padding:4px; border-radius:4px; border:1px solid #555; background:#111; color:#fff; margin-right:4px;';
+  for(const [id,rp] of remotePlayers){
+    const opt = document.createElement('option'); opt.value=String(id); opt.textContent = rp.name || ('Player'+id);
+    tpSelect.appendChild(opt);
+  }
+  if(remotePlayers.size===0){
+    const opt = document.createElement('option'); opt.value=''; opt.textContent='No other players connected';
+    tpSelect.appendChild(opt);
+  }
+  const tpBtn = document.createElement('div'); tpBtn.className='btn'; tpBtn.textContent='Teleport';
+  tpBtn.addEventListener('click', ()=>{
+    const rp = remotePlayers.get(Number(tpSelect.value));
+    if(!rp){ flashMessage('No player selected'); return; }
+    player.x = rp.group.position.x + 1.2;
+    player.y = rp.group.position.y;
+    player.z = rp.group.position.z + 1.2;
+    velocity.y = 0;
+    onGround = false;
+    flashMessage('Teleported to '+(rp.name || ('Player'+rp.id)));
+  });
+  tpBtns.appendChild(tpSelect); tpBtns.appendChild(tpBtn);
+  tpRow.appendChild(tpBtns);
+  list.appendChild(tpRow);
 
   const mapRow = document.createElement('div');
   mapRow.className='devRow';
@@ -6394,16 +6566,17 @@ function updateRemotePlayers(dt){
     rp.group.position.y += (t.y-rp.group.position.y)*lerp;
     rp.group.position.z += (t.z-rp.group.position.z)*lerp;
     rp.group.rotation.y = t.yaw;
-    rp.heldAnchor.rotation.x = t.pitch||0;
     if(rp.swingTimer===undefined) rp.swingTimer = 0;
+    let swingArc = 0;
     if(rp.swingTimer>0){
       rp.swingTimer = Math.max(0, rp.swingTimer-dt);
       const swingFrac = 1-(rp.swingTimer/0.35);
-      const swingArc = Math.sin(swingFrac*Math.PI);
-      rp.heldAnchor.rotation.z = swingArc*0.6;
-    } else {
-      rp.heldAnchor.rotation.z = 0;
+      swingArc = Math.sin(swingFrac*Math.PI);
     }
+    const pickaxeTiltOffset = rp.heldType===STONE_PICKAXE ? (Math.PI/2 - Math.PI/12) : 0; // pickaxe-specific default forward tilt, brought back 15 degrees from 90 - same pivot/axis the swing already uses
+    const swordTiltOffset = rp.heldType===METAL_SWORD ? (Math.PI/2 * 0.7) : 0; // sword-specific default forward tilt, brought back 30% from 90 degrees (now 63)
+    rp.heldAnchor.rotation.x = (t.pitch||0) - swingArc*1.0 - pickaxeTiltOffset - swordTiltOffset;
+    rp.heldAnchor.rotation.z = 0;
     updateHitEffect(rp, dt);
     const targetScaleY = rp.crouching ? 0.72 : 1;
     const newScaleY = rp.group.scale.y + (targetScaleY-rp.group.scale.y)*Math.min(1,dt*10);
@@ -6597,6 +6770,7 @@ function handleNetMessage(msg){
     stopMenuBg();
     try{
       myNetId = msg.id;
+      chatHistory = [];
       seed = msg.seed;
       WORLD_X=msg.worldX; WORLD_Y=msg.worldY; WORLD_Z=msg.worldZ;
       // the server decides the biome (so every client generates identical terrain);
@@ -6925,7 +7099,9 @@ function sendChat(text){
 
 // ---------- Chat (only does anything useful once connected) ----------
 let chatOpen = false;
+let chatHistory = []; // every message since joining this server - never trimmed or faded, unlike the recent-messages log below
 function addChatMessage(name, text){
+  chatHistory.push({name, text});
   const log = document.getElementById('chatLog');
   const line = document.createElement('div');
   line.className='chatLine';
@@ -6933,6 +7109,18 @@ function addChatMessage(name, text){
   log.appendChild(line);
   while(log.children.length>6) log.removeChild(log.firstChild);
   setTimeout(()=>{ line.style.opacity='0'; }, 6000);
+  if(chatOpen) renderChatHistoryPanel(); // keep it live if a message arrives while it's open
+}
+function renderChatHistoryPanel(){
+  const panel = document.getElementById('chatHistoryPanel');
+  panel.innerHTML = '';
+  for(const m of chatHistory){
+    const line = document.createElement('div');
+    line.className = 'chatHistLine';
+    line.textContent = `${m.name}: ${m.text}`;
+    panel.appendChild(line);
+  }
+  panel.scrollTop = panel.scrollHeight;
 }
 function openChat(){
   if(!multiplayer){ flashMessage('Connect to a server to chat'); return; }
@@ -6943,12 +7131,15 @@ function openChat(){
   wrap.style.display='block';
   input.value='';
   input.focus();
+  renderChatHistoryPanel();
+  document.getElementById('chatHistoryPanel').style.display='block';
 }
 function closeChat(send){
   const input = document.getElementById('chatInput');
   if(send && input.value.trim()) sendChat(input.value.trim());
   chatOpen = false;
   document.getElementById('chatInputWrap').style.display='none';
+  document.getElementById('chatHistoryPanel').style.display='none';
   if(started && !paused && !craftOpen && !devOpen) requestPointerLockSafe();
 }
 document.getElementById('chatInput').addEventListener('keydown', (e)=>{
