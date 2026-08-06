@@ -2699,10 +2699,14 @@ function getMuzzleOrigin(){
   const downVec = new THREE.Vector3(0,-1,0).applyQuaternion(camera.quaternion);
   const fwdVec = new THREE.Vector3();
   camera.getWorldDirection(fwdVec);
+  // Matches itemAnchor's actual position (traced through the full
+  // armPivot -> handGroup -> itemAnchor offset chain) rather than an
+  // earlier guess that put this well short of the gun's real position -
+  // shots were visibly starting near the face instead of the gun.
   return camera.position.clone()
-    .addScaledVector(rightVec, 0.28)
-    .addScaledVector(downVec, 0.18)
-    .addScaledVector(fwdVec, 0.45);
+    .addScaledVector(rightVec, 0.32)
+    .addScaledVector(downVec, 0.14)
+    .addScaledVector(fwdVec, 0.87);
 }
 // The muzzle sits offset from the camera (to the side and slightly below,
 // for the held-weapon visual), so a shot fired merely parallel to the
@@ -3764,6 +3768,7 @@ function tryPunchAttack(){
   if(!closestKind) return false;
   lastPunchTime = now;
   sfxSwing();
+  broadcastSwingThrottled();
   punchSwingTimer = PUNCH_SWING_DURATION;
   if(closestKind==='enemy'){
     hitEnemy(closestTarget, FIST_DAMAGE);
@@ -3801,6 +3806,7 @@ function meleeAttack(weapon){
   camera.getWorldDirection(dir);
   const origin = camera.position;
   sfxSwing();
+  broadcastSwingThrottled();
   if(weapon.itemType===METAL_SWORD){
     swordSwingTimer = SWORD_SWING_DURATION;
   } else {
@@ -5568,14 +5574,32 @@ function updateMiningBar(){
   const req = effectiveMineTime(mining.type);
   bar.style.width = Math.min(100, (mining.progress/req)*100) + '%';
 }
+let emptySwingPhase = 0;
+let lastSwingBroadcastTime = 0;
+function broadcastSwingThrottled(){
+  if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
+  const now = performance.now();
+  if(now - lastSwingBroadcastTime < 300) return; // throttle so rapid actions don't spam the relay
+  lastSwingBroadcastTime = now;
+  socket.send(JSON.stringify({type:'swing'}));
+}
+function updateEmptySwing(dt){
+  emptySwingPhase += dt;
+  broadcastSwingThrottled();
+}
+function resetEmptySwing(){
+  emptySwingPhase = 0;
+}
 function updateMining(dt){
   if(!mouseDown0 || !pointerLocked || paused || craftOpen || bandageChannelTimer>0 || armorCraftTimer>0){
     if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
+    resetEmptySwing();
     return;
   }
   const hit = raycastVoxel();
   if(!hit || isInSpectatorBox(hit.x,hit.y,hit.z)){
     if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
+    updateEmptySwing(dt);
     return;
   }
   const t = getBlock(hit.x,hit.y,hit.z);
@@ -5583,12 +5607,15 @@ function updateMining(dt){
   if(t===METAL_ORE && equipped!==STONE_PICKAXE){
     if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
     flashMessage('Need a Stone Pickaxe to mine Metal Ore');
+    updateEmptySwing(dt);
     return;
   }
+  resetEmptySwing(); // actively mining something valid now, not swinging at nothing
   if(!mining || mining.x!==hit.x || mining.y!==hit.y || mining.z!==hit.z){
     mining = {x:hit.x, y:hit.y, z:hit.z, type:t, progress:0};
   } else {
     mining.progress += dt;
+    broadcastSwingThrottled();
     const req = effectiveMineTime(mining.type);
     if(mining.progress>=req){
       if(mining.type===LOOT_CRATE){
@@ -6368,6 +6395,15 @@ function updateRemotePlayers(dt){
     rp.group.position.z += (t.z-rp.group.position.z)*lerp;
     rp.group.rotation.y = t.yaw;
     rp.heldAnchor.rotation.x = t.pitch||0;
+    if(rp.swingTimer===undefined) rp.swingTimer = 0;
+    if(rp.swingTimer>0){
+      rp.swingTimer = Math.max(0, rp.swingTimer-dt);
+      const swingFrac = 1-(rp.swingTimer/0.35);
+      const swingArc = Math.sin(swingFrac*Math.PI);
+      rp.heldAnchor.rotation.z = swingArc*0.6;
+    } else {
+      rp.heldAnchor.rotation.z = 0;
+    }
     updateHitEffect(rp, dt);
     const targetScaleY = rp.crouching ? 0.72 : 1;
     const newScaleY = rp.group.scale.y + (targetScaleY-rp.group.scale.y)*Math.min(1,dt*10);
@@ -6636,6 +6672,9 @@ function handleNetMessage(msg){
       p.available = msg.available;
       p.mesh.visible = msg.available;
     }
+  } else if(msg.type==='swing'){
+    const rp = remotePlayers.get(msg.id);
+    if(rp) rp.swingTimer = 0.35;
   } else if(msg.type==='armorState'){
     const rp = remotePlayers.get(msg.id);
     if(rp && rp.helmetMesh) rp.helmetMesh.visible = !!msg.hasArmor;
@@ -7115,6 +7154,12 @@ function animate(){
     if(mining){
       const swingPeriod = 0.35; // seconds per swing cycle - repeats continuously while mining
       const swingPhase = (mining.progress % swingPeriod) / swingPeriod;
+      const mineArc = Math.sin(swingPhase*Math.PI);
+      itemAnchor.rotation.x = -mineArc*0.7;
+      itemAnchor.rotation.z = mineArc*0.35;
+    } else if(emptySwingPhase>0){
+      const swingPeriod = 0.35;
+      const swingPhase = (emptySwingPhase % swingPeriod) / swingPeriod;
       const mineArc = Math.sin(swingPhase*Math.PI);
       itemAnchor.rotation.x = -mineArc*0.7;
       itemAnchor.rotation.z = mineArc*0.35;
