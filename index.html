@@ -2985,28 +2985,37 @@ function clearItemAnchor(){
     disposeHeldItemMesh(child);
   }
 }
-function buildPickaxeMesh(){
-  const group = new THREE.Group();
+function buildPickaxeMesh(pivotAtBottom){
+  const inner = new THREE.Group();
   const handleMat = new THREE.MeshLambertMaterial({color:0x8a5a30});
   const headMat = new THREE.MeshLambertMaterial({color:0x9a9a9a});
   const HANDLE_LEN = 0.65; // longer again (was 0.5, originally 0.34)
-  const GRIP_OFFSET = 0.1; // how far below the handle's top the grip point (the mesh's own origin, where itemAnchor actually holds it) sits - keeps the hand holding the handle itself, not right up against the head. Kept smaller than before so more of the handle's added length extends toward the arm (closing the gap) rather than toward the head.
+  const GRIP_OFFSET = 0.1; // how far below the handle's top the grip point sits, when pivoting from the grip (the default, first-person case) - keeps the hand holding the handle itself, not right up against the head.
   // Handle's top sits at y=GRIP_OFFSET, extending down from there - so the
   // origin itself (the grip point) lands partway down the handle's length,
   // not at the very top where the head attaches.
   const handle = new THREE.Mesh(new THREE.BoxGeometry(0.05,HANDLE_LEN,0.05), handleMat);
   handle.position.set(0, GRIP_OFFSET-HANDLE_LEN/2, 0);
-  group.add(handle);
+  inner.add(handle);
   // Two-pronged head, inverted (mirrored vertically) from the previous
   // version, apex still attaching right at the handle's top.
   const prongLeft = new THREE.Mesh(new THREE.BoxGeometry(0.16,0.045,0.05), headMat);
   prongLeft.position.set(-0.08,GRIP_OFFSET-0.02,0);
   prongLeft.rotation.z = 0.28;
-  group.add(prongLeft);
+  inner.add(prongLeft);
   const prongRight = new THREE.Mesh(new THREE.BoxGeometry(0.16,0.045,0.05), headMat);
   prongRight.position.set(0.08,GRIP_OFFSET-0.02,0);
   prongRight.rotation.z = -0.28;
-  group.add(prongRight);
+  inner.add(prongRight);
+  const group = new THREE.Group();
+  if(pivotAtBottom){
+    // Shift the whole head+handle assembly up so the handle's BOTTOM end
+    // sits at this mesh's own origin, instead of the mid-handle grip
+    // point - for remote player models, which hold it right against the
+    // body with no arm to bridge a mid-handle pivot visually.
+    inner.position.y += HANDLE_LEN - GRIP_OFFSET;
+  }
+  group.add(inner);
   group.rotation.z = 0.55; // tilt handle+head together for a natural held angle
   group.rotation.y = Math.PI/2; // turn it so the point faces forward, away from the player, instead of out to the side
   return group;
@@ -6307,7 +6316,7 @@ function createRemotePlayer(id,name,skinToneIndex){
 }
 function buildRemoteHeldItemMesh(type){
   switch(type){
-    case STONE_PICKAXE: return buildPickaxeMesh();
+    case STONE_PICKAXE: return buildPickaxeMesh(true); // pivot from the handle bottom - no arm on remote models to bridge a mid-handle grip visually
     case BLOW_PIPE: return buildBlowPipeMesh();
     case STONE_SLING: return buildSlingMesh();
     case WAR_CLUB: return buildClubMesh();
