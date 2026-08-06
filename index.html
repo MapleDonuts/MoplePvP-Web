@@ -106,15 +106,17 @@
   #craftPanel {
     position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
     background:rgba(20,20,25,0.95); border:2px solid rgba(255,255,255,0.25);
-    border-radius:10px; padding:20px; color:#fff; z-index:50; width:400px;
+    border-radius:10px; padding:20px; color:#fff; z-index:50; width:800px;
+    max-height:85vh; overflow-y:auto;
     display:none;
   }
   #craftPanel h2 { margin-top:0; font-size:18px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:8px;}
-  .recipe { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+  #recipes { display:grid; grid-template-columns: 1fr 1fr; gap:2px 24px; }
+  .recipe { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
   .recipe.craftable .desc { color:#9effa0; }
   .recipe .desc { font-size:13px; color:#ccc; }
 
-  #invGrid { display:grid; grid-template-columns: repeat(9, 1fr); gap:6px; margin:14px 0; }
+  #invGrid { display:grid; grid-template-columns: repeat(9, 38px); gap:6px; margin:14px 0; }
   .islot {
     width:38px; height:38px; border:2px solid rgba(255,255,255,0.35);
     border-radius:5px; position:relative; background:rgba(255,255,255,0.06);
@@ -167,14 +169,26 @@
   #devPanel {
     position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
     background:rgba(20,20,25,0.95); border:2px solid rgba(255,255,255,0.25);
-    border-radius:10px; padding:20px; color:#fff; z-index:50; width:400px;
-    max-height:70vh; overflow-y:auto; display:none;
+    border-radius:10px; padding:20px; color:#fff; z-index:50; width:780px;
+    max-height:85vh; overflow-y:auto; display:none;
   }
   #devPanel h2 { margin-top:0; font-size:18px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:8px;}
+  .devSectionTitle {
+    font-size:12px; text-transform:uppercase; letter-spacing:0.6px; color:#8fb0c9;
+    font-weight:bold; margin:16px 0 6px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);
+  }
+  .devSectionTitle:first-of-type { margin-top:4px; padding-top:0; border-top:none; }
+  .devItemsGrid { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:2px 18px; }
+  .devItemsGrid .devRow { padding:4px 0; }
+  .devItemsGrid .devGroupLabel {
+    grid-column: 1 / -1; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;
+    color:#6a8a9a; font-weight:bold; margin:10px 0 2px;
+  }
+  .devItemsGrid .devGroupLabel:first-child { margin-top:0; }
   .devRow { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
   .devRow .desc { font-size:13px; color:#ddd; display:flex; align-items:center; gap:8px; }
   .devRow .sw { width:18px; height:18px; border-radius:3px; display:inline-block; }
-  .devRow .btns { display:flex; gap:6px; }
+  .devRow .btns { display:flex; gap:6px; flex-wrap:wrap; }
   .devRow .btn { padding:5px 10px; font-size:12px; }
 
   #damageFlash {
@@ -594,6 +608,7 @@ const MED_CRATE=31;      // world object only - like a loot crate, but only ever
 const METAL_ORE=32;      // minable terrain block - spawns underground in deep stone, smelt at a Furnace for Metal Bars
 const METAL_BAR=33;      // smelted resource - inventory item, no direct combat use yet
 const ARMOR_HELMET=34;   // crafted from Metal Bars - reduces damage 40% while it has durability left
+const METAL_SWORD=35;    // crafted melee weapon - faster, longer reach, less damage-per-hit than the War Club
 const SOLID_TYPES = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, PLANKS, REEDS, RUBBLE, SNOW, METAL, GLASS, CLEAR_GLASS, METAL_ORE];
 const WORLD_ONLY_TYPES = [LOOT_CRATE, POWERUP_CRATE, MED_CRATE]; // rendered in the world but never held/placed by the player
 const ALL_RENDER_TYPES = [...SOLID_TYPES, ...WORLD_ONLY_TYPES];
@@ -601,7 +616,7 @@ const BLOCK_COLORS = {
   [GRASS]:0x5a9b3c, [DIRT]:0x6b4a2c, [STONE]:0x8a8a8a, [SAND]:0xdccb86,
   [WOOD]:0x6b4423, [LEAVES]:0x3c6b2a, [WATER]:0x3a6fd8, [PLANKS]:0xba8a54,
   [STONE_PICKAXE]:0xb0b0b0, [REEDS]:0x8fae4a, [BLOW_PIPE]:0x9c7a4a,
-  [METAL_ORE]:0x8a8a8a, [METAL_BAR]:0xd9d9d9, [ARMOR_HELMET]:0x8f8f8f,
+  [METAL_ORE]:0x8a8a8a, [METAL_BAR]:0xd9d9d9, [ARMOR_HELMET]:0x8f8f8f, [METAL_SWORD]:0xc9cdd1,
   [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [GRENADE]:0x3a4a3a,
   [POWERUP_CRATE]:0x2a6f8a, [ROCKET_LAUNCHER]:0x555555, [RUBBLE]:0x9c8570,
   [DOUBLE_BARREL]:0x4a3520, [PUMP_SHOTGUN]:0x333333, [RIFLE]:0xc9a227, [SNOW]:0xf0f5fa, [METAL]:0x5a6570,
@@ -611,7 +626,7 @@ const BLOCK_NAMES = {
   [GRASS]:'Grass', [DIRT]:'Dirt', [STONE]:'Stone', [SAND]:'Sand',
   [WOOD]:'Wood', [LEAVES]:'Leaves', [WATER]:'Water', [PLANKS]:'Planks',
   [STONE_PICKAXE]:'Stone Pickaxe', [REEDS]:'Reeds', [BLOW_PIPE]:'Blow Pipe',
-  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade', [MED_CRATE]:'Med Crate', [-1]:'Fists', [METAL_ORE]:'Metal Ore', [METAL_BAR]:'Metal Bar', [ARMOR_HELMET]:'Armor Helmet',
+  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade', [MED_CRATE]:'Med Crate', [-1]:'Fists', [METAL_ORE]:'Metal Ore', [METAL_BAR]:'Metal Bar', [ARMOR_HELMET]:'Armor Helmet', [METAL_SWORD]:'Metal Sword',
   [POWERUP_CRATE]:'Power Crate', [ROCKET_LAUNCHER]:'Rocket Launcher', [RUBBLE]:'Rubble',
   [DOUBLE_BARREL]:'Double Barrel', [PUMP_SHOTGUN]:'Pump Shotgun', [RIFLE]:'Rifle', [SNOW]:'Snow', [METAL]:'Metal',
   [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass', [SNIPER]:'Sniper Rifle', [BANDAGE]:'Bandage', [STIM_INJECTOR]:'Stim Injector'
@@ -621,7 +636,15 @@ const ITEM_ICON = {
   [GRENADE]:'\u2600', [ROCKET_LAUNCHER]:'\u2191', [DOUBLE_BARREL]:'\u25CF', [PUMP_SHOTGUN]:'\u25CF', [RIFLE]:'\u25CF',
   [PISTOL]:'\u25CF', [CARBINE]:'\u25CF', [SNIPER]:'\u25CF', [BANDAGE]:'\u2795', [STIM_INJECTOR]:'\u2695'
 };
-const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR,METAL_ORE,METAL_BAR,ARMOR_HELMET];
+const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR,METAL_ORE,METAL_BAR,ARMOR_HELMET,METAL_SWORD];
+// Same 32 items as ALL_ITEM_TYPES above, just grouped by category for the
+// dev panel's "Give Items" display instead of one flat list.
+const ITEM_GROUPS = [
+  { label:'Blocks & Terrain', items:[GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,RUBBLE,SNOW,METAL,GLASS,CLEAR_GLASS,METAL_ORE] },
+  { label:'Tools & Materials', items:[STONE_PICKAXE,METAL_BAR] },
+  { label:'Weapons', items:[BLOW_PIPE,STONE_SLING,WAR_CLUB,METAL_SWORD,GRENADE,ROCKET_LAUNCHER,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,PISTOL,CARBINE,SNIPER] },
+  { label:'Meds & Armor', items:[BANDAGE,STIM_INJECTOR,ARMOR_HELMET] }
+];
 
 // ---------- Loot table (crate drop rates) ----------
 // Each entry's "weight" controls how often it drops RELATIVE to the others -
@@ -664,7 +687,7 @@ function pickWeightedLoot(){
 const GUN_TYPES = [BLOW_PIPE, STONE_SLING, GRENADE, ROCKET_LAUNCHER, DOUBLE_BARREL, PUMP_SHOTGUN, RIFLE, PISTOL, CARBINE, SNIPER];
 
 // ---------- World config ----------
-let WORLD_X=64, WORLD_Y=40, WORLD_Z=64;
+let WORLD_X=76, WORLD_Y=40, WORLD_Z=76;
 const WATER_LEVEL=8;
 const MAX_INSTANCES=60000;
 let seed = Math.floor(Math.random()*1000000);
@@ -869,6 +892,18 @@ function carveTunnel(startX, startZ, rand){
         }
       }
     }
+    // seed extra ore into the tunnel walls just outside the carved radius -
+    // caves should be a genuinely good place to actually find some, not
+    // just a passage to walk through
+    for(let dx=-carveRadius-1; dx<=carveRadius+1; dx++){
+      for(let dz=-carveRadius-1; dz<=carveRadius+1; dz++){
+        const wallDistSq = dx*dx+dz*dz;
+        if(wallDistSq <= carveRadius*carveRadius+1 || wallDistSq > (carveRadius+2)*(carveRadius+2)) continue;
+        const x=Math.round(cx+dx), y=Math.round(cy), z=Math.round(cz+dz);
+        if(x<1||x>=WORLD_X-1||y<1||y>=WORLD_Y-1||z<1||z>=WORLD_Z-1) continue;
+        if(getBlock(x,y,z)===STONE && rand()<0.18) setBlock(x,y,z,METAL_ORE);
+      }
+    }
     dirX += (rand()-0.5)*0.6;
     dirZ += (rand()-0.5)*0.6;
     dirY += (rand()-0.5)*0.3;
@@ -924,7 +959,7 @@ function scatterLootAndPowerCrates(){
   const changes = [];
   const rand3 = mulberry32(seed+321);
   let cratesPlaced=0, crateAttempts=0;
-  while(cratesPlaced<12 && crateAttempts<500){
+  while(cratesPlaced<15 && crateAttempts<500){
     crateAttempts++;
     const x = 2+Math.floor(rand3()*(WORLD_X-4));
     const z = 2+Math.floor(rand3()*(WORLD_Z-4));
@@ -939,7 +974,7 @@ function scatterLootAndPowerCrates(){
   }
   const rand4 = mulberry32(seed+654);
   let powerCratesPlaced=0, powerAttempts=0;
-  while(powerCratesPlaced<6 && powerAttempts<500){
+  while(powerCratesPlaced<8 && powerAttempts<500){
     powerAttempts++;
     const x = 2+Math.floor(rand4()*(WORLD_X-4));
     const z = 2+Math.floor(rand4()*(WORLD_Z-4));
@@ -992,7 +1027,7 @@ function generateWorld(){
         let t;
         if(y===h) t = (h<=WATER_LEVEL+1) ? SAND : terrainSurfaceBlock;
         else if(y>h-3) t = (h<=WATER_LEVEL+1) ? SAND : DIRT;
-        else t = (oreRand()<0.05) ? METAL_ORE : STONE;
+        else t = (oreRand()<0.025) ? METAL_ORE : STONE;
         setBlock(x,y,z,t);
       }
       if(h<WATER_LEVEL){
@@ -1045,7 +1080,7 @@ function generateOasisWorld(){
       h = Math.max(4, Math.min(WORLD_Y-6, h));
       heightMap[x][z] = h;
       for(let y=0;y<=h;y++){
-        setBlock(x,y,z, y>h-3 ? SAND : (oreRand()<0.05 ? METAL_ORE : STONE));
+        setBlock(x,y,z, y>h-3 ? SAND : (oreRand()<0.025 ? METAL_ORE : STONE));
       }
     }
   }
@@ -1116,7 +1151,7 @@ function generateRuinsWorld(){
       h = Math.max(4, Math.min(WORLD_Y-8, h));
       heightMap[x][z] = h;
       for(let y=0;y<=h;y++){
-        setBlock(x,y,z, y===h ? STONE : (y>h-2 ? DIRT : (oreRand()<0.05 ? METAL_ORE : STONE)));
+        setBlock(x,y,z, y===h ? STONE : (y>h-2 ? DIRT : (oreRand()<0.025 ? METAL_ORE : STONE)));
       }
     }
   }
@@ -1400,7 +1435,7 @@ function generateTunnelsWorld(){
   for(let x=0;x<WORLD_X;x++){
     for(let z=0;z<WORLD_Z;z++){
       for(let y=1;y<TUNNEL_CEILING_Y;y++){
-        setBlock(x,y,z, oreRand()<0.04 ? METAL_ORE : (randFill()<0.12 ? STONE : DIRT));
+        setBlock(x,y,z, oreRand()<0.02 ? METAL_ORE : (randFill()<0.12 ? STONE : DIRT));
       }
     }
   }
@@ -1453,7 +1488,7 @@ function generateGraveyardWorld(){
         let t;
         if(y===h) t = (randSurface()<0.12) ? GRASS : DIRT; // sparse dead grass on mostly-bare dirt
         else if(y>h-2) t = DIRT;
-        else t = (oreRand()<0.05) ? METAL_ORE : STONE;
+        else t = (oreRand()<0.025) ? METAL_ORE : STONE;
         setBlock(x,y,z,t);
       }
     }
@@ -1884,17 +1919,17 @@ function sfxSpeedBoost(){
 // two primitives (playTone/playNoise-style synthesis) as the rest of the
 // audio engine - no loops or files, still fully procedural.
 const AMBIENT_THEMES = {
-  highlands: { kind:'noise', filterType:'lowpass',  filterFreq:600, filterQ:0.7, lfoDepth:200, windVolume:0.05,
+  highlands: { kind:'noise', filterType:'lowpass',  filterFreq:600, filterQ:0.7, lfoDepth:200, windVolume:0.03,
                scale:[0,2,4,7,9],       root:220, noteInterval:3.5, noteDur:2.2, noteType:'sine',     noteVol:0.045 },
-  plains:    { kind:'noise', filterType:'lowpass',  filterFreq:500, filterQ:0.7, lfoDepth:150, windVolume:0.045,
+  plains:    { kind:'noise', filterType:'lowpass',  filterFreq:500, filterQ:0.7, lfoDepth:150, windVolume:0.027,
                scale:[0,2,4,7,9],       root:220, noteInterval:4,   noteDur:2.5, noteType:'sine',     noteVol:0.04 },
-  snow:      { kind:'noise', filterType:'bandpass', filterFreq:900, filterQ:1.2, lfoDepth:250, windVolume:0.06,
+  snow:      { kind:'noise', filterType:'bandpass', filterFreq:900, filterQ:1.2, lfoDepth:250, windVolume:0.036,
                scale:[0,2,3,7,8],       root:196, noteInterval:4.5, noteDur:3,   noteType:'sine',     noteVol:0.04 },
-  oasis:     { kind:'noise', filterType:'lowpass',  filterFreq:350, filterQ:0.5, lfoDepth:100, windVolume:0.04,
+  oasis:     { kind:'noise', filterType:'lowpass',  filterFreq:350, filterQ:0.5, lfoDepth:100, windVolume:0.024,
                scale:[0,1,4,5,7,8,11],  root:207, noteInterval:3.8, noteDur:2,   noteType:'triangle', noteVol:0.045 },
-  ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.04,
+  ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.024,
                scale:[0,1,3,6,7],       root:110, noteInterval:5,   noteDur:3.5, noteType:'sawtooth', noteVol:0.04 },
-  industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.056,
+  industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.0336,
                scale:[0,3,5,7,10],      root:110, noteInterval:1.6, noteDur:0.4, noteType:'square',   noteVol:0.035 }
 };
 let ambientNodes = [];
@@ -2418,9 +2453,18 @@ function metalOreTexture(seedNum){
       ctx.fillRect(x,y,1,1);
     }
   }
-  for(let i=0;i<7;i++){
-    ctx.fillStyle = hexCss(rand()<0.5 ? 0xc07830 : 0xd99245);
-    ctx.fillRect(Math.floor(rand()*size), Math.floor(rand()*size), rand()<0.4?2:1, rand()<0.4?2:1);
+  // Bold, bright ore veins - deliberately much more visible than a subtle
+  // fleck or two, so it doesn't get missed at a glance while mining
+  for(let i=0;i<16;i++){
+    const cx = Math.floor(rand()*size), cy = Math.floor(rand()*size);
+    const bright = rand()<0.5;
+    ctx.fillStyle = hexCss(bright ? 0xffb347 : 0xd9852f);
+    const w = rand()<0.5 ? 2 : 3, h = rand()<0.5 ? 2 : 3;
+    ctx.fillRect(cx, cy, w, h);
+    if(bright){
+      ctx.fillStyle = hexCss(0xffd98a);
+      ctx.fillRect(cx, cy, 1, 1); // a bright highlight pixel on the sunniest veins
+    }
   }
   return toTexture(canvas);
 }
@@ -2898,8 +2942,19 @@ function rebuildMeshes(){
 
 // ---------- First-person hand & held item ----------
 scene.add(camera); // needed so objects parented to the camera get rendered
+// A pivot positioned roughly where a shoulder would be, rather than at the
+// hand itself - only used for the sword's swing (see swordSwingTimer),
+// which rotates this instead of the hand directly, for a wider and more
+// natural-looking arc than rotating from the wrist would give.
+const armPivot = new THREE.Group();
+armPivot.position.set(0.32, -0.55, -0.15);
+camera.add(armPivot);
 const handGroup = new THREE.Group();
-const HAND_BASE_X = 0.32, HAND_BASE_Y = -0.24, HAND_BASE_Z = -0.55;
+// Relative to armPivot now (not the camera directly) - these values are
+// chosen so the hand's resting position on screen is unchanged from
+// before this pivot existed: armPivot.position + these = the original
+// camera-relative position (0.32, -0.24, -0.55).
+const HAND_BASE_X = 0, HAND_BASE_Y = 0.31, HAND_BASE_Z = -0.40;
 // Realistic human skin tones - declared early since the first-person arm
 // mesh below needs it immediately at load time. Indices into this array
 // are now assigned server-side per persistent player identity (see the
@@ -2907,7 +2962,7 @@ const HAND_BASE_X = 0.32, HAND_BASE_Y = -0.24, HAND_BASE_Z = -0.55;
 const SKIN_TONES = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x6b4423, 0x4a2c17];
 handGroup.position.set(HAND_BASE_X, HAND_BASE_Y, HAND_BASE_Z);
 handGroup.rotation.set(0.2, -0.08, 0.15);
-camera.add(handGroup);
+armPivot.add(handGroup);
 let handBobPhase = 0;
 let handBobAmount = 0;
 
@@ -2932,19 +2987,28 @@ function clearItemAnchor(){
 }
 function buildPickaxeMesh(){
   const group = new THREE.Group();
-  const handle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.05,0.34,0.05),
-    new THREE.MeshLambertMaterial({color:0x8a5a30})
-  );
-  handle.rotation.z = 0.55;
+  const handleMat = new THREE.MeshLambertMaterial({color:0x8a5a30});
+  const headMat = new THREE.MeshLambertMaterial({color:0x9a9a9a});
+  const HANDLE_LEN = 0.65; // longer again (was 0.5, originally 0.34)
+  const GRIP_OFFSET = 0.1; // how far below the handle's top the grip point (the mesh's own origin, where itemAnchor actually holds it) sits - keeps the hand holding the handle itself, not right up against the head. Kept smaller than before so more of the handle's added length extends toward the arm (closing the gap) rather than toward the head.
+  // Handle's top sits at y=GRIP_OFFSET, extending down from there - so the
+  // origin itself (the grip point) lands partway down the handle's length,
+  // not at the very top where the head attaches.
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.05,HANDLE_LEN,0.05), handleMat);
+  handle.position.set(0, GRIP_OFFSET-HANDLE_LEN/2, 0);
   group.add(handle);
-  const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.26,0.09,0.09),
-    new THREE.MeshLambertMaterial({color:0x9a9a9a})
-  );
-  head.position.set(0.12,0.16,0);
-  head.rotation.z = 0.55;
-  group.add(head);
+  // Two-pronged head, inverted (mirrored vertically) from the previous
+  // version, apex still attaching right at the handle's top.
+  const prongLeft = new THREE.Mesh(new THREE.BoxGeometry(0.16,0.045,0.05), headMat);
+  prongLeft.position.set(-0.08,GRIP_OFFSET-0.02,0);
+  prongLeft.rotation.z = 0.28;
+  group.add(prongLeft);
+  const prongRight = new THREE.Mesh(new THREE.BoxGeometry(0.16,0.045,0.05), headMat);
+  prongRight.position.set(0.08,GRIP_OFFSET-0.02,0);
+  prongRight.rotation.z = -0.28;
+  group.add(prongRight);
+  group.rotation.z = 0.55; // tilt handle+head together for a natural held angle
+  group.rotation.y = Math.PI/2; // turn it so the point faces forward, away from the player, instead of out to the side
   return group;
 }
 function buildBlowPipeMesh(){
@@ -2967,6 +3031,24 @@ function buildSlingMesh(){
   const pebble = new THREE.Mesh(new THREE.SphereGeometry(0.05,6,6), new THREE.MeshLambertMaterial({color:0x8a8a8a}));
   pebble.position.set(0,0.26,0);
   group.add(pebble);
+  return group;
+}
+function buildSwordMesh(){
+  const group = new THREE.Group();
+  const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.16,0.05), new THREE.MeshLambertMaterial({color:0x5a3a20}));
+  hilt.position.set(0,-0.05,0);
+  group.add(hilt);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.03,0.03), new THREE.MeshLambertMaterial({color:0x8a7a3a}));
+  guard.position.set(0,0.04,0);
+  group.add(guard);
+  const blade = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06,0.48,0.025),
+    new THREE.MeshStandardMaterial({color:0xd9d9d9, metalness:0.6, roughness:0.3})
+  );
+  blade.position.set(0,0.29,0);
+  group.add(blade);
+  group.rotation.z = 0.5; // held at a natural angle, matching the club/pickaxe convention
+  group.rotation.y = Math.PI/2; // point forward, away from the player, instead of out to the side
   return group;
 }
 function buildClubMesh(){
@@ -3163,25 +3245,48 @@ function findNearbyIdleFurnace(){
   }
   return closest;
 }
+const ARMOR_CRAFT_TIME_AT_FURNACE = 1.5; // quick and direct - meant to feel like a real but short risk window at a contested furnace, not a menu detour
 function tryInteract(){
   const furnace = findNearbyIdleFurnace();
   if(furnace){
-    if(countOfType(METAL_ORE)>0){
+    if(!hasArmor && countOfType(METAL_BAR)>=5){
+      startArmorCraftAtFurnace();
+    } else if(countOfType(METAL_ORE)>0){
       startSmelting(furnace);
+    } else if(hasArmor){
+      flashMessage('Already wearing armor');
     } else {
-      flashMessage('Need Metal Ore to smelt');
+      flashMessage('Need Metal Ore to smelt, or 5 Metal Bars for armor');
     }
   }
+}
+function startArmorCraftAtFurnace(){
+  if(armorCraftTimer>0 || bandageChannelTimer>0){ flashMessage('Already busy'); return; }
+  for(let i=0;i<5;i++) removeOneOfType(METAL_BAR);
+  updateHotbarUI();
+  armorCraftTimer = ARMOR_CRAFT_TIME_AT_FURNACE;
+  pendingCraftResults = [{type:ARMOR_HELMET, count:1}];
+  flashMessage('Crafting armor...');
 }
 function startSmelting(furnace){
   removeOneOfType(METAL_ORE);
   updateHotbarUI();
   updateHeldItemMesh();
-  furnace.state = 'smelting';
-  furnace.progress = 0;
-  furnace.smokeTimer = 0;
-  furnace.mesh.userData.mouth.material = furnace.mesh.userData.mouthMatOn;
   flashMessage('Smelting Metal Ore...');
+  if(multiplayer){
+    const index = furnaces.indexOf(furnace);
+    if(socket && socket.readyState===WebSocket.OPEN){
+      socket.send(JSON.stringify({type:'furnaceStart', index, x:furnace.x, y:furnace.y, z:furnace.z}));
+    }
+    // visual state (glow/smoke) applies once the server confirms via
+    // furnaceState, not optimistically here - keeps every client's view of
+    // a shared furnace consistent even if two players reach for it at once
+  } else {
+    furnace.state = 'smelting';
+    furnace.progress = 0;
+    furnace.smokeTimer = 0;
+    furnace.mesh.userData.mouth.material = furnace.mesh.userData.mouthMatOn;
+  }
 }
 function spawnFurnaceSmoke(x,y,z){
   const count = 6;
@@ -3207,12 +3312,13 @@ function spawnFurnaceSmoke(x,y,z){
 function updateFurnaces(dt){
   for(const f of furnaces){
     if(f.state!=='smelting') continue;
-    f.progress += dt;
     f.smokeTimer -= dt;
     if(f.smokeTimer<=0){
       f.smokeTimer = 0.6;
       spawnFurnaceSmoke(f.x, f.y+2.3, f.z);
     }
+    if(multiplayer) continue; // completion is server-driven there - see the furnaceState handler
+    f.progress += dt;
     if(f.progress>=FURNACE_SMELT_TIME){
       f.state = 'idle';
       f.progress = 0;
@@ -3227,21 +3333,94 @@ function scatterFurnaces(){
   for(const f of furnaces) scene.remove(f.mesh);
   furnaces = [];
   const rand = mulberry32(seed+888);
-  let placed=0, attempts=0;
-  while(placed<3 && attempts<200){
-    attempts++;
-    const x = 6+Math.floor(rand()*(WORLD_X-12));
-    const z = 6+Math.floor(rand()*(WORLD_Z-12));
-    const h = heightMap[x] ? heightMap[x][z] : undefined;
-    if(h===undefined) continue;
-    const surfaceType = getBlock(x,h,z);
-    if(surfaceType===AIR || surfaceType===WATER) continue;
-    if(getBlock(x,h+1,z)!==AIR) continue;
-    const mesh = buildFurnaceMesh();
-    mesh.position.set(x+0.5, h+1, z+0.5);
+  const corners = [
+    {tx: WORLD_X*0.2, tz: WORLD_Z*0.2},
+    {tx: WORLD_X*0.8, tz: WORLD_Z*0.8}
+  ];
+  for(const corner of corners){
+    let placed=false, attempts=0;
+    while(!placed && attempts<300){
+      attempts++;
+      const spread = 6 + attempts*0.3; // widen the search gradually if the exact corner spot isn't buildable
+      const x = Math.max(3, Math.min(WORLD_X-4, Math.floor(corner.tx + (rand()-0.5)*spread)));
+      const z = Math.max(3, Math.min(WORLD_Z-4, Math.floor(corner.tz + (rand()-0.5)*spread)));
+      const h = heightMap[x] ? heightMap[x][z] : undefined;
+      if(h===undefined) continue;
+      const surfaceType = getBlock(x,h,z);
+      if(surfaceType===AIR || surfaceType===WATER) continue;
+      if(getBlock(x,h+1,z)!==AIR) continue;
+      const mesh = buildFurnaceMesh();
+      mesh.position.set(x+0.5, h+1, z+0.5);
+      scene.add(mesh);
+      furnaces.push({x:x+0.5, y:h+1, z:z+0.5, mesh, state:'idle', progress:0, smokeTimer:0});
+      placed=true;
+    }
+  }
+  scatterPickaxeSpawners();
+}
+// A floating, slowly-spinning, gently-bouncing pickaxe near each furnace -
+// free pickaxe for anyone who reaches it first, respawns after a cooldown.
+// Client-local, same as the furnaces themselves and for the same reason:
+// the server has zero terrain knowledge, so it doesn't know where the
+// furnaces are either - this couldn't be made server-authoritative
+// without first solving that for furnaces. In multiplayer, each player's
+// pickup is independent rather than synced across everyone watching.
+const PICKAXE_SPAWNER_RESPAWN_TIME = 45;
+let pickaxeSpawners = [];
+function buildPickaxeSpawnerMesh(){
+  const mesh = buildPickaxeMesh();
+  mesh.scale.set(2.4, 2.4, 2.4); // the held-item version is sized for first-person view, much too small to notice as a world object
+  return mesh;
+}
+function scatterPickaxeSpawners(){
+  for(const p of pickaxeSpawners) scene.remove(p.mesh);
+  pickaxeSpawners = [];
+  for(const f of furnaces){
+    const angle = Math.random()*Math.PI*2;
+    const dist = 2.5;
+    const x = f.x + Math.cos(angle)*dist;
+    const z = f.z + Math.sin(angle)*dist;
+    const y = f.y + 1.1;
+    const mesh = buildPickaxeSpawnerMesh();
+    mesh.position.set(x, y, z);
     scene.add(mesh);
-    furnaces.push({x:x+0.5, y:h+1, z:z+0.5, mesh, state:'idle', progress:0, smokeTimer:0});
-    placed++;
+    pickaxeSpawners.push({x, z, baseY:y, mesh, available:true, respawnTimer:0, bobPhase:Math.random()*Math.PI*2});
+  }
+}
+function updatePickaxeSpawners(dt){
+  for(const p of pickaxeSpawners){
+    if(!p.available){
+      if(!multiplayer){
+        p.respawnTimer -= dt;
+        if(p.respawnTimer<=0){
+          p.available = true;
+          p.mesh.visible = true;
+        }
+      }
+      continue;
+    }
+    p.bobPhase += dt*2;
+    p.mesh.position.y = p.baseY + Math.sin(p.bobPhase)*0.15;
+    p.mesh.rotation.y += dt*1.0;
+    const dx=p.x-player.x, dz=p.z-player.z, dy=p.mesh.position.y-(player.y+0.9);
+    const distSq = dx*dx+dy*dy+dz*dz;
+    if(distSq < 1.2*1.2){
+      if(multiplayer){
+        const index = pickaxeSpawners.indexOf(p);
+        if(socket && socket.readyState===WebSocket.OPEN){
+          socket.send(JSON.stringify({type:'grabPickaxe', index}));
+        }
+        p.available = false; // optimistic - avoids spamming requests while still standing in range; the server's broadcast is what everyone else (and this client, via pickaxeGranted) actually goes by
+        p.mesh.visible = false;
+      } else {
+        addToInventory(STONE_PICKAXE);
+        flashMessage('Picked up a Stone Pickaxe!');
+        sfxCrateOpen();
+        p.available = false;
+        p.mesh.visible = false;
+        p.respawnTimer = PICKAXE_SPAWNER_RESPAWN_TIME;
+      }
+    }
   }
 }
 function buildBandageMesh(){
@@ -3287,6 +3466,8 @@ function updateHeldItemMesh(){
     itemAnchor.add(buildSlingMesh());
   } else if(slot.type===WAR_CLUB){
     itemAnchor.add(buildClubMesh());
+  } else if(slot.type===METAL_SWORD){
+    itemAnchor.add(buildSwordMesh());
   } else if(slot.type===GRENADE){
     itemAnchor.add(buildGrenadeMesh());
   } else if(slot.type===ROCKET_LAUNCHER){
@@ -3328,6 +3509,7 @@ const WEAPON_CONFIG = {
   [STONE_SLING]:     { kind:'projectile', damage:3, speed:34.5, cooldown:0.3,  radius:0.06,  color:0x8a8a8a, sound:'sling', crateBreakRange:3 },
   [PISTOL]:          { kind:'projectile', damage:6, speed:60,   cooldown:0.4,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3, canBreakLeaves:true, breakRange:10 },
   [WAR_CLUB]:        { kind:'melee', damage:5, cooldown:0.6, range:2.6, crateBreakRange:3 },
+  [METAL_SWORD]:     { kind:'melee', damage:4, cooldown:0.45, range:2.8, crateBreakRange:3 },
   [GRENADE]:         { kind:'grenade', damage:17.5, cooldown:1.2, throwSpeed:11, blastRadius:2.8 },
   [ROCKET_LAUNCHER]: { kind:'rocket', damage:20, cooldown:1.4, speed:36, blastRadius:3.2, color:0xff5522 },
   // penetration: punches straight through this many soft blocks (dirt/grass/
@@ -3364,6 +3546,8 @@ const MELEE_SWING_DURATION = 0.25;
 let meleeSwingTimer = 0;
 const PUNCH_SWING_DURATION = 0.25;
 let punchSwingTimer = 0;
+const SWORD_SWING_DURATION = 0.3;
+let swordSwingTimer = 0;
 let pendingBurst = null; // {weapon, shotsRemaining, timer} - mid-burst shotgun state
 let darts = [];
 function shootProjectile(weapon){
@@ -3543,31 +3727,29 @@ function tryPunchAttack(){
   if(now-lastPunchTime < FIST_COOLDOWN*1000) return false;
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
+  const origin = camera.position;
   let closestKind=null, closestTarget=null, closestDist=Infinity;
   for(const en of enemies){
     if(!en.alive) continue;
-    const toEnemy = new THREE.Vector3(en.x-player.x, (en.y+0.6)-(player.y+currentEyeHeight), en.z-player.z);
-    const dist = toEnemy.length();
+    const dist = Math.hypot(en.x-player.x, en.z-player.z);
     if(dist>FIST_RANGE) continue;
-    toEnemy.normalize();
-    if(toEnemy.dot(dir)>0.6 && dist<closestDist){ closestDist=dist; closestTarget=en; closestKind='enemy'; }
+    const zone = resolveRayHitZone(origin, dir, FIST_RANGE, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R+0.08, en.y+ENEMY_BODY_Y,ENEMY_BODY_R+0.15);
+    if(zone && dist<closestDist){ closestDist=dist; closestTarget=en; closestKind='enemy'; }
   }
   if(multiplayer){
     for(const [id,rp] of remotePlayers){
       const pos = rp.group.position;
-      const toP = new THREE.Vector3(pos.x-player.x, (pos.y+0.8)-(player.y+currentEyeHeight), pos.z-player.z);
-      const dist = toP.length();
+      const dist = Math.hypot(pos.x-player.x, pos.z-player.z);
       if(dist>FIST_RANGE) continue;
-      toP.normalize();
-      if(toP.dot(dir)>0.6 && dist<closestDist){ closestDist=dist; closestTarget={id,pos,rp}; closestKind='player'; }
+      const zone = resolveRayHitZone(origin, dir, FIST_RANGE, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R+0.08, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R+0.15);
+      if(zone && dist<closestDist){ closestDist=dist; closestTarget={id,pos,rp}; closestKind='player'; }
     }
   }
   if(bossState && bossState.alive){
-    const toBoss = new THREE.Vector3(bossState.x-player.x, (bossState.y+BOSS_HIT_Y)-(player.y+currentEyeHeight), bossState.z-player.z);
-    const dist = toBoss.length();
+    const dist = Math.hypot(bossState.x-player.x, bossState.z-player.z);
     if(dist<=FIST_RANGE){
-      toBoss.normalize();
-      if(toBoss.dot(dir)>0.6 && dist<closestDist){ closestDist=dist; closestTarget=null; closestKind='boss'; }
+      const zone = resolveRayHitZone(origin, dir, FIST_RANGE, bossState.x,bossState.z, bossState.y+BOSS_HIT_Y,BOSS_HIT_R, bossState.y+BOSS_HIT_Y,BOSS_HIT_R);
+      if(zone && dist<closestDist){ closestDist=dist; closestTarget=null; closestKind='boss'; }
     }
   }
   if(!closestKind) return false;
@@ -3581,8 +3763,12 @@ function tryPunchAttack(){
     // enemies recompute their own position from AI each frame, so a smooth
     // decaying push would just get overwritten immediately - an instant
     // shove reads clearly instead
-    closestTarget.x += dir.x*FIST_KNOCKBACK;
-    closestTarget.z += dir.z*FIST_KNOCKBACK;
+    const knockX = closestTarget.x + dir.x*FIST_KNOCKBACK;
+    const knockZ = closestTarget.z + dir.z*FIST_KNOCKBACK;
+    if(!checkCollisionBox(knockX, closestTarget.y, knockZ, ENEMY_HALF_W, ENEMY_HEIGHT)){
+      closestTarget.x = knockX;
+      closestTarget.z = knockZ;
+    }
   } else if(closestKind==='player'){
     sendHit(closestTarget.id, FIST_DAMAGE, -1); // -1 = the reserved "Fists" sentinel for the kill feed
     showHitMarker(false);
@@ -3604,50 +3790,48 @@ function tryPunchAttack(){
 function meleeAttack(weapon){
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
+  const origin = camera.position;
   sfxSwing();
-  meleeSwingTimer = MELEE_SWING_DURATION;
-  let closestKind=null, closestTarget=null, closestDist=Infinity;
+  if(weapon.itemType===METAL_SWORD){
+    swordSwingTimer = SWORD_SWING_DURATION;
+  } else {
+    meleeSwingTimer = MELEE_SWING_DURATION;
+  }
+  let closestKind=null, closestTarget=null, closestDist=Infinity, closestZone=null;
   for(const en of enemies){
     if(!en.alive) continue;
-    const toEnemy = new THREE.Vector3(en.x-player.x, (en.y+0.6)-(player.y+currentEyeHeight), en.z-player.z);
-    const dist = toEnemy.length();
+    const dist = Math.hypot(en.x-player.x, en.z-player.z);
     if(dist>weapon.range) continue;
-    toEnemy.normalize();
-    if(toEnemy.dot(dir)>0.55 && dist<closestDist){ closestDist=dist; closestTarget=en; closestKind='enemy'; }
+    const zone = resolveRayHitZone(origin, dir, weapon.range, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R+0.08, en.y+ENEMY_BODY_Y,ENEMY_BODY_R+0.15);
+    if(zone && dist<closestDist){ closestDist=dist; closestTarget=en; closestKind='enemy'; closestZone=zone; }
   }
   if(multiplayer){
     for(const [id,rp] of remotePlayers){
       const pos = rp.group.position;
-      const toP = new THREE.Vector3(pos.x-player.x, (pos.y+0.8)-(player.y+currentEyeHeight), pos.z-player.z);
-      const dist = toP.length();
+      const dist = Math.hypot(pos.x-player.x, pos.z-player.z);
       if(dist>weapon.range) continue;
-      toP.normalize();
-      if(toP.dot(dir)>0.55 && dist<closestDist){ closestDist=dist; closestTarget={id,pos,rp}; closestKind='player'; }
+      const zone = resolveRayHitZone(origin, dir, weapon.range, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R+0.08, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R+0.15);
+      if(zone && dist<closestDist){ closestDist=dist; closestTarget={id,pos,rp}; closestKind='player'; closestZone=zone; }
     }
   }
   if(bossState && bossState.alive){
-    const toBoss = new THREE.Vector3(bossState.x-player.x, (bossState.y+BOSS_HIT_Y)-(player.y+currentEyeHeight), bossState.z-player.z);
-    const dist = toBoss.length();
+    const dist = Math.hypot(bossState.x-player.x, bossState.z-player.z);
     if(dist<=weapon.range){
-      toBoss.normalize();
-      if(toBoss.dot(dir)>0.55 && dist<closestDist){ closestDist=dist; closestTarget=null; closestKind='boss'; }
+      const zone = resolveRayHitZone(origin, dir, weapon.range, bossState.x,bossState.z, bossState.y+BOSS_HIT_Y,BOSS_HIT_R, bossState.y+BOSS_HIT_Y,BOSS_HIT_R);
+      if(zone && dist<closestDist){ closestDist=dist; closestTarget=null; closestKind='boss'; }
     }
   }
   if(closestKind==='enemy'){
-    const aim = camera.position.clone().addScaledVector(dir, closestDist);
-    const zone = resolveHitZone(aim.x,aim.y,aim.z, closestTarget.x,closestTarget.z, closestTarget.y+ENEMY_HEAD_Y,ENEMY_HEAD_R+0.08, closestTarget.y+ENEMY_BODY_Y,ENEMY_BODY_R+0.15);
-    const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
+    const dmg = closestZone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
     hitEnemy(closestTarget, dmg);
-    showHitMarker(zone==='head');
-    if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
+    showHitMarker(closestZone==='head');
+    if(closestZone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
     spawnBreakParticles(Math.floor(closestTarget.x),Math.floor(closestTarget.y+0.5),Math.floor(closestTarget.z), 0xff5555);
   } else if(closestKind==='player'){
-    const aim = camera.position.clone().addScaledVector(dir, closestDist);
-    const zone = resolveHitZone(aim.x,aim.y,aim.z, closestTarget.pos.x,closestTarget.pos.z, closestTarget.pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R+0.08, closestTarget.pos.y+PLAYER_BODY_Y,PLAYER_BODY_R+0.15);
-    const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
+    const dmg = closestZone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
     sendHit(closestTarget.id, dmg, weapon.itemType);
-    showHitMarker(zone==='head');
-    if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
+    showHitMarker(closestZone==='head');
+    if(closestZone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
     triggerHitEffect(closestTarget.rp);
     spawnBreakParticles(Math.floor(closestTarget.pos.x),Math.floor(closestTarget.pos.y+0.5),Math.floor(closestTarget.pos.z), 0xff5555);
   } else if(closestKind==='boss'){
@@ -3686,6 +3870,7 @@ const GRENADE_GRAVITY = -16;
 // destroyed anywhere in the full radius, lower means it only breaks up close.
 const BLAST_RESISTANCE = {
   [STONE]: 0.45,
+  [METAL_ORE]: 0.3,
   [DIRT]: 0.9,
   [SAND]: 0.9,
   [GRASS]: 0.95,
@@ -4023,6 +4208,7 @@ function buildGroundItemMesh(type){
     case BLOW_PIPE: return buildBlowPipeMesh();
     case STONE_SLING: return buildSlingMesh();
     case WAR_CLUB: return buildClubMesh();
+    case METAL_SWORD: return buildSwordMesh();
     case GRENADE: return buildGrenadeMesh();
     case ROCKET_LAUNCHER: return buildRocketLauncherMesh();
     case PISTOL: return buildPistolMesh();
@@ -4251,7 +4437,11 @@ const ARMOR_MAX_HEALTH = 20;
 const ARMOR_DAMAGE_REDUCTION = 0.4;
 let hasArmor = false;
 let armorHealth = 0;
+let godMode = false;
+let flyMode = false;
+const FLY_SPEED = 8;
 function takeDamage(amount){
+  if(godMode) return;
   if(amount<=0 || health<=0) return;
   if(respawnCountdownActive) return; // invulnerable while waiting to respawn
   if(multiplayer && (myEliminated || inSpectatorBox)) return; // already out of the match - no more damage until reset
@@ -4443,7 +4633,7 @@ const ENEMY_MAX_HEALTH = 8;
 // change. The multiplayer/server-side count is the separate ENEMY_COUNT
 // constant near the top of server.js and should be kept in step with this
 // if you want singleplayer and multiplayer to feel the same.
-const ENEMY_SPAWN_COUNT = 14;
+const ENEMY_SPAWN_COUNT = 18;
 const ENEMY_TOUCH_DAMAGE = 3;
 const ZOMBIE_TOUCH_DAMAGE = 4.5;
 const ENEMY_TOUCH_INTERVAL = 1.2;
@@ -4907,17 +5097,26 @@ function updateEnemies(dt){
       updateHitEffect(en, dt);
       if(!en.alive) continue;
       const posLerp = Math.min(1, dt*4);
-      en.x += (en.serverX-en.x)*posLerp;
-      en.z += (en.serverZ-en.z)*posLerp;
+      const targetX = en.x + (en.serverX-en.x)*posLerp;
+      const targetZ = en.z + (en.serverZ-en.z)*posLerp;
       // Horizontal position still comes from the server (it owns the AI
       // decision of where to go), but vertical movement is local, real jump
       // physics now - the same collision-based approach singleplayer already
-      // used. No more smoothly gliding up/down terrain: if the horizontal
-      // lerp above pushes them against a step, that shows up as a collision
-      // right here, and they have to actually jump to clear it.
-      if(en.onGround && checkCollisionBox(en.x, en.y, en.z, ENEMY_HALF_W, ENEMY_HEIGHT)){
-        const canJump = !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
-        if(canJump){ en.velY = ENEMY_JUMP_SPEED; en.onGround = false; }
+      // used. Check for an obstacle at the target spot BEFORE moving into
+      // it (matching how singleplayer already handles this) rather than
+      // moving unconditionally and discovering embedment afterward - the
+      // old version did the latter, which meant the "did I land" check
+      // kept re-finding the same block they were trying to jump out of and
+      // canceled the jump every single frame before it could build height.
+      const blockedAhead = checkCollisionBox(targetX, en.y, targetZ, ENEMY_HALF_W, ENEMY_HEIGHT);
+      if(blockedAhead){
+        if(en.onGround){
+          const canJump = !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
+          if(canJump){ en.velY = ENEMY_JUMP_SPEED; en.onGround = false; }
+        }
+      } else {
+        en.x = targetX;
+        en.z = targetZ;
       }
       en.velY += ENEMY_GRAVITY*dt;
       if(en.velY < -30) en.velY = -30;
@@ -4940,8 +5139,7 @@ function updateEnemies(dt){
         takeDamage(en.isZombie ? ZOMBIE_TOUCH_DAMAGE : ENEMY_TOUCH_DAMAGE);
         en.touchCooldown = ENEMY_TOUCH_INTERVAL;
         const pushDist = Math.sqrt(tdx*tdx+tdz*tdz) || 1;
-        player.x -= (tdx/pushDist)*ENEMY_TOUCH_KNOCKBACK;
-        player.z -= (tdz/pushDist)*ENEMY_TOUCH_KNOCKBACK;
+        tryMove(-(tdx/pushDist)*ENEMY_TOUCH_KNOCKBACK, 0, -(tdz/pushDist)*ENEMY_TOUCH_KNOCKBACK);
       }
     }
     return;
@@ -5004,8 +5202,7 @@ function updateEnemies(dt){
       takeDamage(en.isZombie ? ZOMBIE_TOUCH_DAMAGE : ENEMY_TOUCH_DAMAGE);
       en.touchCooldown = ENEMY_TOUCH_INTERVAL;
       const pushDist = Math.sqrt(tdx*tdx+tdz*tdz) || 1;
-      player.x -= (tdx/pushDist)*ENEMY_TOUCH_KNOCKBACK;
-      player.z -= (tdz/pushDist)*ENEMY_TOUCH_KNOCKBACK;
+      tryMove(-(tdx/pushDist)*ENEMY_TOUCH_KNOCKBACK, 0, -(tdz/pushDist)*ENEMY_TOUCH_KNOCKBACK);
     }
   }
 }
@@ -5281,8 +5478,14 @@ function spawnFurnaceNearPlayer(){
   const mesh = buildFurnaceMesh();
   mesh.position.set(x+0.5, h+1, z+0.5);
   scene.add(mesh);
-  furnaces.push({x:x+0.5, y:h+1, z:z+0.5, mesh, state:'idle', progress:0, smokeTimer:0});
-  flashMessage('Spawned a furnace nearby');
+  const newFurnace = {x:x+0.5, y:h+1, z:z+0.5, mesh, state:'idle', progress:0, smokeTimer:0};
+  furnaces.push(newFurnace);
+  const pMesh = buildPickaxeSpawnerMesh();
+  const pY = newFurnace.y+1.1;
+  pMesh.position.set(newFurnace.x+2.5, pY, newFurnace.z);
+  scene.add(pMesh);
+  pickaxeSpawners.push({x:newFurnace.x+2.5, z:newFurnace.z, baseY:pY, mesh:pMesh, available:true, respawnTimer:0, bobPhase:Math.random()*Math.PI*2});
+  flashMessage('Spawned a furnace and pickaxe nearby');
 }
 function countOfType(type){
   return slots.reduce((sum,s)=> s.type===type ? sum+s.count : sum, 0);
@@ -5341,7 +5544,7 @@ const MINE_TIME = {
   [WOOD]:0.6, [PLANKS]:0.5, [STONE]:1.1, [REEDS]:0.15, [WATER]:0.2, [LOOT_CRATE]:0.6, [POWERUP_CRATE]:0.4, [MED_CRATE]:0.4,
   [RUBBLE]:0.5, [SNOW]:0.2, [METAL]:1.4, [GLASS]:0.2, [CLEAR_GLASS]:0.2, [METAL_ORE]:1.6
 };
-const PICKAXE_SPEED_MULT = 2.5;
+const PICKAXE_SPEED_MULT = 1.75; // was 2.5 - gather rate reduced 30%
 function effectiveMineTime(type){
   const base = MINE_TIME[type] || 0.4;
   const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
@@ -5367,6 +5570,12 @@ function updateMining(dt){
     return;
   }
   const t = getBlock(hit.x,hit.y,hit.z);
+  const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
+  if(t===METAL_ORE && equipped!==STONE_PICKAXE){
+    if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
+    flashMessage('Need a Stone Pickaxe to mine Metal Ore');
+    return;
+  }
   if(!mining || mining.x!==hit.x || mining.y!==hit.y || mining.z!==hit.z){
     mining = {x:hit.x, y:hit.y, z:hit.z, type:t, progress:0};
   } else {
@@ -5533,12 +5742,20 @@ function toggleDev(){
     requestPointerLockSafe();
   }
 }
+function addDevSectionTitle(list, text){
+  const title = document.createElement('div');
+  title.className='devSectionTitle';
+  title.textContent = text;
+  list.appendChild(title);
+}
 function renderDevPanel(){
   const list = document.getElementById('devList');
   list.innerHTML='';
+
+  addDevSectionTitle(list, 'Match Admin');
   const adminRow = document.createElement('div');
   adminRow.className='devRow';
-  adminRow.innerHTML = `<div class="desc">Admin (multiplayer only)${multiplayer?'':' - connect to a server first'}</div>`;
+  adminRow.innerHTML = `<div class="desc">Admin${multiplayer?'':' (connect to a server first)'}</div>`;
   const adminBtns = document.createElement('div');
   adminBtns.className='btns';
   const skipBtn = document.createElement('div'); skipBtn.className='btn'; skipBtn.textContent='Skip Phase';
@@ -5568,6 +5785,30 @@ function renderDevPanel(){
   mapRow.appendChild(mapBtns);
   list.appendChild(mapRow);
 
+  addDevSectionTitle(list, 'Cheats & Testing');
+  const cheatRow = document.createElement('div');
+  cheatRow.className='devRow';
+  cheatRow.innerHTML = `<div class="desc">God Mode / Fly</div>`;
+  const cheatBtns = document.createElement('div');
+  cheatBtns.className='btns';
+  const godBtn = document.createElement('div'); godBtn.className='btn';
+  godBtn.textContent = 'God Mode: '+(godMode?'ON':'OFF');
+  godBtn.addEventListener('click', ()=>{
+    godMode = !godMode;
+    godBtn.textContent = 'God Mode: '+(godMode?'ON':'OFF');
+    flashMessage('God Mode '+(godMode?'enabled':'disabled'));
+  });
+  const flyBtn = document.createElement('div'); flyBtn.className='btn';
+  flyBtn.textContent = 'Fly Mode: '+(flyMode?'ON':'OFF');
+  flyBtn.addEventListener('click', ()=>{
+    flyMode = !flyMode;
+    flyBtn.textContent = 'Fly Mode: '+(flyMode?'ON':'OFF');
+    flashMessage('Fly Mode '+(flyMode?'enabled':'disabled')+' - Space up, C down');
+  });
+  cheatBtns.appendChild(godBtn); cheatBtns.appendChild(flyBtn);
+  cheatRow.appendChild(cheatBtns);
+  list.appendChild(cheatRow);
+
   const healthRow = document.createElement('div');
   healthRow.className='devRow';
   healthRow.innerHTML = `<div class="desc">Health (${health}/${MAX_HEALTH})</div>`;
@@ -5581,9 +5822,10 @@ function renderDevPanel(){
   healthRow.appendChild(healthBtns);
   list.appendChild(healthRow);
 
+  addDevSectionTitle(list, 'Spawn Near You');
   const spawnRow = document.createElement('div');
   spawnRow.className='devRow';
-  spawnRow.innerHTML = `<div class="desc">Spawn near you</div>`;
+  spawnRow.innerHTML = `<div class="desc">World objects</div>`;
   const spawnBtns = document.createElement('div');
   spawnBtns.className='btns';
   const crateBtn = document.createElement('div'); crateBtn.className='btn'; crateBtn.textContent='Loot Crate';
@@ -5598,20 +5840,30 @@ function renderDevPanel(){
   spawnRow.appendChild(spawnBtns);
   list.appendChild(spawnRow);
 
-  ALL_ITEM_TYPES.forEach(t=>{
-    const row = document.createElement('div');
-    row.className='devRow';
-    row.innerHTML = `<div class="desc"><span class="sw" style="background:#${BLOCK_COLORS[t].toString(16).padStart(6,'0')}"></span>${BLOCK_NAMES[t]}</div>`;
-    const btns = document.createElement('div');
-    btns.className='btns';
-    const b1 = document.createElement('div'); b1.className='btn'; b1.textContent='+1';
-    b1.addEventListener('click', ()=>{ addToInventory(t); });
-    const b10 = document.createElement('div'); b10.className='btn'; b10.textContent='+10';
-    b10.addEventListener('click', ()=>{ for(let i=0;i<10;i++) addToInventory(t); });
-    btns.appendChild(b1); btns.appendChild(b10);
-    row.appendChild(btns);
-    list.appendChild(row);
+  addDevSectionTitle(list, 'Give Items');
+  const itemsGrid = document.createElement('div');
+  itemsGrid.className='devItemsGrid';
+  ITEM_GROUPS.forEach(group=>{
+    const label = document.createElement('div');
+    label.className='devGroupLabel';
+    label.textContent = group.label;
+    itemsGrid.appendChild(label);
+    group.items.forEach(t=>{
+      const row = document.createElement('div');
+      row.className='devRow';
+      row.innerHTML = `<div class="desc"><span class="sw" style="background:#${BLOCK_COLORS[t].toString(16).padStart(6,'0')}"></span>${BLOCK_NAMES[t]}</div>`;
+      const btns = document.createElement('div');
+      btns.className='btns';
+      const b1 = document.createElement('div'); b1.className='btn'; b1.textContent='+1';
+      b1.addEventListener('click', ()=>{ addToInventory(t); });
+      const b10 = document.createElement('div'); b10.className='btn'; b10.textContent='+10';
+      b10.addEventListener('click', ()=>{ for(let i=0;i<10;i++) addToInventory(t); });
+      btns.appendChild(b1); btns.appendChild(b10);
+      row.appendChild(btns);
+      itemsGrid.appendChild(row);
+    });
   });
+  list.appendChild(itemsGrid);
 }
 document.getElementById('btnCloseDev').addEventListener('click', toggleDev);
 document.getElementById('btnDevTop').addEventListener('click', toggleDev);
@@ -5701,7 +5953,7 @@ const RECIPES = [
   { ingredients:[{type:CARBINE,count:2}], results:[{type:RIFLE,count:1}], desc:'2 Carbines &rarr; 1 Rifle (trade up)' },
   { ingredients:[{type:RIFLE,count:2}], results:[{type:SNIPER,count:1}], desc:'2 Rifles &rarr; 1 Sniper Rifle (trade up)' },
   { ingredients:[{type:WAR_CLUB,count:2}], results:[{type:ROCKET_LAUNCHER,count:1}], desc:'2 War Clubs &rarr; 1 Rocket Launcher (trade up)' },
-  { ingredients:[{type:METAL_BAR,count:5}], results:[{type:ARMOR_HELMET,count:1}], desc:'5 Metal Bars &rarr; 1 Armor Helmet (40% damage reduction until it breaks)', craftTime:1.0 },
+  { ingredients:[{type:METAL_BAR,count:2},{type:PLANKS,count:1}], results:[{type:METAL_SWORD,count:1}], desc:'2 Metal Bars + 1 Planks &rarr; 1 Metal Sword (melee, faster and longer reach than the War Club, less damage per hit)' },
 ];
 function isRecipeCraftable(recipe){
   return recipe.ingredients.every(ing => countOfType(ing.type) >= ing.count);
@@ -6059,6 +6311,7 @@ function buildRemoteHeldItemMesh(type){
     case BLOW_PIPE: return buildBlowPipeMesh();
     case STONE_SLING: return buildSlingMesh();
     case WAR_CLUB: return buildClubMesh();
+    case METAL_SWORD: return buildSwordMesh();
     case GRENADE: return buildGrenadeMesh();
     case ROCKET_LAUNCHER: return buildRocketLauncherMesh();
     case DOUBLE_BARREL: return buildDoubleBarrelMesh();
@@ -6284,6 +6537,11 @@ function connectMultiplayer(url, name){
   };
 }
 function handleNetMessage(msg){
+  if(msg.type==='full'){
+    setMpConnectStatus(msg.message || 'Server is full.', true);
+    flashMessage(msg.message || 'Server is full.');
+    return;
+  }
   if(msg.type==='welcome'){
     // Hide the menu FIRST, before any of the setup below - if something
     // downstream throws (e.g. an out-of-date server sending a differently
@@ -6300,6 +6558,20 @@ function handleNetMessage(msg){
       // fall back to highlands if an older server didn't send this field
       applyBiomeProfile(msg.biome || 'highlands');
       generateWorld();
+      if(msg.furnaceStates) for(let i=0;i<msg.furnaceStates.length;i++){
+        const f = furnaces[i];
+        if(f && msg.furnaceStates[i].busy){
+          f.state = 'smelting';
+          f.mesh.userData.mouth.material = f.mesh.userData.mouthMatOn;
+        }
+      }
+      if(msg.pickaxeSpawnerStates) for(let i=0;i<msg.pickaxeSpawnerStates.length;i++){
+        const p = pickaxeSpawners[i];
+        if(p && !msg.pickaxeSpawnerStates[i].available){
+          p.available = false;
+          p.mesh.visible = false;
+        }
+      }
       updateSkybox(biomeMode);
       startAmbience(biomeMode);
       if(msg.diffs) for(const d of msg.diffs) setBlock(d.x,d.y,d.z,d.blockType);
@@ -6335,6 +6607,25 @@ function handleNetMessage(msg){
     }catch(e){
       console.error('Error while joining multiplayer world:', e);
       flashMessage('Something went wrong joining the server - check the console for details, or try again');
+    }
+  } else if(msg.type==='furnaceState'){
+    const f = furnaces[msg.index];
+    if(f){
+      f.state = msg.busy ? 'smelting' : 'idle';
+      f.progress = 0;
+      f.smokeTimer = 0;
+      f.mesh.userData.mouth.material = msg.busy ? f.mesh.userData.mouthMatOn : f.mesh.userData.mouthMatOff;
+      if(!msg.busy) flashMessage('Smelting complete - Metal Bar ready!');
+    }
+  } else if(msg.type==='pickaxeGranted'){
+    addToInventory(STONE_PICKAXE);
+    flashMessage('Picked up a Stone Pickaxe!');
+    sfxCrateOpen();
+  } else if(msg.type==='pickaxeSpawnerState'){
+    const p = pickaxeSpawners[msg.index];
+    if(p){
+      p.available = msg.available;
+      p.mesh.visible = msg.available;
     }
   } else if(msg.type==='armorState'){
     const rp = remotePlayers.get(msg.id);
@@ -6454,6 +6745,20 @@ function handleNetMessage(msg){
     seed = msg.seed;
     applyBiomeProfile(msg.biome || biomeMode);
     generateWorld();
+    if(msg.furnaceStates) for(let i=0;i<msg.furnaceStates.length;i++){
+      const f = furnaces[i];
+      if(f && msg.furnaceStates[i].busy){
+        f.state = 'smelting';
+        f.mesh.userData.mouth.material = f.mesh.userData.mouthMatOn;
+      }
+    }
+    if(msg.pickaxeSpawnerStates) for(let i=0;i<msg.pickaxeSpawnerStates.length;i++){
+      const p = pickaxeSpawners[i];
+      if(p && !msg.pickaxeSpawnerStates[i].available){
+        p.available = false;
+        p.mesh.visible = false;
+      }
+    }
     updateSkybox(biomeMode);
     startAmbience(biomeMode);
     for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
@@ -6699,22 +7004,47 @@ function animate(){
       if(move.lengthSq()>0) move.normalize().multiplyScalar(speed*dt);
     }
 
-    // Gravity/falling always applies, menu or no menu - a menu being open
-    // shouldn't mean you float in place while still taking damage from
-    // other players, only to have everything jump to catch up once closed.
-    velocity.y += GRAVITY*dt;
-    if(velocity.y<-40) velocity.y=-40;
-    if(canAct && onGround && keys.jump){ velocity.y = JUMP_SPEED; onGround=false; sfxJump(); }
+    let onGroundBefore;
+    if(flyMode){
+      const flyMoveSpeed = FLY_SPEED * (keys.sprint ? 2 : 1); // shift doubles fly speed, both horizontal and vertical
+      velocity.y = 0; // no gravity while flying
+      let flyDy = 0;
+      if(canAct){
+        if(keys.jump) flyDy += flyMoveSpeed*dt;
+        if(keys.crouch) flyDy -= flyMoveSpeed*dt;
+      }
+      onGroundBefore = false;
+      onGround = false;
+      airPeakY = player.y; // no fall-damage bookkeeping while flying
+      if(canAct){
+        const flyMove = new THREE.Vector3();
+        if(keys.forward) flyMove.sub(forward);
+        if(keys.back) flyMove.add(forward);
+        if(keys.right) flyMove.add(right);
+        if(keys.left) flyMove.sub(right);
+        if(flyMove.lengthSq()>0) flyMove.normalize().multiplyScalar(flyMoveSpeed*dt);
+        tryMove(flyMove.x,0,0);
+        tryMove(0,0,flyMove.z);
+      }
+      tryMove(0, flyDy, 0);
+    } else {
+      // Gravity/falling always applies, menu or no menu - a menu being open
+      // shouldn't mean you float in place while still taking damage from
+      // other players, only to have everything jump to catch up once closed.
+      velocity.y += GRAVITY*dt;
+      if(velocity.y<-40) velocity.y=-40;
+      if(canAct && onGround && keys.jump){ velocity.y = JUMP_SPEED; onGround=false; sfxJump(); }
 
-    const onGroundBefore = onGround;
-    if(onGroundBefore) airPeakY = player.y;
-    airPeakY = Math.max(airPeakY, player.y);
+      onGroundBefore = onGround;
+      if(onGroundBefore) airPeakY = player.y;
+      airPeakY = Math.max(airPeakY, player.y);
 
-    if(canAct){
-      tryMove(move.x,0,0);
-      tryMove(0,0,move.z);
+      if(canAct){
+        tryMove(move.x,0,0);
+        tryMove(0,0,move.z);
+      }
+      tryMove(0, velocity.y*dt, 0);
     }
-    tryMove(0, velocity.y*dt, 0);
 
     if(onGround && !onGroundBefore){
       const fallDist = airPeakY - player.y;
@@ -6752,6 +7082,7 @@ function animate(){
     updateBandageChannel(dt);
     updateArmorCraft(dt);
     updateFurnaces(dt);
+    updatePickaxeSpawners(dt);
     updateCooldownRing();
     const targetFOV = isAiming ? getZoomFOV() : BASE_FOV;
     if(Math.abs(camera.fov-targetFOV) > 0.01){
@@ -6772,6 +7103,13 @@ function animate(){
       itemAnchor.rotation.x = 0;
       itemAnchor.rotation.z = 0;
     }
+    if(mining){
+      const swingPeriod = 0.35; // seconds per swing cycle - repeats continuously while mining
+      const swingPhase = (mining.progress % swingPeriod) / swingPeriod;
+      const mineArc = Math.sin(swingPhase*Math.PI);
+      itemAnchor.rotation.x = -mineArc*0.7;
+      itemAnchor.rotation.z = mineArc*0.35;
+    }
     if(punchSwingTimer>0){
       punchSwingTimer = Math.max(0, punchSwingTimer-dt);
       const punchFrac = 1 - (punchSwingTimer/PUNCH_SWING_DURATION);
@@ -6779,6 +7117,16 @@ function animate(){
       handGroup.rotation.x = 0.2 - punchArc*0.35;
     } else {
       handGroup.rotation.x = 0.2;
+    }
+    if(swordSwingTimer>0){
+      swordSwingTimer = Math.max(0, swordSwingTimer-dt);
+      const swordFrac = 1 - (swordSwingTimer/SWORD_SWING_DURATION);
+      const swordArc = Math.sin(swordFrac*Math.PI); // rises then falls back to 0, same shape as the other swings
+      armPivot.rotation.z = swordArc*1.3; // flipped direction - now sweeps in toward center instead of out toward the edge
+      armPivot.rotation.x = -swordArc*0.4;
+    } else {
+      armPivot.rotation.z = 0;
+      armPivot.rotation.x = 0;
     }
 
     noDamageTimer += dt;
