@@ -29,7 +29,7 @@
     display:flex; align-items:center; justify-content:center;
   }
   .slot.selected { border-color:#fff; box-shadow:0 0 8px rgba(255,255,255,0.9); }
-  .slot .swatch { width:32px; height:32px; border-radius:3px; box-shadow: inset 0 0 4px rgba(0,0,0,0.5); }
+  .slot .swatch { width:100%; height:100%; border-radius:6px; box-shadow: inset 0 0 4px rgba(0,0,0,0.5); }
   .slot .count {
     position:absolute; bottom:2px; right:4px; color:#fff; font-size:12px;
     font-weight:bold; text-shadow:1px 1px 1px #000;
@@ -439,7 +439,7 @@
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
-  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.34</div>
+  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.35</div>
 </div>
 
 <div id="chatLog"></div>
@@ -620,6 +620,8 @@ const METAL_ORE=32;      // minable terrain block - spawns underground in deep s
 const METAL_BAR=33;      // smelted resource - inventory item, no direct combat use yet
 const ARMOR_HELMET=34;   // crafted from Metal Bars - reduces damage 40% while it has durability left
 const METAL_SWORD=35;    // crafted melee weapon - faster, longer reach, less damage-per-hit than the War Club
+const PLANT_FIBER=36;    // crafted from Leaves - inventory item, no direct combat use, intermediate step toward Bandage
+const ADMIN_ROCKET_LAUNCHER=37; // dev-tools-only weapon, never in loot/crafting - same stats as Rocket Launcher but 4x fire rate, gold-colored
 const SOLID_TYPES = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, PLANKS, REEDS, RUBBLE, SNOW, METAL, GLASS, CLEAR_GLASS, METAL_ORE];
 const WORLD_ONLY_TYPES = [LOOT_CRATE, POWERUP_CRATE, MED_CRATE]; // rendered in the world but never held/placed by the player
 const ALL_RENDER_TYPES = [...SOLID_TYPES, ...WORLD_ONLY_TYPES];
@@ -631,13 +633,13 @@ const BLOCK_COLORS = {
   [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [GRENADE]:0x3a4a3a,
   [POWERUP_CRATE]:0x2a6f8a, [ROCKET_LAUNCHER]:0x555555, [RUBBLE]:0x9c8570,
   [DOUBLE_BARREL]:0x4a3520, [PUMP_SHOTGUN]:0x333333, [RIFLE]:0xc9a227, [SNOW]:0xf0f5fa, [METAL]:0x5a6570,
-  [PISTOL]:0x707070, [CARBINE]:0x8a6a45, [GLASS]:0xbfe0f0, [CLEAR_GLASS]:0xeaf7fb, [SNIPER]:0x2a3a2a, [BANDAGE]:0xe8ddc8, [STIM_INJECTOR]:0x5fd0ff
+  [PISTOL]:0x707070, [CARBINE]:0x8a6a45, [GLASS]:0xbfe0f0, [CLEAR_GLASS]:0xeaf7fb, [SNIPER]:0x2a3a2a, [BANDAGE]:0xe8ddc8, [STIM_INJECTOR]:0x5fd0ff, [PLANT_FIBER]:0x9a8a4a, [ADMIN_ROCKET_LAUNCHER]:0xffd700
 };
 const BLOCK_NAMES = {
   [GRASS]:'Grass', [DIRT]:'Dirt', [STONE]:'Stone', [SAND]:'Sand',
   [WOOD]:'Wood', [LEAVES]:'Leaves', [WATER]:'Water', [PLANKS]:'Planks',
   [STONE_PICKAXE]:'Stone Pickaxe', [REEDS]:'Reeds', [BLOW_PIPE]:'Blow Pipe',
-  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade', [MED_CRATE]:'Med Crate', [-1]:'Fists', [METAL_ORE]:'Metal Ore', [METAL_BAR]:'Metal Bar', [ARMOR_HELMET]:'Armor Helmet', [METAL_SWORD]:'Metal Sword',
+  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade', [MED_CRATE]:'Med Crate', [-1]:'Fists', [METAL_ORE]:'Metal Ore', [METAL_BAR]:'Metal Bar', [ARMOR_HELMET]:'Armor Helmet', [METAL_SWORD]:'Metal Sword', [PLANT_FIBER]:'Plant Fiber', [ADMIN_ROCKET_LAUNCHER]:'Admin Rocket Launcher',
   [POWERUP_CRATE]:'Power Crate', [ROCKET_LAUNCHER]:'Rocket Launcher', [RUBBLE]:'Rubble',
   [DOUBLE_BARREL]:'Double Barrel', [PUMP_SHOTGUN]:'Pump Shotgun', [RIFLE]:'Rifle', [SNOW]:'Snow', [METAL]:'Metal',
   [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass', [SNIPER]:'Sniper Rifle', [BANDAGE]:'Bandage', [STIM_INJECTOR]:'Stim Injector'
@@ -647,13 +649,14 @@ const ITEM_ICON = {
   [GRENADE]:'\u2600', [ROCKET_LAUNCHER]:'\u2191', [DOUBLE_BARREL]:'\u25CF', [PUMP_SHOTGUN]:'\u25CF', [RIFLE]:'\u25CF',
   [PISTOL]:'\u25CF', [CARBINE]:'\u25CF', [SNIPER]:'\u25CF', [BANDAGE]:'\u2795', [STIM_INJECTOR]:'\u2695'
 };
-const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR,METAL_ORE,METAL_BAR,ARMOR_HELMET,METAL_SWORD];
+const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR,METAL_ORE,METAL_BAR,ARMOR_HELMET,METAL_SWORD,PLANT_FIBER,ADMIN_ROCKET_LAUNCHER];
 // Same 32 items as ALL_ITEM_TYPES above, just grouped by category for the
 // dev panel's "Give Items" display instead of one flat list.
 const ITEM_GROUPS = [
   { label:'Blocks & Terrain', items:[GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,RUBBLE,SNOW,METAL,GLASS,CLEAR_GLASS,METAL_ORE] },
-  { label:'Tools & Materials', items:[STONE_PICKAXE,METAL_BAR] },
+  { label:'Tools & Materials', items:[STONE_PICKAXE,METAL_BAR,PLANT_FIBER] },
   { label:'Weapons', items:[BLOW_PIPE,STONE_SLING,WAR_CLUB,METAL_SWORD,GRENADE,ROCKET_LAUNCHER,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,PISTOL,CARBINE,SNIPER] },
+  { label:'Admin Weapons', items:[ADMIN_ROCKET_LAUNCHER] },
   { label:'Meds & Armor', items:[BANDAGE,STIM_INJECTOR,ARMOR_HELMET] }
 ];
 
@@ -968,9 +971,20 @@ function scatterCaveTunnels(count){
 
 function scatterLootAndPowerCrates(){
   const changes = [];
+  // Density-based instead of fixed counts, so crate density stays roughly
+  // constant regardless of map size instead of the same absolute count
+  // getting diluted across a much bigger map (or overcrowded on a much
+  // smaller one). Density constants are exactly the current 76x76 tuning
+  // expressed per 1000 tiles - verified this reproduces the old fixed
+  // counts (15/8/3) exactly at today's size before changing anything.
+  const area = WORLD_X*WORLD_Z;
+  const lootTarget = Math.max(1, Math.round(2.597*area/1000));
+  const powerTarget = Math.max(1, Math.round(1.385*area/1000));
+  const medTarget = Math.max(1, Math.round(0.519*area/1000));
   const rand3 = mulberry32(seed+321);
   let cratesPlaced=0, crateAttempts=0;
-  while(cratesPlaced<15 && crateAttempts<500){
+  const lootAttemptCap = Math.max(500, lootTarget*30);
+  while(cratesPlaced<lootTarget && crateAttempts<lootAttemptCap){
     crateAttempts++;
     const x = 2+Math.floor(rand3()*(WORLD_X-4));
     const z = 2+Math.floor(rand3()*(WORLD_Z-4));
@@ -985,7 +999,8 @@ function scatterLootAndPowerCrates(){
   }
   const rand4 = mulberry32(seed+654);
   let powerCratesPlaced=0, powerAttempts=0;
-  while(powerCratesPlaced<8 && powerAttempts<500){
+  const powerAttemptCap = Math.max(500, powerTarget*30);
+  while(powerCratesPlaced<powerTarget && powerAttempts<powerAttemptCap){
     powerAttempts++;
     const x = 2+Math.floor(rand4()*(WORLD_X-4));
     const z = 2+Math.floor(rand4()*(WORLD_Z-4));
@@ -1000,7 +1015,8 @@ function scatterLootAndPowerCrates(){
   }
   const rand5 = mulberry32(seed+987);
   let medCratesPlaced=0, medAttempts=0;
-  while(medCratesPlaced<3 && medAttempts<500){ // rarer than both loot (12) and power (6) crates
+  const medAttemptCap = Math.max(500, medTarget*30);
+  while(medCratesPlaced<medTarget && medAttempts<medAttemptCap){ // rarer than both loot and power crates
     medAttempts++;
     const x = 2+Math.floor(rand5()*(WORLD_X-4));
     const z = 2+Math.floor(rand5()*(WORLD_Z-4));
@@ -1352,9 +1368,17 @@ function buildMausoleum(x,z,rand){
 // already-carved path, rather than starting independent random walks and
 // hoping they happen to connect. The two floors are linked by a handful
 // of vertical connector shafts.
-const TUNNEL_CEILING_Y = 17; // everything above this stays open air, same as every other biome's spectator box
-const TUNNEL_FLOOR1_Y = 5;
-const TUNNEL_FLOOR2_Y = 12;
+const TUNNEL_CEILING_Y = 13; // everything above this stays open air, same as every other biome's spectator box - reduced from 17 for less overall verticality
+const TUNNEL_FLOOR1_Y = 4;
+const TUNNEL_FLOOR2_Y = 9;
+// Horizontal bounds for the tunnel network specifically - set fresh at the
+// start of generateTunnelsWorld() (not a fixed constant), since they're a
+// proportion of WORLD_X/WORLD_Z, which can differ between singleplayer's
+// default and whatever a multiplayer server actually provides. Keeps the
+// tunnels' footprint smaller than the full map while leaving WORLD_X/Z
+// themselves untouched, since those are shared by every other biome, all
+// spawn logic, and multiplayer sync.
+let TUNNEL_MIN_X = 0, TUNNEL_MAX_X = 0, TUNNEL_MIN_Z = 0, TUNNEL_MAX_Z = 0;
 let tunnelSpawnPoints = [];
 function carveTunnelBranch(x, y, z, angle, steps, rand, depth){
   const carveRadius = 1.0; // narrower still, per feedback
@@ -1373,8 +1397,8 @@ function carveTunnelBranch(x, y, z, angle, steps, rand, depth){
     angle += (rand()-0.5)*0.5;
     x += Math.sin(angle)*1.4;
     z += Math.cos(angle)*1.4;
-    x = Math.max(3, Math.min(WORLD_X-4, x));
-    z = Math.max(3, Math.min(WORLD_Z-4, z));
+    x = Math.max(TUNNEL_MIN_X, Math.min(TUNNEL_MAX_X, x));
+    z = Math.max(TUNNEL_MIN_Z, Math.min(TUNNEL_MAX_Z, z));
     if(depth<3 && s>3 && s%6===0 && rand()<0.72){
       carveTunnelBranch(x, y, z, angle + (rand()<0.5?1:-1)*(Math.PI/2+(rand()-0.5)), Math.floor(steps*0.6), rand, depth+1);
     }
@@ -1418,29 +1442,48 @@ function findTunnelFloorY(x, startY, z){
   return null;
 }
 function scatterTunnelLoot(){
+  const changes = [];
   const rand = mulberry32(seed+555);
-  if(tunnelSpawnPoints.length===0) return;
+  if(tunnelSpawnPoints.length===0) return changes;
+  // Same density-based approach as scatterLootAndPowerCrates, and for the
+  // same reason - verified these densities reproduce the exact old fixed
+  // counts (10/6) at today's 76x76 size before applying to other sizes.
+  const area = WORLD_X*WORLD_Z;
+  const lootTarget = Math.max(1, Math.round(1.731*area/1000));
+  const medTarget = Math.max(1, Math.round(1.039*area/1000));
   let lootPlaced=0, lootAttempts=0;
-  while(lootPlaced<10 && lootAttempts<400){
+  const lootAttemptCap = Math.max(400, lootTarget*30);
+  while(lootPlaced<lootTarget && lootAttempts<lootAttemptCap){
     lootAttempts++;
     const p = tunnelSpawnPoints[Math.floor(rand()*tunnelSpawnPoints.length)];
     const floorY = findTunnelFloorY(p.x, p.y+2, p.z);
     if(floorY===null || getBlock(p.x,floorY,p.z)!==AIR) continue;
     setBlock(p.x,floorY,p.z,LOOT_CRATE);
+    changes.push({x:p.x, y:floorY, z:p.z, blockType:LOOT_CRATE});
     lootPlaced++;
   }
   let medPlaced=0, medAttempts=0;
-  while(medPlaced<6 && medAttempts<400){
+  const medAttemptCap = Math.max(400, medTarget*30);
+  while(medPlaced<medTarget && medAttempts<medAttemptCap){
     medAttempts++;
     const p = tunnelSpawnPoints[Math.floor(rand()*tunnelSpawnPoints.length)];
     const floorY = findTunnelFloorY(p.x, p.y+2, p.z);
     if(floorY===null || getBlock(p.x,floorY,p.z)!==AIR) continue;
     setBlock(p.x,floorY,p.z,MED_CRATE);
+    changes.push({x:p.x, y:floorY, z:p.z, blockType:MED_CRATE});
     medPlaced++;
   }
+  return changes;
 }
 function generateTunnelsWorld(){
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
+  // Tunnels occupy roughly the middle 65% of the full map width/depth,
+  // rather than the full WORLD_X/WORLD_Z extent every other biome uses -
+  // computed fresh here since it depends on the actual world size, which
+  // can differ between singleplayer's default and a multiplayer server's.
+  const marginX = WORLD_X*0.175, marginZ = WORLD_Z*0.175;
+  TUNNEL_MIN_X = marginX; TUNNEL_MAX_X = WORLD_X-marginX;
+  TUNNEL_MIN_Z = marginZ; TUNNEL_MAX_Z = WORLD_Z-marginZ;
   const randFill = mulberry32(seed+111);
   const oreRand = mulberry32(seed+781);
   for(let x=0;x<WORLD_X;x++){
@@ -1462,11 +1505,19 @@ function generateTunnelsWorld(){
   const rand = mulberry32(seed+222);
   carveTunnelBranch(WORLD_X/2, TUNNEL_FLOOR1_Y, WORLD_Z/2, rand()*Math.PI*2, 50, rand, 0);
   carveTunnelBranch(WORLD_X/2+10, TUNNEL_FLOOR2_Y, WORLD_Z/2-10, rand()*Math.PI*2, 45, rand, 0);
+  // Extra trunks/shafts scale with area instead of being fixed counts, so
+  // coverage doesn't fall off on a much bigger map (or overlap itself into
+  // one big cavern on a much smaller one, which is what fixed counts did
+  // at candidate sizes - checked directly with real generation output
+  // before locking this in, not just assumed from the formula).
+  const areaScale = (WORLD_X*WORLD_Z)/(76*76);
+  const extraTrunkCount = Math.max(1, Math.round(3*areaScale));
+  const connectorShaftCount = Math.max(2, Math.round(5*areaScale));
   // several extra trunks per floor, each starting from an already-carved
   // point on that same floor - keeps connectivity guaranteed (same trick
   // as branching) while adding a lot more overall coverage, per feedback
   // wanting more tunnels
-  for(let i=0;i<3;i++){
+  for(let i=0;i<extraTrunkCount;i++){
     const f1 = tunnelSpawnPoints.filter(p=>p.y===TUNNEL_FLOOR1_Y);
     const start1 = f1[Math.floor(rand()*f1.length)];
     if(start1) carveTunnelBranch(start1.x, TUNNEL_FLOOR1_Y, start1.z, rand()*Math.PI*2, 35, rand, 0);
@@ -1475,7 +1526,7 @@ function generateTunnelsWorld(){
     if(start2) carveTunnelBranch(start2.x, TUNNEL_FLOOR2_Y, start2.z, rand()*Math.PI*2, 32, rand, 0);
   }
   const floor1Points = tunnelSpawnPoints.filter(p=>p.y===TUNNEL_FLOOR1_Y);
-  for(let i=0;i<5;i++){
+  for(let i=0;i<connectorShaftCount;i++){
     const p1 = floor1Points[Math.floor(rand()*floor1Points.length)];
     if(p1) carveConnectorShaft(p1.x, p1.z, TUNNEL_FLOOR1_Y-1, TUNNEL_FLOOR2_Y+3);
   }
@@ -1677,6 +1728,19 @@ function resumeAudio(){
   initAudio();
   if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
 }
+// Menu music starts playing (scheduled) immediately on page load, but
+// browsers block actual audio output until a real user gesture happens -
+// without unlocking on the very first interaction, most people would
+// never actually hear it, since by the time they click Start/Join (which
+// already call resumeAudio elsewhere) the menu theme has already been
+// replaced by biome music.
+function unlockAudioOnFirstInteraction(){
+  resumeAudio();
+  document.removeEventListener('pointerdown', unlockAudioOnFirstInteraction);
+  document.removeEventListener('keydown', unlockAudioOnFirstInteraction);
+}
+document.addEventListener('pointerdown', unlockAudioOnFirstInteraction);
+document.addEventListener('keydown', unlockAudioOnFirstInteraction);
 function busGain(bus){
   return bus==='music' ? musicGain : sfxGain;
 }
@@ -1686,13 +1750,14 @@ function busGain(bus){
 // only other players'/enemies' sounds get positioned). Uses Web Audio's
 // built-in PannerNode + AudioListener rather than hand-rolled distance/pan
 // math - it already handles distance falloff and stereo direction properly.
-function createPositionalPanner(pos){
+function createPositionalPanner(pos, opts){
+  const {refDistance=3, maxDistance=60, rolloffFactor=1.3} = opts||{};
   const panner = audioCtx.createPanner();
   panner.panningModel = 'HRTF';
   panner.distanceModel = 'inverse';
-  panner.refDistance = 3;    // full volume within ~3 blocks
-  panner.maxDistance = 60;   // basically inaudible past ~60 blocks
-  panner.rolloffFactor = 1.3;
+  panner.refDistance = refDistance;    // full volume within this many blocks
+  panner.maxDistance = maxDistance;    // basically inaudible past this many blocks
+  panner.rolloffFactor = rolloffFactor;
   if(panner.positionX){
     panner.positionX.value = pos.x;
     panner.positionY.value = pos.y;
@@ -1723,7 +1788,7 @@ function playTone(opts){
   if(!audioEnabled) return;
   initAudio();
   if(!audioCtx) return;
-  const {freq=440, freqEnd=null, duration=0.15, type='sine', volume=0.3, attack=0.005, decay=null, bus='sfx', pos=null} = opts;
+  const {freq=440, freqEnd=null, duration=0.15, type='sine', volume=0.3, attack=0.005, decay=null, bus='sfx', pos=null, pannerOpts=null} = opts;
   const ctx = audioCtx;
   const t0 = ctx.currentTime;
   const osc = ctx.createOscillator();
@@ -1738,7 +1803,7 @@ function playTone(opts){
   osc.connect(gain);
   let panner = null;
   if(pos){
-    panner = createPositionalPanner(pos);
+    panner = createPositionalPanner(pos, pannerOpts);
     gain.connect(panner);
     panner.connect(busGain(bus));
   } else {
@@ -1762,7 +1827,7 @@ function playNoise(opts){
   if(!audioEnabled) return;
   initAudio();
   if(!audioCtx) return;
-  const {duration=0.15, volume=0.3, filterType='lowpass', filterFreq=1200, attack=0.002, bus='sfx', pos=null} = opts;
+  const {duration=0.15, volume=0.3, filterType='lowpass', filterFreq=1200, attack=0.002, bus='sfx', pos=null, pannerOpts=null} = opts;
   const ctx = audioCtx;
   const t0 = ctx.currentTime;
   const bufferSize = Math.max(1, Math.floor(ctx.sampleRate*duration));
@@ -1782,7 +1847,7 @@ function playNoise(opts){
   filter.connect(gain);
   let panner = null;
   if(pos){
-    panner = createPositionalPanner(pos);
+    panner = createPositionalPanner(pos, pannerOpts);
     gain.connect(panner);
     panner.connect(busGain(bus));
   } else {
@@ -1818,6 +1883,33 @@ function sfxMine(type){
   const pitch = Math.max(300, 1500 - hardness*800);
   playNoise({duration:0.09, volume:0.22, filterType:'lowpass', filterFreq:pitch});
   playTone({freq:pitch*0.25, duration:0.07, type:'triangle', volume:0.13, attack:0.001});
+}
+function sfxLeavesRustle(pos){
+  // A quick shuffle of several staggered, bright bandpass noise bursts
+  // instead of one clean thunk - leaves don't have a single "hit" impact,
+  // they scatter and brush against each other, so a handful of quick,
+  // slightly randomized taps reads much closer to an actual rustle than
+  // the generic low-pass mining thunk used for every other block type.
+  // Deliberately loud and far-carrying (louder than a gunshot, full
+  // volume out to 10 blocks instead of the usual 3, gentler rolloff
+  // beyond that) - this is meant to be a real stealth-vs-noise decision,
+  // not ambient flavor, so it needs to be genuinely worth noticing and
+  // hunting by ear from a real distance, not just technically audible.
+  const rustlePannerOpts = {refDistance:10, maxDistance:60, rolloffFactor:0.9};
+  const burstCount = 3 + Math.floor(Math.random()*2); // 3-4
+  for(let i=0;i<burstCount;i++){
+    const delay = i * (20 + Math.random()*25); // ms, staggered
+    setTimeout(() => {
+      playNoise({
+        duration: 0.05 + Math.random()*0.04,
+        volume: 0.32 + Math.random()*0.1,
+        filterType: 'bandpass',
+        filterFreq: 2200 + Math.random()*1800,
+        pos,
+        pannerOpts: rustlePannerOpts
+      });
+    }, delay);
+  }
 }
 function sfxPlace(){
   playNoise({duration:0.07, volume:0.2, filterType:'lowpass', filterFreq:500});
@@ -1941,7 +2033,14 @@ const AMBIENT_THEMES = {
   ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.024,
                scale:[0,1,3,6,7],       root:110, noteInterval:5,   noteDur:3.5, noteType:'sawtooth', noteVol:0.04 },
   industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.0336,
-               scale:[0,3,5,7,10],      root:110, noteInterval:1.6, noteDur:0.4, noteType:'square',   noteVol:0.035 }
+               scale:[0,3,5,7,10],      root:110, noteInterval:1.6, noteDur:0.4, noteType:'square',   noteVol:0.035 },
+  // Deliberately no `kind` here - the noise/drone background texture every
+  // biome theme has is what would compete with a melody for attention, and
+  // the whole point of this one is being clearly melodic (flute-like), not
+  // ambient texture. Higher root and slower, longer notes than any biome
+  // theme for a relaxed feel; reuses the same pentatonic family (with the
+  // octave added) already established as sounding pleasant elsewhere.
+  menu:      { scale:[0,2,4,7,9,12],    root:330, noteInterval:3.2, noteDur:3,   noteType:'sine',     noteVol:0.06 }
 };
 let ambientNodes = [];
 let ambientMelodyTimeoutId = null;
@@ -2097,21 +2196,55 @@ function makeSkyTexture(theme){
     }
   }
   ctx.globalAlpha = 1;
+  // The sphere's UV mapping pinches severely at the very top (the zenith,
+  // straight up) - every longitude slice of the texture's top edge
+  // converges to a single point in 3D, so any cloud detail there
+  // stretches into thin radiating wedges. Checked with real numbers
+  // before fixing this: cloud blobs can reach up to 44px past the top
+  // edge given the current placement bounds, squarely in the zone that
+  // matters. A fading mask back to solid sky color guarantees no cloud
+  // detail ever lands there, regardless of where a given blob randomly
+  // ends up, without leaving a visible hard seam where the mask ends.
+  const poleMaskHeight = h*0.22;
+  const poleMask = ctx.createLinearGradient(0,0,0,poleMaskHeight);
+  poleMask.addColorStop(0, hexCss(theme.top));
+  poleMask.addColorStop(1, hexCss(theme.top)+'00');
+  ctx.fillStyle = poleMask;
+  ctx.fillRect(0,0,w,poleMaskHeight);
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   return tex;
 }
+const SKY_CAP_THETA = 0.5; // radians from the pole - the disc covers 0 to this, sphere covers the rest
 const skyMesh = new THREE.Mesh(
-  new THREE.SphereGeometry(150, 16, 12),
+  new THREE.SphereGeometry(150, 16, 12, 0, Math.PI*2, SKY_CAP_THETA, Math.PI-SKY_CAP_THETA),
   new THREE.MeshBasicMaterial({side:THREE.BackSide, fog:false})
 );
 scene.add(skyMesh);
+// A flat disc has no pole to pinch at, unlike the sphere's own UV mapping -
+// checked the actual math before building this rather than just enlarging
+// the texture mask further: stretch factor is 1/sin(theta) from the pole,
+// which is still 1.57x even at the edge of the existing mask (22% down the
+// texture) - a mask alone can only hide detail, it can't fix the
+// underlying stretch, and pushing it further would eat too far into the
+// actual cloud-visible sky. This sits exactly where the sphere's cap was
+// cut off, so there's no gap or seam between the two.
+const skyCapRadius = 150*Math.sin(SKY_CAP_THETA);
+const skyCapY = 150*Math.cos(SKY_CAP_THETA);
+const skyCapMesh = new THREE.Mesh(
+  new THREE.CircleGeometry(skyCapRadius, 16),
+  new THREE.MeshBasicMaterial({side:THREE.DoubleSide, fog:false})
+);
+skyCapMesh.rotation.x = Math.PI/2;
+skyCapMesh.position.y = skyCapY;
+scene.add(skyCapMesh);
 function updateSkybox(biome){
   const theme = SKY_THEMES[biome] || SKY_THEMES.highlands;
   const oldMap = skyMesh.material.map;
   skyMesh.material.map = makeSkyTexture(theme);
   skyMesh.material.needsUpdate = true;
   if(oldMap) oldMap.dispose();
+  skyCapMesh.material.color.setHex(theme.top);
   scene.fog.color.setHex(theme.fog);
   renderer.setClearColor(theme.fog);
 }
@@ -2154,12 +2287,13 @@ function renderMenuBgFrame(){
     }
   }
   menuBgCtx.putImageData(imgData,0,0);
-  menuBgTime += 0.02;
+  menuBgTime += 0.008; // slowed down from 0.02
   menuBgAnimId = requestAnimationFrame(renderMenuBgFrame);
 }
 function startMenuBg(){
   menuBgCanvas.style.display = 'block';
   if(menuBgAnimId) return;
+  startAmbience('menu');
   renderMenuBgFrame();
 }
 function stopMenuBg(){
@@ -2175,7 +2309,7 @@ const beaconBeam = new THREE.Mesh(
 );
 beaconBeam.visible = false;
 scene.add(beaconBeam);
-const BEACON_ZONE_RADIUS = 7; // must match the server's BEACON_ZONE_RADIUS - purely visual here, the server is authoritative on the actual mechanic
+let BEACON_ZONE_RADIUS = 7; // now server-authoritative on connect - see the welcome handler's sharedConstants override, added after "must match" comments turned out to only reduce drift risk, not eliminate it
 const beaconRing = new THREE.Mesh(
   new THREE.RingGeometry(BEACON_ZONE_RADIUS-0.4, BEACON_ZONE_RADIUS, 48),
   new THREE.MeshBasicMaterial({color:0xfff2b0, transparent:true, opacity:0.7, side:THREE.DoubleSide, depthWrite:false})
@@ -2714,10 +2848,28 @@ function getMuzzleOrigin(){
   // armPivot -> handGroup -> itemAnchor offset chain) rather than an
   // earlier guess that put this well short of the gun's real position -
   // shots were visibly starting near the face instead of the gun.
+  // NOTE: this is for the purely cosmetic muzzle flash only now - see
+  // getFiringOrigin() for anything that actually affects where a shot
+  // goes or what it can hit.
   return camera.position.clone()
     .addScaledVector(rightVec, 0.32)
     .addScaledVector(downVec, 0.14)
     .addScaledVector(fwdVec, 0.87);
+}
+// Aiming toward a far point down the camera's sightline (getAimedDirection
+// below) only fully converges AT that far point - it doesn't fix the
+// offset close to the origin itself. Checked this numerically before
+// changing anything: even reducing the convergence distance from 100 down
+// to 3 barely moved the close-range offset (0.936 -> 0.857), because that
+// offset is set by the muzzle's own ~0.9-unit distance from the camera,
+// not by how far away the aim point is. So instead of trying to converge
+// away the error, this uses an origin that's mostly at the camera (with
+// just a small nudge toward the muzzle) for anything that actually
+// affects gameplay - hit detection, projectile spawn position - while the
+// muzzle flash above stays fully at the visual gun position, since that's
+// purely cosmetic and never needs to line up with where a shot can hit.
+function getFiringOrigin(){
+  return camera.position.clone().lerp(getMuzzleOrigin(), 0.15);
 }
 // The muzzle sits offset from the camera (to the side and slightly below,
 // for the held-weapon visual), so a shot fired merely parallel to the
@@ -2839,10 +2991,10 @@ function sniperDestroyTerrain(origin, dir, maxRange){
   }
 }
 function fireSniperHitscan(weapon){
-  const origin = getMuzzleOrigin();
+  const origin = getFiringOrigin();
   const dir = getAimedDirection(origin);
-  spawnMuzzleFlash(origin);
-  spawnSniperTracer(origin, dir, weapon.range);
+  spawnMuzzleFlash(getMuzzleOrigin());
+  spawnSniperTracer(getMuzzleOrigin(), dir, weapon.range);
   sfxShootSniper();
   sniperDestroyTerrain(origin, dir, weapon.range);
 
@@ -3117,23 +3269,24 @@ function buildGrenadeMesh(){
   group.add(stem);
   return group;
 }
-function buildRocketLauncherMesh(){
+function buildRocketLauncherMesh(gold){
   const group = new THREE.Group();
   const tube = new THREE.Mesh(
     new THREE.CylinderGeometry(0.07,0.07,0.55,8),
-    new THREE.MeshLambertMaterial({color:0x555555})
+    new THREE.MeshLambertMaterial({color: gold ? 0xffd700 : 0x555555})
   );
   tube.rotation.x = Math.PI/2;
   group.add(tube);
   const tip = new THREE.Mesh(
     new THREE.ConeGeometry(0.08,0.15,8),
-    new THREE.MeshLambertMaterial({color:0x333333})
+    new THREE.MeshLambertMaterial({color: gold ? 0xcc9900 : 0x333333})
   );
   tip.rotation.x = -Math.PI/2;
   tip.position.z = -0.35;
   group.add(tip);
   return group;
 }
+function buildAdminRocketLauncherMesh(){ return buildRocketLauncherMesh(true); }
 function buildDoubleBarrelMesh(){
   const group = new THREE.Group();
   const barrelMat = new THREE.MeshLambertMaterial({color:0x333333});
@@ -3250,6 +3403,24 @@ function buildMetalBarMesh(){
   group.add(bar);
   return group;
 }
+function buildPlantFiberMesh(){
+  // A small bundle of thin dried strands, each slightly offset/rotated so
+  // it doesn't read as one solid block - fits the "fibrous plant material"
+  // theme without needing more than simple boxes.
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({color:0x9a8a4a, roughness:0.9});
+  const strandOffsets = [
+    {x:-0.05, z:0.02, rot:0.08}, {x:0.03, z:-0.03, rot:-0.12},
+    {x:0.0, z:0.04, rot:0.15}, {x:-0.02, z:-0.01, rot:-0.05}
+  ];
+  for(const s of strandOffsets){
+    const strand = new THREE.Mesh(new THREE.BoxGeometry(0.03,0.24,0.03), mat);
+    strand.position.set(s.x, 0, s.z);
+    strand.rotation.z = s.rot;
+    group.add(strand);
+  }
+  return group;
+}
 // ---------- Furnace: smelts Metal Ore into Metal Bars ----------
 // A compact custom structure (not part of the voxel block grid) - roughly
 // matches a 2-wide x 2-deep x 3-tall footprint in proportion, but built
@@ -3260,7 +3431,7 @@ function buildMetalBarMesh(){
 // watching the same glow together. A reasonable first version given the
 // complexity a fully server-authoritative version would add, but worth
 // knowing about.
-const FURNACE_SMELT_TIME = 8; // seconds
+let FURNACE_SMELT_TIME = 8; // seconds - now server-authoritative on connect (see welcome handler)
 function buildFurnaceMesh(){
   const group = new THREE.Group();
   const stoneMat = new THREE.MeshLambertMaterial({color:0x6f6f6f});
@@ -3410,7 +3581,7 @@ function scatterFurnaces(){
 // furnaces are either - this couldn't be made server-authoritative
 // without first solving that for furnaces. In multiplayer, each player's
 // pickup is independent rather than synced across everyone watching.
-const PICKAXE_SPAWNER_RESPAWN_TIME = 45;
+let PICKAXE_SPAWNER_RESPAWN_TIME = 45; // now server-authoritative on connect (see welcome handler)
 let pickaxeSpawners = [];
 function buildPickaxeSpawnerMesh(){
   const mesh = buildPickaxeMesh();
@@ -3517,6 +3688,8 @@ function updateHeldItemMesh(){
     itemAnchor.add(buildGrenadeMesh());
   } else if(slot.type===ROCKET_LAUNCHER){
     itemAnchor.add(buildRocketLauncherMesh());
+  } else if(slot.type===ADMIN_ROCKET_LAUNCHER){
+    itemAnchor.add(buildAdminRocketLauncherMesh());
   } else if(slot.type===DOUBLE_BARREL){
     itemAnchor.add(buildDoubleBarrelMesh());
   } else if(slot.type===PUMP_SHOTGUN){
@@ -3535,6 +3708,8 @@ function updateHeldItemMesh(){
     itemAnchor.add(buildStimMesh());
   } else if(slot.type===METAL_BAR){
     itemAnchor.add(buildMetalBarMesh());
+  } else if(slot.type===PLANT_FIBER){
+    itemAnchor.add(buildPlantFiberMesh());
   } else if(slot.type===REEDS){
     itemAnchor.add(new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]));
   } else if(SOLID_TYPES.includes(slot.type)){
@@ -3557,6 +3732,7 @@ const WEAPON_CONFIG = {
   [METAL_SWORD]:     { kind:'melee', damage:4, cooldown:0.45, range:2.8, crateBreakRange:3 },
   [GRENADE]:         { kind:'grenade', damage:17.5, cooldown:1.2, throwSpeed:11, blastRadius:2.8 },
   [ROCKET_LAUNCHER]: { kind:'rocket', damage:20, cooldown:1.4, speed:36, blastRadius:3.2, color:0xff5522 },
+  [ADMIN_ROCKET_LAUNCHER]: { kind:'rocket', damage:20, cooldown:0.35, speed:36, blastRadius:3.2, color:0xffd700 }, // 4x the fire rate (cooldown/4), dev-tools-only
   // penetration: punches straight through this many soft blocks (dirt/grass/
   // leaves/snow) in a row before finally stopping on the next hit - a high-
   // powered round shooting through cover, unlike everything else which just
@@ -3586,7 +3762,17 @@ const WEAPON_CONFIG = {
 // (used for the kill feed's "killed with X" label) without needing to
 // thread an extra parameter through every firing function.
 for(const key in WEAPON_CONFIG) WEAPON_CONFIG[key].itemType = Number(key);
-let lastAttackTime = 0;
+let lastAttackTime = {}; // per weapon type (item type id) - keeps each weapon's cooldown independent, so firing one doesn't reset another's clock
+// CS:GO-style reload-cancel, applied to the cooldown timer since guns here
+// have no magazines to actually reload - switching away from a weapon
+// before its cooldown is at least halfway done marks it cancelled, and
+// switching back to it later forces a full fresh wait instead of
+// continuing where it left off. Waiting past halfway before switching
+// away costs nothing, since the cooldown already keeps ticking in the
+// background regardless of what's currently equipped - so it can end up
+// ready (or nearly ready) by the time you switch back, same spirit as
+// CS:GO's quick-switch reward for waiting past the commit point.
+let cooldownCancelled = {};
 const MELEE_SWING_DURATION = 0.25;
 let meleeSwingTimer = 0;
 const PUNCH_SWING_DURATION = 0.25;
@@ -3596,9 +3782,9 @@ let swordSwingTimer = 0;
 let pendingBurst = null; // {weapon, shotsRemaining, timer} - mid-burst shotgun state
 let darts = [];
 function shootProjectile(weapon){
-  const origin = getMuzzleOrigin();
+  const origin = getFiringOrigin();
   const dir = getAimedDirection(origin);
-  spawnMuzzleFlash(origin);
+  spawnMuzzleFlash(getMuzzleOrigin());
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(weapon.radius,6,6),
     new THREE.MeshLambertMaterial({color:weapon.color})
@@ -3614,9 +3800,9 @@ function shootProjectile(weapon){
   else sfxShootLight();
 }
 function fireShotgunPellets(weapon){
-  const origin = getMuzzleOrigin();
+  const origin = getFiringOrigin();
   const baseDir = getAimedDirection(origin);
-  spawnMuzzleFlash(origin);
+  spawnMuzzleFlash(getMuzzleOrigin());
   for(let i=0;i<weapon.pelletCount;i++){
     const dir = baseDir.clone();
     dir.x += (Math.random()-0.5)*weapon.spread;
@@ -3656,6 +3842,7 @@ function updateDarts(dt){
   for(let i=darts.length-1;i>=0;i--){
     const d = darts[i];
     d.life += dt;
+    const prevX=d.mesh.position.x, prevY=d.mesh.position.y, prevZ=d.mesh.position.z;
     d.mesh.position.addScaledVector(d.dir, d.speed*dt);
     spawnTrailParticle(d.mesh.position, d.color);
     let hitSomething = false;
@@ -3663,7 +3850,7 @@ function updateDarts(dt){
     // check enemies first
     for(const en of enemies){
       if(!en.alive) continue;
-      const zone = resolveHitZone(d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R, en.y+ENEMY_BODY_Y,ENEMY_BODY_R);
+      const zone = resolveSweptHitZone(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R, en.y+ENEMY_BODY_Y,ENEMY_BODY_R);
       if(zone){
         const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
         hitEnemy(en, dmg);
@@ -3676,7 +3863,7 @@ function updateDarts(dt){
     }
 
     // the boss, if present
-    if(!hitSomething && checkBossHit(d.mesh.position.x,d.mesh.position.y,d.mesh.position.z)){
+    if(!hitSomething && checkBossHitSwept(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z)){
       damageBoss(d.damage);
       showHitMarker(false);
       spawnBreakParticles(Math.floor(d.mesh.position.x),Math.floor(d.mesh.position.y),Math.floor(d.mesh.position.z), 0xaa2255);
@@ -3687,7 +3874,7 @@ function updateDarts(dt){
     if(!hitSomething && multiplayer){
       for(const [id,rp] of remotePlayers){
         const pos = rp.group.position;
-        const zone = resolveHitZone(d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
+        const zone = resolveSweptHitZone(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
         if(zone){
           const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
           sendHit(id, dmg, d.itemType);
@@ -3905,6 +4092,7 @@ function meleeAttack(weapon){
       rebuildMeshes();
       sendBlockChange(hit.x,hit.y,hit.z,AIR);
       spawnBreakParticles(hit.x,hit.y,hit.z,BLOCK_COLORS[t]);
+      if(t===LEAVES) sfxLeavesRustle({x:hit.x+0.5, y:hit.y+0.5, z:hit.z+0.5});
     } else {
       flashMessage('Swing missed');
     }
@@ -3934,7 +4122,7 @@ const BLAST_RESISTANCE = {
 };
 let grenades = [];
 function throwGrenade(weapon){
-  const origin = getMuzzleOrigin();
+  const origin = getFiringOrigin();
   const dir = getAimedDirection(origin);
   const mesh = buildGrenadeMesh();
   mesh.position.copy(origin).addScaledVector(dir, 0.5);
@@ -4056,9 +4244,9 @@ function triggerExplosion(pos, damage, radius, weaponType){
 // ---------- Rocket launcher: fast straight-line flight, explodes on impact ----------
 let rockets = [];
 function fireRocket(weapon){
-  const origin = getMuzzleOrigin();
+  const origin = getFiringOrigin();
   const dir = getAimedDirection(origin);
-  spawnMuzzleFlash(origin);
+  spawnMuzzleFlash(getMuzzleOrigin());
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.09,8,8),
     new THREE.MeshLambertMaterial({color:weapon.color})
@@ -4066,7 +4254,7 @@ function fireRocket(weapon){
   mesh.position.copy(origin).addScaledVector(dir, 0.5);
   scene.add(mesh);
   const shotId = multiplayer ? makeShotId() : null;
-  rockets.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, radius:weapon.blastRadius, shotId});
+  rockets.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, radius:weapon.blastRadius, shotId, color:weapon.color, itemType:weapon.itemType});
   sendShotEvent({kind:'rocket', speed:weapon.speed, color:weapon.color, radius:0.09, sound:'rocket-launch'}, origin, dir, shotId);
   sfxRocketLaunch();
 }
@@ -4075,7 +4263,7 @@ function updateRockets(dt){
     const r = rockets[i];
     r.life += dt;
     r.mesh.position.addScaledVector(r.dir, r.speed*dt);
-    spawnTrailParticle(r.mesh.position, 0xff5522);
+    spawnTrailParticle(r.mesh.position, r.color);
     let hit = false;
 
     for(const en of enemies){
@@ -4099,7 +4287,7 @@ function updateRockets(dt){
     }
 
     if(hit || r.life>2.5){
-      triggerExplosion(r.mesh.position, r.damage, r.radius, ROCKET_LAUNCHER);
+      triggerExplosion(r.mesh.position, r.damage, r.radius, r.itemType);
       sendImpact(r.shotId, r.mesh.position);
       scene.remove(r.mesh);
       r.mesh.geometry.dispose();
@@ -4258,6 +4446,7 @@ function buildGroundItemMesh(type){
     case METAL_SWORD: return buildSwordMesh();
     case GRENADE: return buildGrenadeMesh();
     case ROCKET_LAUNCHER: return buildRocketLauncherMesh();
+    case ADMIN_ROCKET_LAUNCHER: return buildAdminRocketLauncherMesh();
     case PISTOL: return buildPistolMesh();
     case CARBINE: return buildCarbineMesh();
     case RIFLE: return buildRifleMesh();
@@ -4267,6 +4456,7 @@ function buildGroundItemMesh(type){
     case BANDAGE: return buildBandageMesh();
     case STIM_INJECTOR: return buildStimMesh();
     case METAL_BAR: return buildMetalBarMesh();
+    case PLANT_FIBER: return buildPlantFiberMesh();
     case POWERUP_CRATE: return new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), materials[POWERUP_CRATE]);
     default: {
       const tex = GROUND_ICON_TEX[type];
@@ -4413,7 +4603,7 @@ function updateCooldownRing(){
   if(!weapon || !weapon.cooldown){ wrap.style.display='none'; return; }
   wrap.style.display='block';
   const ring = document.getElementById('cooldownRingProgress');
-  const elapsed = performance.now() - lastAttackTime;
+  const elapsed = performance.now() - (lastAttackTime[equipped]||0);
   const progress = Math.max(0, Math.min(1, elapsed/(weapon.cooldown*1000)));
   ring.setAttribute('stroke-dashoffset', COOLDOWN_RING_CIRCUMFERENCE*(1-progress));
   ring.setAttribute('stroke', progress>=1 ? '#5fe07a' : '#ffdd55');
@@ -4673,7 +4863,7 @@ function spawnPlayer(){
 }
 
 // ---------- Simple enemies (to test the weapons on) ----------
-const ENEMY_MAX_HEALTH = 8;
+let ENEMY_MAX_HEALTH = 8; // now server-authoritative on connect (see welcome handler)
 // How many enemies are on the map at once (singleplayer default, and the
 // starting count before any respawns). Same idea as LOOT_TABLE above - this
 // is the one place to edit to change the spawn rate, nothing else needs to
@@ -4687,11 +4877,12 @@ const ENEMY_TOUCH_INTERVAL = 1.2;
 const ENEMY_TOUCH_KNOCKBACK = 0.9; // a physical shove away from whatever hit you, horizontal only
 const ENEMY_RESPAWN_DELAY = [15000, 25000]; // ms range
 const ENEMY_HALF_W = 0.28, ENEMY_HEIGHT = 0.9;
-const ENEMY_GRAVITY = -24, ENEMY_JUMP_SPEED = JUMP_SPEED*1.15, ENEMY_SPEED = 1.3;
-const ENEMY_AGGRO_RANGE = 10; // within this distance, an enemy stops wandering and chases the player
+const ENEMY_GRAVITY = -24, ENEMY_JUMP_SPEED = JUMP_SPEED*1.15;
+let ENEMY_SPEED = 1.3; // now server-authoritative on connect (see welcome handler) - gravity/jump above are purely client-side physics with no server equivalent, so those stay const
+let ENEMY_AGGRO_RANGE = 10; // within this distance, an enemy stops wandering and chases the player - now server-authoritative on connect
 const ZOMBIE_CHANCE = 0.25;
-const ZOMBIE_MAX_HEALTH = 20; // set directly rather than as a multiplier, for exact tuning
-const ZOMBIE_SPEED_MULT = 1.3;
+let ZOMBIE_MAX_HEALTH = 20; // set directly rather than as a multiplier, for exact tuning - now server-authoritative on connect
+let ZOMBIE_SPEED_MULT = 1.3; // now server-authoritative on connect
 let enemies = [];
 let enemyIdCounter = 1;
 
@@ -4933,6 +5124,25 @@ function resolveRayHitZone(origin, dir, maxRange, cx,cz, headY,headR, bodyY,body
   if(bodyDist!==null && bodyDist<bodyR) return 'body';
   return null;
 }
+// Same idea again, but for a dart's movement this frame specifically - a
+// fast dart's per-frame travel distance can exceed a target's hitbox
+// size (checked with real numbers before building this: Rifle/Carbine
+// move more than a full body-diameter per frame at 60fps, Pistol/Stone
+// Sling can skip clean past the smaller head hitbox), so checking only
+// the dart's brand-new position each frame could miss a target it
+// visibly passed straight through between two frames. Checks the whole
+// segment it just traveled instead of just where it ended up.
+function resolveSweptHitZone(prevX,prevY,prevZ, currX,currY,currZ, cx,cz, headY,headR, bodyY,bodyR){
+  const dx=currX-prevX, dy=currY-prevY, dz=currZ-prevZ;
+  const segLen = Math.sqrt(dx*dx+dy*dy+dz*dz);
+  if(segLen<0.0001) return resolveHitZone(currX,currY,currZ, cx,cz, headY,headR, bodyY,bodyR);
+  const ndx=dx/segLen, ndy=dy/segLen, ndz=dz/segLen;
+  const headDist = pointToRayDistance(cx,headY,cz, prevX,prevY,prevZ, ndx,ndy,ndz, segLen);
+  if(headDist!==null && headDist<headR) return 'head';
+  const bodyDist = pointToRayDistance(cx,bodyY,cz, prevX,prevY,prevZ, ndx,ndy,ndz, segLen);
+  if(bodyDist!==null && bodyDist<bodyR) return 'body';
+  return null;
+}
 
 const HIT_FLASH_DURATION = 0.25;
 const HIT_BUMP_DURATION = 0.15;
@@ -4986,6 +5196,7 @@ function spawnInitialEnemies(count){
     const z = 4+Math.floor(Math.random()*(WORLD_Z-8));
     const y = findSurfaceY(x,z);
     if(getBlock(x,y,z)===WATER) continue; // don't spawn on a submerged lakebed/oasis floor
+    if(checkFurnaceCollision(x+0.5,y,z+0.5,ENEMY_HALF_W,ENEMY_HEIGHT)) continue; // otherwise it can spawn already overlapping one and get stuck, since movement out of that same footprint is blocked too
     spawnEnemyAt(x+0.5, z+0.5);
     spawned++;
   }
@@ -5018,6 +5229,15 @@ function checkBossHit(px,py,pz){
   const dx=px-bossState.x, dy=py-(bossState.y+BOSS_HIT_Y), dz=pz-bossState.z;
   return (dx*dx+dy*dy+dz*dz) < BOSS_HIT_R*BOSS_HIT_R;
 }
+function checkBossHitSwept(prevX,prevY,prevZ, currX,currY,currZ){
+  if(!bossState || !bossState.alive) return false;
+  const dx=currX-prevX, dy=currY-prevY, dz=currZ-prevZ;
+  const segLen = Math.sqrt(dx*dx+dy*dy+dz*dz);
+  if(segLen<0.0001) return checkBossHit(currX,currY,currZ);
+  const ndx=dx/segLen, ndy=dy/segLen, ndz=dz/segLen;
+  const dist = pointToRayDistance(bossState.x, bossState.y+BOSS_HIT_Y, bossState.z, prevX,prevY,prevZ, ndx,ndy,ndz, segLen);
+  return dist!==null && dist<BOSS_HIT_R;
+}
 function damageBoss(amount){
   // Same routing idea as hitEnemy - report and wait for sync in multiplayer
   // (server is authoritative, -1 is the reserved boss sentinel ID), apply
@@ -5034,6 +5254,7 @@ function damageBoss(amount){
     bossState.phase = 'swarm';
     for(let i=0;i<10;i++){
       const ex = bossState.x+(Math.random()-0.5)*8, ez = bossState.z+(Math.random()-0.5)*8;
+      if(checkFurnaceCollision(ex,findSurfaceY(Math.floor(ex),Math.floor(ez)),ez,ENEMY_HALF_W,ENEMY_HEIGHT)) continue;
       const en = spawnEnemyAt(ex, ez, true);
       en.swarmMode = true;
       spawnGroundRiseEffect(ex, ez);
@@ -5042,6 +5263,7 @@ function damageBoss(amount){
     // near the boss
     for(let i=0;i<8;i++){
       const ex = 4+Math.random()*(WORLD_X-8), ez = 4+Math.random()*(WORLD_Z-8);
+      if(checkFurnaceCollision(ex,findSurfaceY(Math.floor(ex),Math.floor(ez)),ez,ENEMY_HALF_W,ENEMY_HEIGHT)) continue;
       const en = spawnEnemyAt(ex, ez, true);
       en.swarmMode = true;
       spawnGroundRiseEffect(ex, ez);
@@ -5063,6 +5285,7 @@ function respawnEnemy(enemy){
   const z = 4+Math.floor(Math.random()*(WORLD_Z-8));
   const y = findSurfaceY(x,z);
   if(getBlock(x,y,z)===WATER){ setTimeout(()=>respawnEnemy(enemy), 3000); return; }
+  if(checkFurnaceCollision(x+0.5,y,z+0.5,ENEMY_HALF_W,ENEMY_HEIGHT)){ setTimeout(()=>respawnEnemy(enemy), 3000); return; }
   enemy.x=x+0.5; enemy.z=z+0.5; enemy.y=y;
   enemy.velY=0; enemy.onGround=true;
   enemy.isZombie = Math.random()<ZOMBIE_CHANCE;
@@ -5197,7 +5420,7 @@ function updateEnemies(dt){
 
     const pdx = player.x-en.x, pdz = player.z-en.z;
     const distToPlayer = Math.sqrt(pdx*pdx+pdz*pdz);
-    const aggroed = en.swarmMode || distToPlayer < ENEMY_AGGRO_RANGE;
+    const aggroed = !godMode && (en.swarmMode || distToPlayer < ENEMY_AGGRO_RANGE);
 
     if(aggroed){
       en.wanderDir = Math.atan2(pdx, pdz);
@@ -5384,8 +5607,8 @@ canvas.addEventListener('mousedown', (e)=>{
     const weapon = WEAPON_CONFIG[equipped];
     if(weapon){
       const now = performance.now();
-      if(now-lastAttackTime >= weapon.cooldown*1000){
-        lastAttackTime = now;
+      if(now-(lastAttackTime[equipped]||0) >= weapon.cooldown*1000){
+        lastAttackTime[equipped] = now;
         if(weapon.kind==='projectile') shootProjectile(weapon);
         else if(weapon.kind==='melee') meleeAttack(weapon);
         else if(weapon.kind==='grenade') throwGrenade(weapon);
@@ -5564,8 +5787,21 @@ function removeOneOfType(type){
 }
 function selectSlot(i){
   if(i<0||i>=HOTBAR_SIZE) return;
-  if(selectedSlot!==i) sfxClick();
-  selectedSlot=i;
+  if(selectedSlot!==i){
+    sfxClick();
+    const prevType = slots[selectedSlot] ? slots[selectedSlot].type : null;
+    const prevWeapon = WEAPON_CONFIG[prevType];
+    if(prevWeapon && prevWeapon.cooldown){
+      const elapsed = performance.now() - (lastAttackTime[prevType]||0);
+      if(elapsed < prevWeapon.cooldown*1000*0.5) cooldownCancelled[prevType] = true;
+    }
+    selectedSlot=i;
+    const newType = slots[selectedSlot] ? slots[selectedSlot].type : null;
+    if(cooldownCancelled[newType]){
+      lastAttackTime[newType] = performance.now();
+      cooldownCancelled[newType] = false;
+    }
+  }
   updateHotbarUI();
 }
 
@@ -5578,6 +5814,7 @@ const ITEM_MESH_BUILDERS = {
   [WAR_CLUB]: buildClubMesh,
   [GRENADE]: buildGrenadeMesh,
   [ROCKET_LAUNCHER]: buildRocketLauncherMesh,
+  [ADMIN_ROCKET_LAUNCHER]: buildAdminRocketLauncherMesh,
   [DOUBLE_BARREL]: buildDoubleBarrelMesh,
   [PUMP_SHOTGUN]: buildPumpShotgunMesh,
   [RIFLE]: buildRifleMesh,
@@ -5585,6 +5822,7 @@ const ITEM_MESH_BUILDERS = {
   [CARBINE]: buildCarbineMesh,
   [SNIPER]: buildSniperMesh,
   [METAL_BAR]: buildMetalBarMesh,
+  [PLANT_FIBER]: buildPlantFiberMesh,
   [BANDAGE]: buildBandageMesh,
   [STIM_INJECTOR]: buildStimMesh,
 };
@@ -5772,7 +6010,8 @@ function updateMining(dt){
       } else {
         dropItemOnGround(mining.x, mining.y, mining.z, mining.type, 1);
         spawnBreakParticles(mining.x, mining.y, mining.z, BLOCK_COLORS[mining.type]);
-        sfxMine(mining.type);
+        if(mining.type===LEAVES) sfxLeavesRustle({x:mining.x+0.5, y:mining.y+0.5, z:mining.z+0.5});
+        else sfxMine(mining.type);
       }
       setBlock(mining.x,mining.y,mining.z,AIR);
       sendBlockChange(mining.x,mining.y,mining.z,AIR);
@@ -6005,6 +6244,9 @@ function renderDevPanel(){
     godMode = !godMode;
     godBtn.textContent = 'God Mode: '+(godMode?'ON':'OFF');
     flashMessage('God Mode '+(godMode?'enabled':'disabled'));
+    if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
+      socket.send(JSON.stringify({type:'godModeState', godMode}));
+    }
   });
   const flyBtn = document.createElement('div'); flyBtn.className='btn';
   flyBtn.textContent = 'Fly Mode: '+(flyMode?'ON':'OFF');
@@ -6162,6 +6404,8 @@ const RECIPES = [
   { ingredients:[{type:RIFLE,count:2}], results:[{type:SNIPER,count:1}], desc:'2 Rifles &rarr; 1 Sniper Rifle (trade up)' },
   { ingredients:[{type:WAR_CLUB,count:2}], results:[{type:ROCKET_LAUNCHER,count:1}], desc:'2 War Clubs &rarr; 1 Rocket Launcher (trade up)' },
   { ingredients:[{type:METAL_BAR,count:2},{type:PLANKS,count:1}], results:[{type:METAL_SWORD,count:1}], desc:'2 Metal Bars + 1 Planks &rarr; 1 Metal Sword (melee, faster and longer reach than the War Club, less damage per hit)' },
+  { ingredients:[{type:LEAVES,count:3}], results:[{type:PLANT_FIBER,count:1}], desc:'3 Leaves &rarr; 1 Plant Fiber' },
+  { ingredients:[{type:PLANT_FIBER,count:2}], results:[{type:BANDAGE,count:1}], desc:'2 Plant Fiber &rarr; 1 Bandage' },
 ];
 function isRecipeCraftable(recipe){
   return recipe.ingredients.every(ing => countOfType(ing.type) >= ing.count);
@@ -6522,6 +6766,7 @@ function buildRemoteHeldItemMesh(type){
     case METAL_SWORD: return buildSwordMesh();
     case GRENADE: return buildGrenadeMesh();
     case ROCKET_LAUNCHER: return buildRocketLauncherMesh();
+    case ADMIN_ROCKET_LAUNCHER: return buildAdminRocketLauncherMesh();
     case DOUBLE_BARREL: return buildDoubleBarrelMesh();
     case PUMP_SHOTGUN: return buildPumpShotgunMesh();
     case RIFLE: return buildRifleMesh();
@@ -6531,6 +6776,7 @@ function buildRemoteHeldItemMesh(type){
     case BANDAGE: return buildBandageMesh();
     case STIM_INJECTOR: return buildStimMesh();
     case METAL_BAR: return buildMetalBarMesh();
+    case PLANT_FIBER: return buildPlantFiberMesh();
     case REEDS: return new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]);
     default:
       if(type!==null && type!==undefined && SOLID_TYPES.includes(type)){
@@ -6773,6 +7019,22 @@ function handleNetMessage(msg){
       chatHistory = [];
       seed = msg.seed;
       WORLD_X=msg.worldX; WORLD_Y=msg.worldY; WORLD_Z=msg.worldZ;
+      // Adopt the server's authoritative values for constants it actually
+      // simulates with, instead of relying on separately-typed copies
+      // staying in sync by coincidence (previously only enforced by
+      // "must match" comments). Falls back to this client's own defaults
+      // if an older server doesn't send this field.
+      if(msg.sharedConstants){
+        const sc = msg.sharedConstants;
+        if(typeof sc.enemyMaxHealth==='number') ENEMY_MAX_HEALTH = sc.enemyMaxHealth;
+        if(typeof sc.enemySpeed==='number') ENEMY_SPEED = sc.enemySpeed;
+        if(typeof sc.enemyAggroRange==='number') ENEMY_AGGRO_RANGE = sc.enemyAggroRange;
+        if(typeof sc.zombieMaxHealth==='number') ZOMBIE_MAX_HEALTH = sc.zombieMaxHealth;
+        if(typeof sc.zombieSpeedMult==='number') ZOMBIE_SPEED_MULT = sc.zombieSpeedMult;
+        if(typeof sc.furnaceSmeltTime==='number') FURNACE_SMELT_TIME = sc.furnaceSmeltTime;
+        if(typeof sc.pickaxeSpawnerRespawnTime==='number') PICKAXE_SPAWNER_RESPAWN_TIME = sc.pickaxeSpawnerRespawnTime;
+        if(typeof sc.beaconZoneRadius==='number') BEACON_ZONE_RADIUS = sc.beaconZoneRadius;
+      }
       // the server decides the biome (so every client generates identical terrain);
       // fall back to highlands if an older server didn't send this field
       applyBiomeProfile(msg.biome || 'highlands');
@@ -6878,8 +7140,10 @@ function handleNetMessage(msg){
       rp.crouching = !!msg.crouching;
     }
   } else if(msg.type==='block'){
+    const oldType = getBlock(msg.x,msg.y,msg.z);
     setBlock(msg.x,msg.y,msg.z,msg.blockType);
     rebuildMeshes();
+    if(oldType===LEAVES && msg.blockType===AIR) sfxLeavesRustle({x:msg.x+0.5, y:msg.y+0.5, z:msg.z+0.5});
   } else if(msg.type==='blockBatch'){
     if(msg.changes) for(const c of msg.changes) setBlock(c.x,c.y,c.z,c.blockType);
     rebuildMeshes();
@@ -6931,7 +7195,7 @@ function handleNetMessage(msg){
     // knows about it too - otherwise a player joining mid-series later
     // would never learn these crates exist, since this change never
     // touched the server at all otherwise.
-    const crateChanges = scatterLootAndPowerCrates();
+    const crateChanges = biomeMode==='tunnels' ? scatterTunnelLoot() : scatterLootAndPowerCrates(); // tunnels has no meaningful heightMap (flat, at the ceiling) - the shared function would place every crate in the open-air region above the tunnels instead of on the actual floors
     if(crateChanges.length) sendBlockBatch(crateChanges);
     rebuildMeshes();
     sfxMatchStart();
@@ -7409,8 +7673,8 @@ function animate(){
         const weapon = WEAPON_CONFIG[equipped];
         if(weapon && weapon.kind==='projectile'){
           const now = performance.now();
-          if(now-lastAttackTime >= weapon.cooldown*1000){
-            lastAttackTime = now;
+          if(now-(lastAttackTime[equipped]||0) >= weapon.cooldown*1000){
+            lastAttackTime[equipped] = now;
             shootProjectile(weapon);
           }
         } else {
