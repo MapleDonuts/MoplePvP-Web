@@ -466,7 +466,7 @@
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
 </div>
-<div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none; z-index:5;">MoplePvP 0.36</div>
+<div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none; z-index:101;">MoplePvP 0.37</div>
 
 <div id="itemTooltip"></div>
 <div id="chatLog"></div>
@@ -2049,17 +2049,17 @@ function sfxSpeedBoost(){
 // two primitives (playTone/playNoise-style synthesis) as the rest of the
 // audio engine - no loops or files, still fully procedural.
 const AMBIENT_THEMES = {
-  highlands: { kind:'noise', filterType:'lowpass',  filterFreq:600, filterQ:0.7, lfoDepth:200, windVolume:0.03,
+  highlands: { kind:'noise', filterType:'lowpass',  filterFreq:600, filterQ:0.7, lfoDepth:200, windVolume:0.0195,
                scale:[0,2,4,7,9],       root:220, noteInterval:3.5, noteDur:2.2, noteType:'sine',     noteVol:0.045 },
-  plains:    { kind:'noise', filterType:'lowpass',  filterFreq:500, filterQ:0.7, lfoDepth:150, windVolume:0.027,
+  plains:    { kind:'noise', filterType:'lowpass',  filterFreq:500, filterQ:0.7, lfoDepth:150, windVolume:0.0175,
                scale:[0,2,4,7,9],       root:220, noteInterval:4,   noteDur:2.5, noteType:'sine',     noteVol:0.04 },
-  snow:      { kind:'noise', filterType:'bandpass', filterFreq:900, filterQ:1.2, lfoDepth:250, windVolume:0.036,
+  snow:      { kind:'noise', filterType:'bandpass', filterFreq:900, filterQ:1.2, lfoDepth:250, windVolume:0.0234,
                scale:[0,2,3,7,8],       root:196, noteInterval:4.5, noteDur:3,   noteType:'sine',     noteVol:0.04 },
-  oasis:     { kind:'noise', filterType:'lowpass',  filterFreq:350, filterQ:0.5, lfoDepth:100, windVolume:0.024,
+  oasis:     { kind:'noise', filterType:'lowpass',  filterFreq:350, filterQ:0.5, lfoDepth:100, windVolume:0.0156,
                scale:[0,1,4,5,7,8,11],  root:207, noteInterval:3.8, noteDur:2,   noteType:'triangle', noteVol:0.045 },
-  ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.024,
+  ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.0156,
                scale:[0,1,3,6,7],       root:110, noteInterval:5,   noteDur:3.5, noteType:'sawtooth', noteVol:0.04 },
-  industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.0336,
+  industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.0218,
                scale:[0,3,5,7,10],      root:110, noteInterval:1.6, noteDur:0.4, noteType:'square',   noteVol:0.035 },
   // Deliberately no `kind` here - the noise/drone background texture every
   // biome theme has is what would compete with a melody for attention, and
@@ -3030,7 +3030,7 @@ function fireSniperHitscan(weapon){
     const zone = resolveRayHitZone(origin, dir, weapon.range, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R, en.y+ENEMY_BODY_Y,ENEMY_BODY_R);
     if(zone){
       const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
-      hitEnemy(en, dmg);
+      hitEnemy(en, dmg, weapon.itemType);
       showHitMarker(zone==='head');
       if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
       spawnBreakParticles(Math.floor(en.x),Math.floor(en.y+0.5),Math.floor(en.z), 0xff5555);
@@ -3042,7 +3042,7 @@ function fireSniperHitscan(weapon){
     for(let t=0; t<=weapon.range; t+=2){
       const px = origin.x+dir.x*t, py = origin.y+dir.y*t, pz = origin.z+dir.z*t;
       if(checkBossHit(px,py,pz)){
-        damageBoss(weapon.damage);
+        damageBoss(weapon.damage, weapon.itemType);
         spawnBreakParticles(Math.floor(px),Math.floor(py),Math.floor(pz), 0xaa2255);
         break;
       }
@@ -3900,7 +3900,7 @@ function updateDarts(dt){
       const zone = resolveSweptHitZone(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R, en.y+ENEMY_BODY_Y,ENEMY_BODY_R);
       if(zone){
         const dmg = zone==='head' ? effectiveDamage*HEADSHOT_MULT : effectiveDamage;
-        hitEnemy(en, dmg);
+        hitEnemy(en, dmg, d.itemType);
         showHitMarker(zone==='head');
         if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
         spawnBreakParticles(Math.floor(en.x),Math.floor(en.y+0.5),Math.floor(en.z), 0xff5555);
@@ -3911,7 +3911,7 @@ function updateDarts(dt){
 
     // the boss, if present
     if(!hitSomething && checkBossHitSwept(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z)){
-      damageBoss(effectiveDamage);
+      damageBoss(effectiveDamage, d.itemType);
       showHitMarker(false);
       spawnBreakParticles(Math.floor(d.mesh.position.x),Math.floor(d.mesh.position.y),Math.floor(d.mesh.position.z), 0xaa2255);
       hitSomething = true;
@@ -4103,7 +4103,7 @@ function meleeAttack(weapon){
   }
   if(closestKind==='enemy'){
     const dmg = closestZone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
-    hitEnemy(closestTarget, dmg);
+    hitEnemy(closestTarget, dmg, weapon.itemType);
     showHitMarker(closestZone==='head');
     if(closestZone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
     spawnBreakParticles(Math.floor(closestTarget.x),Math.floor(closestTarget.y+0.5),Math.floor(closestTarget.z), 0xff5555);
@@ -4115,7 +4115,7 @@ function meleeAttack(weapon){
     triggerHitEffect(closestTarget.rp);
     spawnBreakParticles(Math.floor(closestTarget.pos.x),Math.floor(closestTarget.pos.y+0.5),Math.floor(closestTarget.pos.z), 0xff5555);
   } else if(closestKind==='boss'){
-    damageBoss(weapon.damage);
+    damageBoss(weapon.damage, weapon.itemType);
     showHitMarker(false);
     spawnBreakParticles(Math.floor(bossState.x),Math.floor(bossState.y+BOSS_HIT_Y),Math.floor(bossState.z), 0xaa2255);
   } else {
@@ -4212,7 +4212,7 @@ function triggerExplosion(pos, damage, radius, weaponType){
     const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
     if(dist<=radius){
       const falloff = 1 - dist/radius;
-      hitEnemy(en, Math.max(1, Math.ceil(damage*falloff)));
+      hitEnemy(en, Math.max(1, Math.ceil(damage*falloff)), weaponType);
       hitAnyone = true;
     }
   }
@@ -4221,7 +4221,7 @@ function triggerExplosion(pos, damage, radius, weaponType){
     const bdist = Math.sqrt(bdx*bdx+bdy*bdy+bdz*bdz);
     if(bdist<=radius+BOSS_HIT_R){ // a bit more forgiving given how large the boss actually is
       const falloff = 1 - Math.min(1, bdist/(radius+BOSS_HIT_R));
-      damageBoss(Math.max(1, Math.ceil(damage*falloff)));
+      damageBoss(Math.max(1, Math.ceil(damage*falloff)), weaponType);
       hitAnyone = true;
     }
   }
@@ -5277,11 +5277,11 @@ function damageEnemy(enemy, amount){
     setTimeout(()=>respawnEnemy(enemy), delay);
   }
 }
-function hitEnemy(enemy, amount){
+function hitEnemy(enemy, amount, weaponType){
   // Called from weapons instead of damageEnemy directly - routes to whichever
   // side is actually authoritative for enemy health right now.
   if(multiplayer){
-    sendHitEnemy(enemy.id, amount); // wait for the server's 'enemyHealth' broadcast
+    sendHitEnemy(enemy.id, amount, weaponType); // wait for the server's 'enemyHealth' broadcast
   } else {
     damageEnemy(enemy, amount);
   }
@@ -5300,14 +5300,14 @@ function checkBossHitSwept(prevX,prevY,prevZ, currX,currY,currZ){
   const dist = pointToRayDistance(bossState.x, bossState.y+BOSS_HIT_Y, bossState.z, prevX,prevY,prevZ, ndx,ndy,ndz, segLen);
   return dist!==null && dist<BOSS_HIT_R;
 }
-function damageBoss(amount){
+function damageBoss(amount, weaponType){
   // Same routing idea as hitEnemy - report and wait for sync in multiplayer
   // (server is authoritative, -1 is the reserved boss sentinel ID), apply
   // and resolve everything locally in singleplayer.
   if(!bossState || !bossState.alive) return;
   if(multiplayer){
     if(socket && socket.readyState===WebSocket.OPEN){
-      socket.send(JSON.stringify({type:'hitEnemy', enemyId:-1, damage:amount}));
+      socket.send(JSON.stringify({type:'hitEnemy', enemyId:-1, damage:amount, weaponType: typeof weaponType==='number' ? weaponType : null}));
     }
     return;
   }
@@ -5423,10 +5423,10 @@ function applyServerEnemyRespawn(id, x, z, isZombie){
   scene.add(en.group);
 }
 let recentEnemyHitsByMe = {}; // enemyId -> timestamp, so kill confirmation only shows for a kill this client actually contributed to
-function sendHitEnemy(enemyId, damage){
+function sendHitEnemy(enemyId, damage, weaponType){
   if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
   recentEnemyHitsByMe[enemyId] = performance.now();
-  socket.send(JSON.stringify({type:'hitEnemy', enemyId, damage}));
+  socket.send(JSON.stringify({type:'hitEnemy', enemyId, damage, weaponType: typeof weaponType==='number' ? weaponType : null}));
 }
 
 function updateEnemies(dt){
@@ -6269,6 +6269,7 @@ document.getElementById('btnCloseCraft').addEventListener('click', toggleCraft);
 document.getElementById('btnCraftTop').addEventListener('click', toggleCraft);
 
 let devOpen = false;
+let devAuthenticated = false; // whether the server has confirmed this connection's admin password - server is the real gate, this just drives the UI
 // NOT real security - this is client-side JS, so anyone who opens the
 // browser's dev tools or views page source can read this password directly.
 // It's here to stop casual/curious players from poking at Dev Tools, not to
@@ -6307,6 +6308,25 @@ function renderDevPanel(){
   list.innerHTML='';
 
   addDevSectionTitle(list, 'Match Admin');
+  const authRow = document.createElement('div');
+  authRow.className='devRow';
+  authRow.innerHTML = `<div class="desc">Admin password ${devAuthenticated ? '(authenticated)' : '(not authenticated)'}</div>`;
+  const authBtns = document.createElement('div');
+  authBtns.className='btns';
+  const authInput = document.createElement('input');
+  authInput.type='password';
+  authInput.placeholder='Password';
+  authInput.style.cssText='padding:6px; border-radius:4px; border:1px solid #555; background:#111; color:#fff; margin-right:4px; width:120px;';
+  const authBtn = document.createElement('div'); authBtn.className='btn'; authBtn.textContent='Authenticate';
+  authBtn.addEventListener('click', ()=>{
+    if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN){ flashMessage('Connect to a server first'); return; }
+    socket.send(JSON.stringify({type:'devAuth', password:authInput.value}));
+  });
+  authInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') authBtn.click(); });
+  authBtns.appendChild(authInput); authBtns.appendChild(authBtn);
+  authRow.appendChild(authBtns);
+  list.appendChild(authRow);
+
   const adminRow = document.createElement('div');
   adminRow.className='devRow';
   adminRow.innerHTML = `<div class="desc">Admin${multiplayer?'':' (connect to a server first)'}</div>`;
@@ -7220,6 +7240,7 @@ function handleNetMessage(msg){
     try{
       myNetId = msg.id;
       chatHistory = [];
+      devAuthenticated = false;
       seed = msg.seed;
       WORLD_X=msg.worldX; WORLD_Y=msg.worldY; WORLD_Z=msg.worldZ;
       // Adopt the server's authoritative values for constants it actually
@@ -7317,6 +7338,10 @@ function handleNetMessage(msg){
   } else if(msg.type==='armorState'){
     const rp = remotePlayers.get(msg.id);
     if(rp && rp.helmetMesh) rp.helmetMesh.visible = !!msg.hasArmor;
+  } else if(msg.type==='devAuthResult'){
+    devAuthenticated = !!msg.success;
+    flashMessage(devAuthenticated ? 'Admin authenticated' : 'Wrong password');
+    if(devOpen) renderDevPanel();
   } else if(msg.type==='identified'){
     if(typeof msg.skinToneIndex==='number'){
       arm.material.color.set(SKIN_TONES[msg.skinToneIndex]);
