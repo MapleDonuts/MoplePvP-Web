@@ -112,6 +112,9 @@
     color:#ddd; font-size:12px; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.06);
     word-wrap:break-word;
   }
+  .chatHistLine.killHistLine {
+    padding-left:6px; border-left:2px solid #e0463f;
+  }
 
   #craftPanel {
     position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -232,17 +235,40 @@
   #hitMarker::after  { transform:translate(-50%,-50%) rotate(-45deg); }
   #hitMarker.headshot::before, #hitMarker.headshot::after { background:#ff3333; }
   #killFeed {
-    position:fixed; top:16px; right:16px; z-index:20;
-    display:flex; flex-direction:column; align-items:flex-end; gap:4px;
+    position:fixed; top:16px; left:16px; z-index:20;
+    display:flex; flex-direction:column; align-items:flex-start; gap:5px;
     font-size:14px; pointer-events:none;
   }
   #killFeed .entry {
-    background:rgba(0,0,0,0.55); color:#eee; padding:5px 10px; border-radius:4px;
+    background:linear-gradient(90deg, rgba(20,20,24,0.75), rgba(0,0,0,0.5));
+    color:#eee; padding:6px 12px 6px 10px; border-radius:0 5px 5px 0;
+    border-left:3px solid #e0463f;
+    box-shadow:0 2px 6px rgba(0,0,0,0.4);
     text-shadow:1px 1px 1px #000; white-space:nowrap;
+    animation:killFeedSlideIn 0.22s ease-out;
   }
-  #killFeed .entry .killer { color:#7fd9ff; font-weight:bold; }
-  #killFeed .entry .victim { color:#ff8080; font-weight:bold; }
-  #killFeed .entry .weapon { color:#e0c060; font-style:italic; }
+  @keyframes killFeedSlideIn {
+    from { transform:translateX(-24px); opacity:0; }
+    to { transform:translateX(0); opacity:1; }
+  }
+  #killFeed .entry .killer, #chatHistoryPanel .killHistLine .killer { color:#7fd9ff; font-weight:bold; }
+  #killFeed .entry .victim, #chatHistoryPanel .killHistLine .victim { color:#ff8080; font-weight:bold; }
+  #killFeed .entry .weapon, #chatHistoryPanel .killHistLine .weapon { color:#e0c060; font-style:italic; }
+  #itemTooltip {
+    position:fixed; z-index:95; pointer-events:none;
+    background:linear-gradient(135deg, rgba(30,30,34,0.92), rgba(10,10,12,0.92));
+    color:#f0f0f0; padding:5px 11px; border-radius:5px;
+    border:1px solid rgba(255,255,255,0.15);
+    box-shadow:0 3px 10px rgba(0,0,0,0.5);
+    font-size:13px; font-weight:600; text-shadow:1px 1px 1px #000;
+    white-space:nowrap; display:none;
+  }
+  #itemTooltip.show { display:block; }
+  .dragGhost {
+    position:fixed; width:38px; height:38px; z-index:70; pointer-events:none;
+    opacity:0.85; filter:drop-shadow(0 3px 8px rgba(0,0,0,0.6));
+  }
+  .dragGhost .swatch { width:100%; height:100%; border-radius:5px; }
   #respawnCountdown {
     position:fixed; top:40%; left:50%; transform:translate(-50%,-50%);
     z-index:32; text-align:center; color:#fff; display:none;
@@ -362,7 +388,7 @@
   </div>
   <div class="subLine" id="seriesEndSubLine"></div>
 </div>
-<div id="hint">WASD move · Space jump · C crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · F interact · Tab scoreboard · ~ dev tools · T chat · Esc close/pause</div>
+<div id="hint">WASD move · Space jump · C crouch · Hold left click to mine · Right click place · Scroll/1-9 select · E inventory · F interact · Q drop · Tab scoreboard · ~ dev tools · T chat · Esc close/pause</div>
 <div id="message"></div>
 <div id="topButtons">
   <div class="btn" id="btnSaveTop">Save</div>
@@ -381,7 +407,7 @@
 
 <div id="craftPanel">
   <h2>Inventory &amp; Crafting</h2>
-  <p style="font-size:12px; color:#aaa; margin-top:-8px;">Click a slot to pick an item up, click another slot to drop it there.</p>
+  <p style="font-size:12px; color:#aaa; margin-top:-8px;">Click a slot to pick an item up, click another slot to drop it there. Drag a slot out of this window to drop that item on the ground.</p>
   <div id="invGrid"></div>
   <div id="recipes"></div>
   <div class="btn" id="btnCloseCraft" style="text-align:center; margin-top:10px;">Close (E)</div>
@@ -439,9 +465,10 @@
     <div class="btn" id="btnJoinMp">Join Multiplayer Server</div>
     <div id="mpConnectStatus" style="font-size:13px; color:#ddd; margin-top:6px; display:none;"></div>
   </div>
-  <div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none;">MoplePvP 0.35</div>
 </div>
+<div id="versionLabel" style="position:fixed; bottom:10px; left:14px; font-size:12px; color:rgba(255,255,255,0.35); pointer-events:none; z-index:5;">MoplePvP 0.36</div>
 
+<div id="itemTooltip"></div>
 <div id="chatLog"></div>
 <div id="chatHistoryPanel"></div>
 <div id="chatInputWrap"><input id="chatInput" type="text" maxlength="200" placeholder="Press Enter to send, Esc to cancel"></div>
@@ -1034,7 +1061,7 @@ function scatterLootAndPowerCrates(){
 function generateWorld(){
   if(biomeMode==='oasis'){ generateOasisWorld(); buildSpectatorBox(); scatterFurnaces(); return; }
   if(biomeMode==='ruins'){ generateRuinsWorld(); buildSpectatorBox(); scatterFurnaces(); return; }
-  if(biomeMode==='industrial'){ generateIndustrialWorld(); buildSpectatorBox(); scatterFurnaces(); return; }
+  if(biomeMode==='industrial'){ generateIndustrialWorld(); buildSpectatorBox(); return; } // no furnaces here
   if(biomeMode==='graveyard'){ generateGraveyardWorld(); buildSpectatorBox(); scatterFurnaces(); return; }
   if(biomeMode==='tunnels'){ generateTunnelsWorld(); buildSpectatorBox(); return; } // no conventional surface here - furnaces would end up embedded in rock
   blocks = new Uint8Array(WORLD_X*WORLD_Y*WORLD_Z);
@@ -3655,6 +3682,22 @@ function buildBandageMesh(){
   group.add(cross2);
   return group;
 }
+function buildArmorHelmetMesh(){
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({color:0x8f8f8f, metalness:0.6, roughness:0.4});
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(0.14, 12, 8, 0, Math.PI*2, 0, Math.PI/1.9),
+    mat
+  );
+  group.add(dome);
+  const rim = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.145, 0.145, 0.025, 12),
+    mat
+  );
+  rim.position.y = -0.02;
+  group.add(rim);
+  return group;
+}
 function buildStimMesh(){
   const group = new THREE.Group();
   const body = new THREE.Mesh(
@@ -3706,6 +3749,8 @@ function updateHeldItemMesh(){
     itemAnchor.add(buildBandageMesh());
   } else if(slot.type===STIM_INJECTOR){
     itemAnchor.add(buildStimMesh());
+  } else if(slot.type===ARMOR_HELMET){
+    itemAnchor.add(buildArmorHelmetMesh());
   } else if(slot.type===METAL_BAR){
     itemAnchor.add(buildMetalBarMesh());
   } else if(slot.type===PLANT_FIBER){
@@ -3749,8 +3794,8 @@ const WEAPON_CONFIG = {
   // other hit, so you can't delete a whole hillside from across the map.
   // crateBreakRange is separate and much shorter - you have to be right on
   // top of a crate to shotgun it open.
-  [DOUBLE_BARREL]:   { kind:'shotgun', burstCount:2, burstDelay:0.12, pelletCount:6, pelletDamage:4, spread:0.13, speed:45, cooldown:1.8, color:0x4a3520, breakRange:10, crateBreakRange:3 },
-  [PUMP_SHOTGUN]:    { kind:'shotgun', burstCount:1, burstDelay:0,    pelletCount:9, pelletDamage:4, spread:0.08, speed:45, cooldown:0.7, color:0x333333, breakRange:10, crateBreakRange:3 },
+  [DOUBLE_BARREL]:   { kind:'shotgun', burstCount:2, burstDelay:0.12, pelletCount:6, pelletDamage:4, spread:0.19, speed:45, cooldown:1.8, color:0x4a3520, breakRange:10, crateBreakRange:3, falloffStart:5, falloffEnd:18, falloffMinMult:0.35 },
+  [PUMP_SHOTGUN]:    { kind:'shotgun', burstCount:1, burstDelay:0,    pelletCount:9, pelletDamage:4, spread:0.12, speed:45, cooldown:0.7, color:0x333333, breakRange:10, crateBreakRange:3, falloffStart:5, falloffEnd:18, falloffMinMult:0.35 },
   // sniper: instant hitscan rather than a travelling projectile - ignores
   // terrain entirely (no block/crate interaction at all, unlike everything
   // else) and hits every enemy/player along the line, not just the first.
@@ -3846,13 +3891,15 @@ function updateDarts(dt){
     d.mesh.position.addScaledVector(d.dir, d.speed*dt);
     spawnTrailParticle(d.mesh.position, d.color);
     let hitSomething = false;
+    const dist = d.life*d.speed;
+    const effectiveDamage = applyDamageFalloff(d.damage, d.itemType, dist);
 
     // check enemies first
     for(const en of enemies){
       if(!en.alive) continue;
       const zone = resolveSweptHitZone(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, en.x,en.z, en.y+ENEMY_HEAD_Y,ENEMY_HEAD_R, en.y+ENEMY_BODY_Y,ENEMY_BODY_R);
       if(zone){
-        const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
+        const dmg = zone==='head' ? effectiveDamage*HEADSHOT_MULT : effectiveDamage;
         hitEnemy(en, dmg);
         showHitMarker(zone==='head');
         if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
@@ -3864,7 +3911,7 @@ function updateDarts(dt){
 
     // the boss, if present
     if(!hitSomething && checkBossHitSwept(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z)){
-      damageBoss(d.damage);
+      damageBoss(effectiveDamage);
       showHitMarker(false);
       spawnBreakParticles(Math.floor(d.mesh.position.x),Math.floor(d.mesh.position.y),Math.floor(d.mesh.position.z), 0xaa2255);
       hitSomething = true;
@@ -3876,7 +3923,7 @@ function updateDarts(dt){
         const pos = rp.group.position;
         const zone = resolveSweptHitZone(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
         if(zone){
-          const dmg = zone==='head' ? d.damage*HEADSHOT_MULT : d.damage;
+          const dmg = zone==='head' ? effectiveDamage*HEADSHOT_MULT : effectiveDamage;
           sendHit(id, dmg, d.itemType);
           showHitMarker(zone==='head');
           if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
@@ -3892,7 +3939,6 @@ function updateDarts(dt){
       const bx=Math.floor(d.mesh.position.x), by=Math.floor(d.mesh.position.y), bz=Math.floor(d.mesh.position.z);
       const t = getBlock(bx,by,bz);
       if(isSolid(t)){
-        const dist = d.life*d.speed;
         const isSoft = (t===DIRT || t===GRASS || t===LEAVES || t===SNOW);
         const isCrate = (t===LOOT_CRATE || t===POWERUP_CRATE || t===MED_CRATE);
 
@@ -4455,6 +4501,7 @@ function buildGroundItemMesh(type){
     case SNIPER: return buildSniperMesh();
     case BANDAGE: return buildBandageMesh();
     case STIM_INJECTOR: return buildStimMesh();
+    case ARMOR_HELMET: return buildArmorHelmetMesh();
     case METAL_BAR: return buildMetalBarMesh();
     case PLANT_FIBER: return buildPlantFiberMesh();
     case POWERUP_CRATE: return new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), materials[POWERUP_CRATE]);
@@ -4835,6 +4882,7 @@ function spawnPlayer(){
     const z = Math.floor(margin + o.dz*(WORLD_Z-2*margin));
     const y = findSurfaceY(x,z);
     if(getBlock(x,y,z)===WATER) continue; // don't spawn in a lake/oasis pool
+    if(checkFurnaceCollision(x+0.5,y+0.1,z+0.5,HALF_W,HEIGHT_)) continue; // otherwise can spawn stuck inside one, same bug as enemies spawning inside furnaces
     let minDist = Infinity;
     if(multiplayer){
       for(const [id,rp] of remotePlayers){
@@ -5096,6 +5144,19 @@ function updateLocalBoss(dt){
 // mesh geometry (the old single hit-sphere for each was centered too low to
 // ever actually reach the head model - this fixes that and adds a crit).
 const HEADSHOT_MULT = 2;
+// Distance-based damage falloff - only weapons with these fields set in
+// WEAPON_CONFIG are affected, so this has zero effect on anything else.
+// Full damage out to falloffStart, linearly dropping to falloffMinMult
+// by falloffEnd, then held flat beyond that rather than continuing to
+// fall toward zero.
+function applyDamageFalloff(baseDamage, itemType, dist){
+  const weapon = WEAPON_CONFIG[itemType];
+  if(!weapon || weapon.falloffStart===undefined) return baseDamage;
+  if(dist <= weapon.falloffStart) return baseDamage;
+  if(dist >= weapon.falloffEnd) return baseDamage*weapon.falloffMinMult;
+  const t = (dist-weapon.falloffStart)/(weapon.falloffEnd-weapon.falloffStart);
+  return baseDamage*(1 - t*(1-weapon.falloffMinMult));
+}
 const ENEMY_HEAD_Y = 1.15, ENEMY_HEAD_R = 0.28, ENEMY_BODY_Y = 0.55, ENEMY_BODY_R = 0.5;
 const PLAYER_HEAD_Y = 1.5, PLAYER_HEAD_R = 0.28, PLAYER_BODY_Y = 0.75, PLAYER_BODY_R = 0.5;
 function resolveHitZone(px,py,pz, cx,cz, headY,headR, bodyY,bodyR){
@@ -5179,6 +5240,7 @@ function spawnEnemyAt(x,z,forceZombie){
     velY: 0, onGround: true,
     health: maxHealth, maxHealth, alive:true, isZombie,
     wanderDir: Math.random()*Math.PI*2, wanderTimer: 1+Math.random()*2,
+    stuckDeflectDir: 0, stuckDeflectTimer: 0,
     touchCooldown: 0
   };
   enemies.push(enemy);
@@ -5293,6 +5355,7 @@ function respawnEnemy(enemy){
   enemy.health = enemy.maxHealth;
   enemy.alive = true;
   enemy.touchCooldown = 0.5;
+  enemy.stuckDeflectTimer = 0;
   enemy.flashTimer = 0; enemy.bumpTimer = 0;
   enemy.group.scale.set(1,1,1);
   // rebuild the mesh so a re-rolled zombie/normal status is reflected visually
@@ -5336,7 +5399,13 @@ function applyServerEnemyHealth(id, health, alive){
   en.alive = alive;
   if(wasAlive){
     triggerHitEffect(en);
-    if(!alive){ scene.remove(en.group); showKillConfirm('ENEMY DEFEATED'); sfxEnemyDeath(); }
+    if(!alive){
+      scene.remove(en.group);
+      sfxEnemyDeath();
+      const lastHit = recentEnemyHitsByMe[id];
+      if(lastHit!==undefined && performance.now()-lastHit < 2000) showKillConfirm('ENEMY DEFEATED');
+      delete recentEnemyHitsByMe[id];
+    }
   }
 }
 function applyServerEnemyRespawn(id, x, z, isZombie){
@@ -5353,8 +5422,10 @@ function applyServerEnemyRespawn(id, x, z, isZombie){
   en.group.scale.set(1,1,1);
   scene.add(en.group);
 }
+let recentEnemyHitsByMe = {}; // enemyId -> timestamp, so kill confirmation only shows for a kill this client actually contributed to
 function sendHitEnemy(enemyId, damage){
   if(!multiplayer || !socket || socket.readyState!==WebSocket.OPEN) return;
+  recentEnemyHitsByMe[enemyId] = performance.now();
   socket.send(JSON.stringify({type:'hitEnemy', enemyId, damage}));
 }
 
@@ -5422,7 +5493,14 @@ function updateEnemies(dt){
     const distToPlayer = Math.sqrt(pdx*pdx+pdz*pdz);
     const aggroed = !godMode && (en.swarmMode || distToPlayer < ENEMY_AGGRO_RANGE);
 
-    if(aggroed){
+    if(en.stuckDeflectTimer>0){
+      // Temporarily overrides the aggro direction below - lets a stuck
+      // enemy slide sideways along whatever it hit instead of continuing
+      // to point straight at the player every single frame, which is
+      // what made it ram the same spot forever with no way to deviate.
+      en.stuckDeflectTimer -= dt;
+      en.wanderDir = en.stuckDeflectDir;
+    } else if(aggroed){
       en.wanderDir = Math.atan2(pdx, pdz);
     } else {
       en.wanderTimer -= dt;
@@ -5447,6 +5525,13 @@ function updateEnemies(dt){
       // try to jump over whatever's in the way if there's headroom above
       const canJump = en.onGround && !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
       if(canJump){ en.velY = ENEMY_JUMP_SPEED; en.onGround = false; }
+      else if(aggroed){
+        // can't jump over it and still want to reach the player - slide
+        // sideways along the obstacle for a bit instead of continuing to
+        // ram it every frame, in case there's a doorway/gap nearby
+        en.stuckDeflectDir = en.wanderDir + (Math.random()<0.5 ? 1 : -1)*Math.PI/2;
+        en.stuckDeflectTimer = 0.6+Math.random()*0.5;
+      }
       else { en.wanderTimer = 0; } // properly stuck - turn and pick a new direction
     }
 
@@ -5555,6 +5640,7 @@ document.addEventListener('keydown', (e)=>{
       break;
     case 'KeyE': toggleCraft(); break;
     case 'KeyF': tryInteract(); break;
+    case 'KeyQ': dropHeldItem(); break;
     case 'Backquote': toggleDev(); break;
     case 'KeyT': openChat(); break;
     case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
@@ -5650,9 +5736,17 @@ let selectedSlot = 0;
 let heldSlotIndex = null; // index of slot currently "picked up" with the mouse in the inventory screen
 
 function addToInventory(type){
-  // stack onto an existing pile of the same type first, anywhere
-  for(const s of slots){
-    if(s.type===type){ s.count++; updateHotbarUI(); if(craftOpen) renderInventoryPanel(); return; }
+  // Weapons don't stack - picking up a second one of the same gun/melee
+  // weapon should occupy its own slot, not just bump a count that
+  // doesn't mean anything meaningful for a weapon the way it does for
+  // materials or meds. Anything not in WEAPON_CONFIG (meds, materials,
+  // blocks) keeps stacking exactly as before.
+  const isWeapon = WEAPON_CONFIG[type] !== undefined;
+  if(!isWeapon){
+    // stack onto an existing pile of the same type first, anywhere
+    for(const s of slots){
+      if(s.type===type){ s.count++; updateHotbarUI(); if(craftOpen) renderInventoryPanel(); return; }
+    }
   }
   function tryFill(indices){
     for(const i of indices){
@@ -5825,6 +5919,7 @@ const ITEM_MESH_BUILDERS = {
   [PLANT_FIBER]: buildPlantFiberMesh,
   [BANDAGE]: buildBandageMesh,
   [STIM_INJECTOR]: buildStimMesh,
+  [ARMOR_HELMET]: buildArmorHelmetMesh,
 };
 let iconRenderer=null, iconScene=null, iconCamera=null;
 function initIconRenderer(){
@@ -5889,6 +5984,27 @@ function getBlockIconDataURL(type){
   blockIconCache[type] = url;
   return url;
 }
+function showItemTooltip(text, e){
+  const el = document.getElementById('itemTooltip');
+  if(!text){ el.classList.remove('show'); return; }
+  el.textContent = text;
+  el.classList.add('show');
+  positionItemTooltip(e);
+}
+function positionItemTooltip(e){
+  const el = document.getElementById('itemTooltip');
+  if(!el.classList.contains('show')) return;
+  const pad = 14;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  const rect = el.getBoundingClientRect();
+  if(x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
+  if(y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
+  el.style.left = x+'px';
+  el.style.top = y+'px';
+}
+function hideItemTooltip(){
+  document.getElementById('itemTooltip').classList.remove('show');
+}
 function slotInnerHTML(s){
   if(!s.type) return '';
   const meshIconUrl = ITEM_MESH_BUILDERS[s.type] ? getItemMeshIconDataURL(s.type) : null;
@@ -5905,6 +6021,7 @@ function slotInnerHTML(s){
   return `<div class="swatch" style="${bgStyle}">${icon?'<span class="toolIcon">'+icon+'</span>':''}</div><div class="count">${s.count>1?s.count:''}</div>`;
 }
 function buildHotbarDOM(){
+  hideItemTooltip();
   const bar = document.getElementById('hotbar');
   bar.innerHTML='';
   for(let i=0;i<HOTBAR_SIZE;i++){
@@ -5912,6 +6029,12 @@ function buildHotbarDOM(){
     const el = document.createElement('div');
     el.className='slot'+(i===selectedSlot?' selected':'');
     el.innerHTML = `<div class="key">${i+1}</div>${slotInnerHTML(s)}`;
+    if(s.type){
+      el.addEventListener('mouseenter', (e)=> showItemTooltip(BLOCK_NAMES[s.type], e));
+      el.addEventListener('mousemove', positionItemTooltip);
+      el.addEventListener('mouseleave', hideItemTooltip);
+      if(craftOpen) attachDragHandlers(el, i);
+    }
     el.addEventListener('click', ()=>{
       if(craftOpen) onSlotClick(i); else selectSlot(i);
     });
@@ -6067,6 +6190,18 @@ function useConsumable(){
     updateHotbarUI();
     return true;
   }
+  if(slot.type===ARMOR_HELMET){
+    if(hasArmor){ flashMessage('Already wearing armor'); return true; }
+    hasArmor = true;
+    armorHealth = ARMOR_MAX_HEALTH;
+    updateArmorUI();
+    sendArmorStateIfMultiplayer();
+    sfxCraftSuccess();
+    flashMessage('Armor equipped!');
+    slot.count--; if(slot.count===0) slot.type=null;
+    updateHotbarUI();
+    return true;
+  }
   return false;
 }
 function updateBandageChannel(dt){
@@ -6089,7 +6224,7 @@ function updateBandageChannel(dt){
 }
 function placeBlock(){
   const slot = slots[selectedSlot];
-  if(slot.type===BANDAGE || slot.type===STIM_INJECTOR){ useConsumable(); return; }
+  if(slot.type===BANDAGE || slot.type===STIM_INJECTOR || slot.type===ARMOR_HELMET){ useConsumable(); return; }
   const hit = raycastVoxel();
   if(!hit || !hit.prev) return;
   if(!slot.type || slot.count<=0) return;
@@ -6121,10 +6256,12 @@ function toggleCraft(){
   document.getElementById('craftPanel').style.display = craftOpen ? 'block' : 'none';
   if(craftOpen){
     document.exitPointerLock();
+    buildHotbarDOM();
     renderInventoryPanel();
   } else {
     heldSlotIndex = null;
     updateHeldIcon();
+    buildHotbarDOM();
     if(started && !paused) requestPointerLockSafe();
   }
 }
@@ -6320,6 +6457,70 @@ document.getElementById('btnDevTop').addEventListener('click', toggleDev);
 
 // Clicking a slot (in the hotbar or the backpack grid) either picks its stack up
 // or, if something is already held, drops/merges/swaps it into that slot.
+let dragState = null; // {fromIndex, ghostEl, moved} while a drag is in progress, else null
+function attachDragHandlers(el, i){
+  const s = slots[i];
+  if(!s.type) return;
+  el.addEventListener('mousedown', (e)=>{
+    if(e.button!==0) return; // left-click only
+    e.preventDefault();
+    heldSlotIndex = null; // starting a drag supersedes the click-based pickup, so the two gestures can't conflict
+    updateHeldIcon();
+    const ghost = document.createElement('div');
+    ghost.className = 'dragGhost';
+    ghost.innerHTML = slotInnerHTML(slots[i]);
+    document.body.appendChild(ghost);
+    dragState = {fromIndex: i, ghostEl: ghost, moved: false};
+    positionDragGhost(e);
+    document.addEventListener('mousemove', onDragMouseMove);
+    document.addEventListener('mouseup', onDragMouseUp);
+  });
+}
+function positionDragGhost(e){
+  if(!dragState) return;
+  dragState.ghostEl.style.left = (e.clientX-19)+'px';
+  dragState.ghostEl.style.top = (e.clientY-19)+'px';
+}
+function onDragMouseMove(e){
+  if(!dragState) return;
+  dragState.moved = true;
+  positionDragGhost(e);
+}
+function onDragMouseUp(e){
+  document.removeEventListener('mousemove', onDragMouseMove);
+  document.removeEventListener('mouseup', onDragMouseUp);
+  if(!dragState) return;
+  const {fromIndex, ghostEl, moved} = dragState;
+  dragState = null;
+  ghostEl.remove();
+  if(!moved) return; // a plain click, not a drag - let the normal click handler deal with it
+  const panelRect = document.getElementById('craftPanel').getBoundingClientRect();
+  const barRect = document.getElementById('hotbar').getBoundingClientRect();
+  const inRect = (r)=> e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+  if(!inRect(panelRect) && !inRect(barRect)) dropSlotItemOnGround(fromIndex);
+}
+function dropSlotItemOnGround(i){
+  const s = slots[i];
+  if(!s || !s.type || s.count<=0) return;
+  dropItemOnGround(Math.floor(player.x), Math.floor(player.y), Math.floor(player.z), s.type, s.count);
+  slots[i] = {type:null, count:0};
+  updateHotbarUI();
+  renderInventoryPanel();
+}
+function dropHeldItem(){
+  if(respawnCountdownActive || (multiplayer && (myEliminated || inSpectatorBox))) return;
+  const s = slots[selectedSlot];
+  if(!s || !s.type || s.count<=0){ flashMessage('Nothing to drop'); return; }
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const x = Math.floor(player.x + dir.x*1.5);
+  const y = Math.floor(player.y);
+  const z = Math.floor(player.z + dir.z*1.5);
+  dropItemOnGround(x, y, z, s.type, s.count);
+  slots[selectedSlot] = {type:null, count:0};
+  updateHotbarUI();
+  if(craftOpen) renderInventoryPanel();
+}
 function onSlotClick(i){
   const clicked = slots[i];
   if(heldSlotIndex===null){
@@ -6363,6 +6564,7 @@ document.addEventListener('mousemove', (e)=>{
 });
 
 function renderInventoryPanel(){
+  hideItemTooltip();
   const grid = document.getElementById('invGrid');
   grid.innerHTML='';
   for(let i=HOTBAR_SIZE;i<TOTAL_SLOTS;i++){
@@ -6370,7 +6572,12 @@ function renderInventoryPanel(){
     const el = document.createElement('div');
     el.className='islot';
     el.innerHTML = slotInnerHTML(s);
-    el.title = s.type ? `${BLOCK_NAMES[s.type]}: ${s.count}` : '';
+    if(s.type){
+      el.addEventListener('mouseenter', (e)=> showItemTooltip(BLOCK_NAMES[s.type], e));
+      el.addEventListener('mousemove', positionItemTooltip);
+      el.addEventListener('mouseleave', hideItemTooltip);
+      attachDragHandlers(el, i);
+    }
     el.addEventListener('click', ()=>onSlotClick(i));
     grid.appendChild(el);
   }
@@ -6453,20 +6660,11 @@ function updateArmorCraft(dt){
   if(armorCraftTimer<=0) return;
   armorCraftTimer = Math.max(0, armorCraftTimer-dt);
   if(armorCraftTimer<=0 && pendingCraftResults){
-    let equippedArmor = false;
     for(const res of pendingCraftResults){
-      if(res.type===ARMOR_HELMET){
-        hasArmor = true;
-        armorHealth = ARMOR_MAX_HEALTH;
-        updateArmorUI();
-        equippedArmor = true;
-        sendArmorStateIfMultiplayer();
-      } else {
-        for(let i=0;i<res.count;i++) addToInventory(res.type);
-      }
+      for(let i=0;i<res.count;i++) addToInventory(res.type);
     }
     renderInventoryPanel(); updateHotbarUI();
-    flashMessage(equippedArmor ? 'Armor equipped!' : ('Crafted '+craftedResultText(pendingCraftResults)+'!'));
+    flashMessage('Crafted '+craftedResultText(pendingCraftResults)+'!');
     sfxCraftSuccess();
     pendingCraftResults = null;
   }
@@ -6538,38 +6736,42 @@ function showHitMarker(isHeadshot){
 }
 
 // ---------- Kill feed (top-right log of eliminations) ----------
-function addKillFeedEntry(killerName, victimName, killerWeapon){
-  const feed = document.getElementById('killFeed');
-  const entry = document.createElement('div');
-  entry.className = 'entry';
+function buildKillEntryContent(container, killerName, victimName, killerWeapon){
   if(killerName){
     const killerSpan = document.createElement('span');
     killerSpan.className = 'killer';
     killerSpan.textContent = killerName;
-    entry.appendChild(killerSpan);
+    container.appendChild(killerSpan);
     const weaponName = (typeof killerWeapon==='number' && BLOCK_NAMES[killerWeapon]) ? BLOCK_NAMES[killerWeapon] : null;
-    entry.appendChild(document.createTextNode(' eliminated '));
+    container.appendChild(document.createTextNode(' eliminated '));
     const victimSpan = document.createElement('span');
     victimSpan.className = 'victim';
     victimSpan.textContent = victimName;
-    entry.appendChild(victimSpan);
+    container.appendChild(victimSpan);
     if(weaponName){
-      entry.appendChild(document.createTextNode(' with '));
+      container.appendChild(document.createTextNode(' with '));
       const weaponSpan = document.createElement('span');
       weaponSpan.className = 'weapon';
       weaponSpan.textContent = weaponName;
-      entry.appendChild(weaponSpan);
+      container.appendChild(weaponSpan);
     }
   } else {
     const victimSpan = document.createElement('span');
     victimSpan.className = 'victim';
     victimSpan.textContent = victimName;
-    entry.appendChild(victimSpan);
-    entry.appendChild(document.createTextNode(' was eliminated'));
+    container.appendChild(victimSpan);
+    container.appendChild(document.createTextNode(' was eliminated'));
   }
+}
+function addKillFeedEntry(killerName, victimName, killerWeapon){
+  chatHistory.push({type:'kill', killerName, victimName, killerWeapon});
+  const feed = document.getElementById('killFeed');
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  buildKillEntryContent(entry, killerName, victimName, killerWeapon);
   feed.appendChild(entry);
   while(feed.children.length > 5) feed.removeChild(feed.firstChild);
-  setTimeout(()=>{ if(entry.parentNode) entry.parentNode.removeChild(entry); }, 6000);
+  setTimeout(()=>{ if(entry.parentNode) entry.parentNode.removeChild(entry); }, 9000);
 }
 
 // ---------- Save / Load (window.storage persistent API) ----------
@@ -6775,6 +6977,7 @@ function buildRemoteHeldItemMesh(type){
     case SNIPER: return buildSniperMesh();
     case BANDAGE: return buildBandageMesh();
     case STIM_INJECTOR: return buildStimMesh();
+    case ARMOR_HELMET: return buildArmorHelmetMesh();
     case METAL_BAR: return buildMetalBarMesh();
     case PLANT_FIBER: return buildPlantFiberMesh();
     case REEDS: return new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]);
@@ -7365,7 +7568,7 @@ function sendChat(text){
 let chatOpen = false;
 let chatHistory = []; // every message since joining this server - never trimmed or faded, unlike the recent-messages log below
 function addChatMessage(name, text){
-  chatHistory.push({name, text});
+  chatHistory.push({type:'chat', name, text});
   const log = document.getElementById('chatLog');
   const line = document.createElement('div');
   line.className='chatLine';
@@ -7380,8 +7583,13 @@ function renderChatHistoryPanel(){
   panel.innerHTML = '';
   for(const m of chatHistory){
     const line = document.createElement('div');
-    line.className = 'chatHistLine';
-    line.textContent = `${m.name}: ${m.text}`;
+    if(m.type==='kill'){
+      line.className = 'chatHistLine killHistLine';
+      buildKillEntryContent(line, m.killerName, m.victimName, m.killerWeapon);
+    } else {
+      line.className = 'chatHistLine';
+      line.textContent = `${m.name}: ${m.text}`;
+    }
     panel.appendChild(line);
   }
   panel.scrollTop = panel.scrollHeight;
