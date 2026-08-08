@@ -163,6 +163,14 @@
   #miningBarWrap.show { opacity:1; }
   #miningBar { height:100%; width:0%; background:#e8d95c; }
 
+  #grenadeChargeBarWrap {
+    position:fixed; top:calc(50% + 34px); left:50%; transform:translateX(-50%);
+    width:90px; height:7px; background:rgba(0,0,0,0.4); border-radius:4px;
+    z-index:10; overflow:hidden; opacity:0; transition:opacity 0.15s;
+  }
+  #grenadeChargeBarWrap.show { opacity:1; }
+  #grenadeChargeBar { height:100%; width:0%; background:#ff6a3a; }
+
   #pauseMenu {
     position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:90;
     display:none; align-items:center; justify-content:center; flex-direction:column;
@@ -300,19 +308,36 @@
     position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:60;
     display:none; flex-direction:column; align-items:center; justify-content:center;
     color:#fff; font-family:sans-serif; text-align:center;
+    padding:20px; box-sizing:border-box;
   }
   #seriesEndOverlay .trophy { font-size:52px; margin-bottom:6px; }
   #seriesEndOverlay .winnerLine { font-size:30px; font-weight:bold; color:#ffdd55; text-shadow:2px 2px 6px #000; margin-bottom:18px; }
   #seriesEndOverlay .subLine { font-size:15px; color:#aaa; margin-top:14px; }
-  .voteBtn {
-    display:flex; flex-direction:column; align-items:center; gap:4px;
-    padding:10px 16px; border-radius:6px; border:1px solid rgba(255,255,255,0.25);
-    background:rgba(255,255,255,0.08); color:#fff; cursor:pointer; font-size:14px;
-    min-width:110px; transition:background 0.15s, border-color 0.15s;
+  .voteSectionHeader {
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    font-size:17px; font-weight:bold; color:#e8e8e8; margin-bottom:12px;
   }
-  .voteBtn:hover { background:rgba(255,255,255,0.16); }
-  .voteBtn.voted { border-color:#7fd9ff; background:rgba(127,217,255,0.18); }
-  .voteBtn .voteCount { font-size:12px; color:#aaa; }
+  .voteCountdown {
+    font-size:15px; font-weight:bold; color:#ffdd55; background:rgba(255,221,85,0.12);
+    border:1px solid rgba(255,221,85,0.4); border-radius:20px; padding:3px 12px;
+  }
+  .voteCardsRow { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+  .voteBtn {
+    display:flex; flex-direction:column; align-items:stretch; gap:0;
+    width:190px; border-radius:10px; border:2px solid rgba(255,255,255,0.2);
+    background:rgba(255,255,255,0.06); color:#fff; cursor:pointer; overflow:hidden;
+    transition:background 0.15s, border-color 0.15s, transform 0.15s;
+  }
+  .voteBtn:hover { background:rgba(255,255,255,0.14); border-color:rgba(255,255,255,0.4); transform:translateY(-3px); }
+  .voteBtn.voted { border-color:#7fd9ff; background:rgba(127,217,255,0.16); }
+  .voteBtn .voteThumb {
+    width:100%; height:110px; background-size:cover; image-rendering:pixelated;
+    border-bottom:2px solid rgba(255,255,255,0.15);
+  }
+  .voteBtn .voteInfo { padding:10px 12px 12px; text-align:left; }
+  .voteBtn .voteTitle { font-size:15px; font-weight:bold; margin-bottom:3px; }
+  .voteBtn .voteDesc { font-size:12px; color:#bbb; line-height:1.35; min-height:32px; }
+  .voteBtn .voteCount { font-size:12px; color:#7fd9ff; font-weight:bold; margin-top:8px; }
   #healthBar {
     position:fixed; bottom:82px; left:50%; transform:translateX(-50%);
     display:flex; gap:2px; z-index:10;
@@ -365,6 +390,7 @@
     stroke-dasharray="69.12" stroke-dashoffset="0" transform="rotate(-90 14 14)" style="transition:stroke-dashoffset 0.05s linear;"/>
 </svg>
 <div id="miningBarWrap"><div id="miningBar"></div></div>
+<div id="grenadeChargeBarWrap"><div id="grenadeChargeBar"></div></div>
 <div id="armorBar"></div>
 <div id="healthBar"></div>
 <div id="bossHealthBar">
@@ -386,9 +412,12 @@
   <div class="trophy">\uD83C\uDFC6</div>
   <div class="winnerLine" id="seriesWinnerLine"></div>
   <table><thead><tr><th style="text-align:left;color:#888;font-weight:normal;padding:4px 10px;">Player</th><th style="color:#888;font-weight:normal;padding:4px 10px;">K</th><th style="color:#888;font-weight:normal;padding:4px 10px;">D</th><th style="color:#888;font-weight:normal;padding:4px 10px;">Wins</th></tr></thead><tbody id="seriesEndBody" style="font-size:15px;"></tbody></table>
-  <div id="mapVoteSection" style="display:none; margin-top:16px;">
-    <div style="font-size:14px; color:#ccc; margin-bottom:8px;">Vote for the next map:</div>
-    <div id="mapVoteButtons" style="display:flex; gap:8px; justify-content:center;"></div>
+  <div id="mapVoteSection" style="display:none; margin-top:18px;">
+    <div class="voteSectionHeader">
+      <span>Vote for the next map</span>
+      <span id="voteCountdown" class="voteCountdown"></span>
+    </div>
+    <div id="mapVoteButtons" class="voteCardsRow"></div>
   </div>
   <div class="subLine" id="seriesEndSubLine"></div>
 </div>
@@ -455,7 +484,6 @@
       <option value="industrial">Industrial - dense rooms &amp; corridors</option>
       <option value="snow">Snow - frosty hills &amp; forest</option>
       <option value="graveyard">Graveyard - tombstones &amp; a boss</option>
-      <option value="tunnels">Tunnels - dirt maze, shotguns &amp; stims only</option>
       <option value="test">Test - flat, empty, no mobs</option>
     </select>
   </label>
@@ -2080,13 +2108,13 @@ function sfxPlace(){
   playTone({freq:180, duration:0.08, type:'triangle', volume:0.13});
 }
 function sfxFootstep(volume, pos){
-  playNoise({duration:0.05, volume: volume!==undefined ? volume : 0.08, filterType:'lowpass', filterFreq:280, pos});
+  playNoise({duration:0.05, volume: volume!==undefined ? volume : 0.104, filterType:'lowpass', filterFreq:280, pos});
 }
 function sfxJump(){
-  playTone({freq:220, freqEnd:480, duration:0.12, type:'square', volume:0.10});
+  playTone({freq:220, freqEnd:480, duration:0.12, type:'square', volume:0.05});
 }
 function sfxLand(){
-  playNoise({duration:0.08, volume:0.14, filterType:'lowpass', filterFreq:220});
+  playNoise({duration:0.08, volume:0.07, filterType:'lowpass', filterFreq:220});
 }
 function sfxShootLight(pos){
   playNoise({duration:0.06, volume:0.19, filterType:'highpass', filterFreq:1700, pos});
@@ -2220,6 +2248,11 @@ function startAmbience(biome){
   stopAmbience();
   initAudio();
   if(!audioCtx) return;
+  // Music, drone, and wind all disabled for now (commented out, not
+  // deleted) - reported as overwhelming/annoying alongside jump noise,
+  // to the point where "all you hear is your own jumping and low drone".
+  // Uncomment to bring any of it back.
+  /*
   const theme = AMBIENT_THEMES[biome] || AMBIENT_THEMES.highlands;
   const ctx = audioCtx;
 
@@ -2269,6 +2302,7 @@ function startAmbience(biome){
     const jitter = theme.noteInterval*(0.7+Math.random()*0.7);
     ambientMelodyTimeoutId = setTimeout(scheduleNote, jitter*1000);
   })();
+  */
 }
 
 // ---------- Three.js setup ----------
@@ -2463,6 +2497,101 @@ function startMenuBg(){
 function stopMenuBg(){
   if(menuBgAnimId){ cancelAnimationFrame(menuBgAnimId); menuBgAnimId=null; }
   menuBgCanvas.style.display = 'none';
+}
+
+// ---------- Map vote thumbnails (procedural, no external images) ----------
+// Two kinds: a real top-down render of the actual current map (for the
+// "keep this map" option, sampled straight from the live heightMap/blocks
+// data already in memory) and a stylized, characteristic preview per biome
+// (for the two freshly-rolled alternatives, which have no real generated
+// terrain yet to sample from - built from that biome's own noise shape and
+// real in-game color palette instead, for a genuine "this is roughly what
+// it looks like" preview rather than a generic placeholder).
+const THUMB_W = 72, THUMB_H = 54;
+const BIOME_PREVIEW_PROFILES = {
+  highlands: { base:0x5a9b3c, high:0x8a8a8a, freq:0.15, contrast:1.8, mode:'hills' },
+  plains:    { base:0x5a9b3c, high:0x8a8a8a, freq:0.1,  contrast:0.8, mode:'hills' },
+  oasis:     { base:0xdccb86, high:0x3a6fd8, freq:0.2,  contrast:1,   mode:'pools' },
+  ruins:     { base:0x9c8570, high:0x8a8a8a, freq:0.4,  contrast:2.2, mode:'hills' },
+  snow:      { base:0xf0f5fa, high:0x8a8a8a, freq:0.15, contrast:1.8, mode:'hills' },
+  industrial:{ base:0x5a6570, high:0x3a4550, freq:0,    contrast:1,   mode:'grid' },
+  graveyard: { base:0x6b4a2c, high:0x5c7a5c, freq:0.18, contrast:1,   mode:'graves' },
+};
+function hashStringToSeed(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i))|0; }
+  return Math.abs(h) + 1; // Noise2D's mulberry32 seed of exactly 0 is a valid but less varied case - keep it away from that
+}
+function hexToRgb(hex){ return [(hex>>16)&255, (hex>>8)&255, hex&255]; }
+function lerpRgb(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+function makeOffscreenCanvas(w,h){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+function generateBiomeThumbnail(biome, seedForVariety){
+  const profile = BIOME_PREVIEW_PROFILES[biome] || BIOME_PREVIEW_PROFILES.highlands;
+  const canvas = makeOffscreenCanvas(THUMB_W, THUMB_H);
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(THUMB_W, THUMB_H);
+  const data = imgData.data;
+  const noise = new Noise2D(seedForVariety);
+  const baseRgb = hexToRgb(profile.base);
+  const highRgb = hexToRgb(profile.high);
+  for(let y=0;y<THUMB_H;y++){
+    for(let x=0;x<THUMB_W;x++){
+      let rgb;
+      if(profile.mode==='grid'){
+        // industrial: flat metal floor with a maze-like grid of darker corridor walls
+        const cell = 9;
+        rgb = ((x%cell===0) || (y%cell===0)) ? highRgb : baseRgb;
+      } else {
+        // noise() already returns 0..1 - stretch/compress around the midpoint
+        // for contrast, then clamp back into range
+        const raw = noise.noise(x*profile.freq, y*profile.freq);
+        const t = Math.max(0, Math.min(1, 0.5 + (raw-0.5)*profile.contrast));
+        if(profile.mode==='pools'){
+          // oasis: mostly sand, with the lowest noise values carved out as water pools
+          rgb = t < 0.22 ? highRgb : baseRgb;
+        } else if(profile.mode==='graves'){
+          rgb = lerpRgb(baseRgb, highRgb, t*0.5); // subtle grass patches over mostly-bare dirt
+          if(((x*7+y*13)%37)===0) rgb = [150,150,155]; // scattered tombstone flecks, a fixed deterministic pattern
+        } else {
+          rgb = lerpRgb(baseRgb, highRgb, t);
+        }
+      }
+      const idx = (y*THUMB_W+x)*4;
+      data[idx]=rgb[0]; data[idx+1]=rgb[1]; data[idx+2]=rgb[2]; data[idx+3]=255;
+    }
+  }
+  ctx.putImageData(imgData,0,0);
+  return canvas.toDataURL();
+}
+// Real thumbnail of the actual current map, sampled from the live
+// heightMap/blocks data - accurate to whatever's actually there right now,
+// including any destruction/changes already made this series, since "keep"
+// means keeping exactly this, not a fresh copy of the biome.
+function generateCurrentMapThumbnail(){
+  const canvas = makeOffscreenCanvas(THUMB_W, THUMB_H);
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(THUMB_W, THUMB_H);
+  const data = imgData.data;
+  for(let ty=0;ty<THUMB_H;ty++){
+    for(let tx=0;tx<THUMB_W;tx++){
+      const wx = Math.min(WORLD_X-1, Math.round(tx/(THUMB_W-1)*(WORLD_X-1)));
+      const wz = Math.min(WORLD_Z-1, Math.round(ty/(THUMB_H-1)*(WORLD_Z-1)));
+      const h = (heightMap[wx] && typeof heightMap[wx][wz]==='number') ? heightMap[wx][wz] : 0;
+      const surfaceType = getBlock(wx, h, wz);
+      const color = BLOCK_COLORS[surfaceType] || 0x5a9b3c;
+      const rgb = hexToRgb(color);
+      // subtle height-based shading for a bit of depth, purely cosmetic
+      const shade = Math.max(0.7, Math.min(1.15, h/WORLD_Y*1.8+0.6));
+      const idx = (ty*THUMB_W+tx)*4;
+      data[idx]=Math.min(255,rgb[0]*shade); data[idx+1]=Math.min(255,rgb[1]*shade); data[idx+2]=Math.min(255,rgb[2]*shade); data[idx+3]=255;
+    }
+  }
+  ctx.putImageData(imgData,0,0);
+  return canvas.toDataURL();
 }
 startMenuBg();
 
@@ -2934,8 +3063,8 @@ function spawnGroundRiseEffect(x,z){
   spawnBreakParticles(Math.floor(x), y, Math.floor(z), 0x3a2a1a);
   spawnBreakParticles(Math.floor(x), y+1, Math.floor(z), 0x4a3a2a);
 }
-function spawnBloodBurst(x,y,z){
-  const count = 18;
+function spawnBloodBurst(x,y,z,count){
+  count = count || 18;
   const positions = new Float32Array(count*3);
   const velocities = [];
   for(let i=0;i<count;i++){
@@ -2954,6 +3083,50 @@ function spawnBloodBurst(x,y,z){
   const points = new THREE.Points(geo, mat);
   scene.add(points);
   particleSystems.push({points, velocities, life:0, maxLife:0.6});
+}
+// Death is meant to read as a bigger, more spectacular moment than a
+// regular hit - a much larger initial burst, plus a second, slightly
+// offset and lower burst a beat later, rather than the single small burst
+// death previously reused from (what was) the only blood effect in the
+// game.
+function spawnDeathBloodEffect(x,y,z){
+  spawnBloodBurst(x,y,z,42);
+  setTimeout(()=>{
+    spawnBloodBurst(x+(Math.random()-0.5)*0.4, y-0.15, z+(Math.random()-0.5)*0.4, 24);
+  }, 120);
+}
+// A lasting red mark on the ground where someone died - snapped to the
+// actual ground surface (via findSurfaceY) rather than the death
+// position's own y-coordinate, since a player can die mid-air or
+// mid-fall and that y wouldn't be the real ground level. Fades out and
+// cleans up after a while instead of accumulating forever.
+let bloodPoolDecals = [];
+function spawnBloodPoolDecal(x,z){
+  const gx = Math.floor(x), gz = Math.floor(z);
+  const gy = findSurfaceY(gx,gz);
+  const geo = new THREE.PlaneGeometry(1.3, 1.3);
+  const mat = new THREE.MeshBasicMaterial({color:0x6b0000, transparent:true, opacity:0.85, depthWrite:false});
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI/2;
+  mesh.position.set(x, gy+0.02, z);
+  scene.add(mesh);
+  bloodPoolDecals.push({mesh, life:0, holdTime:10, fadeTime:5});
+}
+function updateBloodPoolDecals(dt){
+  for(let i=bloodPoolDecals.length-1;i>=0;i--){
+    const d = bloodPoolDecals[i];
+    d.life += dt;
+    if(d.life>d.holdTime){
+      const fadeFrac = Math.min(1, (d.life-d.holdTime)/d.fadeTime);
+      d.mesh.material.opacity = 0.85*(1-fadeFrac);
+      if(fadeFrac>=1){
+        scene.remove(d.mesh);
+        d.mesh.geometry.dispose();
+        d.mesh.material.dispose();
+        bloodPoolDecals.splice(i,1);
+      }
+    }
+  }
 }
 
 // ---------- Explosion visuals: bigger burst + an expanding flash so it actually
@@ -3955,12 +4128,12 @@ const WEAPON_CONFIG = {
   // crateBreakRange: any gun can shatter a crate open at close range - short
   // on purpose, so you have to actually walk up to one rather than sniping
   // it from across the map.
-  [BLOW_PIPE]:       { kind:'projectile', damage:1.35, speed:23,   cooldown:0.15, radius:0.045, color:0x4a3520, sound:'light' },
+  [BLOW_PIPE]:       { kind:'projectile', damage:1.35, speed:23,   cooldown:0.15, radius:0.045, color:0x4a3520, sound:'light', bloomPerShot:0.0292, maxBloomAdd:0.10, bloomDecayRate:0.0833 },
   [STONE_SLING]:     { kind:'projectile', damage:3, speed:34.5, cooldown:0.3,  radius:0.06,  color:0x8a8a8a, sound:'sling' },
-  [PISTOL]:          { kind:'projectile', damage:6, speed:60,   cooldown:0.2,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3, canBreakLeaves:true, breakRange:10, semiAuto:true },
+  [PISTOL]:          { kind:'projectile', damage:6, speed:60,   cooldown:0.2,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3, canBreakLeaves:true, breakRange:10, semiAuto:true, bloomPerShot:0.03, maxBloomAdd:0.09, bloomDecayRate:0.075 },
   [WAR_CLUB]:        { kind:'melee', damage:5, cooldown:0.6, range:2.6, crateBreakRange:3 },
   [METAL_SWORD]:     { kind:'melee', damage:4, cooldown:0.45, range:2.8, crateBreakRange:3 },
-  [GRENADE]:         { kind:'grenade', damage:17.5, cooldown:1.2, throwSpeed:11, blastRadius:2.8 },
+  [GRENADE]:         { kind:'grenade', damage:24, cooldown:1.2, throwSpeedMin:11, throwSpeedMax:20, maxChargeTime:1.2, blastRadius:2.8 },
   [ROCKET_LAUNCHER]: { kind:'rocket', damage:20, cooldown:1.4, speed:36, blastRadius:3.2, color:0xff5522 },
   [ADMIN_ROCKET_LAUNCHER]: { kind:'rocket', damage:20, cooldown:0.35, speed:36, blastRadius:3.2, color:0xffd700 }, // 4x the fire rate (cooldown/4), dev-tools-only
   // penetration: punches straight through this many soft blocks (dirt/grass/
@@ -3970,7 +4143,7 @@ const WEAPON_CONFIG = {
   [RIFLE]:           { kind:'projectile', damage:8, speed:72, cooldown:1.0, radius:0.04, color:0xc9a227, sound:'rifle', penetration:2, crateBreakRange:3 },
   // carbine: same rifle family, no penetration, but noticeably faster on
   // both the bullet and the trigger, trading power for rate of fire.
-  [CARBINE]:         { kind:'projectile', damage:6, speed:78, cooldown:0.6, radius:0.04, color:0x8a6a45, sound:'rifle', crateBreakRange:3, canBreakLeaves:true, breakRange:10 },
+  [CARBINE]:         { kind:'projectile', damage:6, speed:78, cooldown:0.4, radius:0.04, color:0x8a6a45, sound:'rifle', crateBreakRange:3, canBreakLeaves:true, breakRange:10, bloomPerShot:0.07, maxBloomAdd:0.14, bloomDecayRate:0.1167 },
   // shotguns: a spread of small fast pellets (reuses the same dart system as
   // blow pipe/sling) - burstCount>1 fires several blasts in quick succession
   // from one click before the real cooldown kicks in. No magazines/reloading.
@@ -3979,8 +4152,8 @@ const WEAPON_CONFIG = {
   // other hit, so you can't delete a whole hillside from across the map.
   // crateBreakRange is separate and much shorter - you have to be right on
   // top of a crate to shotgun it open.
-  [DOUBLE_BARREL]:   { kind:'shotgun', burstCount:2, burstDelay:0.12, pelletCount:6, pelletDamage:4, spread:0.19, speed:45, cooldown:1.8, color:0x4a3520, breakRange:10, crateBreakRange:3, falloffStart:5, falloffEnd:18, falloffMinMult:0.35 },
-  [PUMP_SHOTGUN]:    { kind:'shotgun', burstCount:1, burstDelay:0,    pelletCount:9, pelletDamage:4, spread:0.12, speed:45, cooldown:0.7, color:0x333333, breakRange:10, crateBreakRange:3, falloffStart:5, falloffEnd:18, falloffMinMult:0.35 },
+  [DOUBLE_BARREL]:   { kind:'shotgun', burstCount:2, burstDelay:0.12, pelletCount:6, pelletDamage:4, spread:0.19, speed:45, cooldown:1.8, color:0x4a3520, breakRange:10, crateBreakRange:3, falloffStart:5, falloffEnd:18, falloffMinMult:0.35, bloomPerShot:0.10, maxBloomAdd:0.10, bloomDecayRate:0.5 },
+  [PUMP_SHOTGUN]:    { kind:'shotgun', burstCount:1, burstDelay:0,    pelletCount:9, pelletDamage:4, spread:0.12, speed:45, cooldown:0.7, color:0x333333, breakRange:10, crateBreakRange:3, falloffStart:5, falloffEnd:18, falloffMinMult:0.35, bloomPerShot:0.09, maxBloomAdd:0.12, bloomDecayRate:0.10 },
   // sniper: instant hitscan rather than a travelling projectile - ignores
   // terrain entirely (no block/crate interaction at all, unlike everything
   // else) and hits every enemy/player along the line, not just the first.
@@ -3992,6 +4165,46 @@ const WEAPON_CONFIG = {
 // (used for the kill feed's "killed with X" label) without needing to
 // thread an extra parameter through every firing function.
 for(const key in WEAPON_CONFIG) WEAPON_CONFIG[key].itemType = Number(key);
+// Spread/bloom for rapid-fire guns (Blow Pipe, Pistol, Carbine, both
+// shotguns) - the actual fired direction gets randomized within a cone
+// that widens with sustained fire and narrows back down when not firing.
+// Deliberately NOT camera-kick recoil (the view itself never moves) -
+// spread only affects where the shot actually goes. First-shot accuracy
+// from a resting weapon is always perfect for weapons with no natural
+// spread of their own (bloom starts at 0); only sustained fire degrades
+// it from there. Tracked per weapon-type (item type id), same pattern as
+// lastAttackTime below, so switching weapons doesn't carry bloom over
+// incorrectly - a weapon's own bloom keeps decaying back down even while
+// it's not equipped, so it's fresh again whenever you switch back to it.
+let weaponBloom = {};
+function addWeaponBloom(weapon){
+  if(!weapon.bloomPerShot) return;
+  const current = weaponBloom[weapon.itemType] || 0;
+  weaponBloom[weapon.itemType] = Math.min(weapon.maxBloomAdd, current + weapon.bloomPerShot);
+}
+const crosshairEl = document.getElementById('crosshair');
+function updateCrosshairSpread(){
+  const equipped = slots[selectedSlot] ? slots[selectedSlot].type : null;
+  const weapon = WEAPON_CONFIG[equipped];
+  if(!weapon || !weapon.bloomPerShot){
+    crosshairEl.style.transform = 'translate(-50%,-50%)';
+    return;
+  }
+  const maxPossible = (weapon.spread||0) + weapon.maxBloomAdd;
+  const ratio = maxPossible>0 ? Math.min(1, currentSpreadFor(weapon)/maxPossible) : 0;
+  const scale = 1 + ratio*1.2; // grows up to ~2.2x size at max bloom
+  crosshairEl.style.transform = `translate(-50%,-50%) scale(${scale.toFixed(3)})`;
+}
+function updateWeaponBloom(dt){
+  for(const key in weaponBloom){
+    const cfg = WEAPON_CONFIG[key];
+    const decayRate = cfg ? (cfg.bloomDecayRate||0.3) : 0.3;
+    weaponBloom[key] = Math.max(0, weaponBloom[key] - decayRate*dt);
+  }
+}
+function currentSpreadFor(weapon){
+  return (weapon.spread||0) + (weaponBloom[weapon.itemType]||0);
+}
 let lastAttackTime = {}; // per weapon type (item type id) - keeps each weapon's cooldown independent, so firing one doesn't reset another's clock
 // CS:GO-style reload-cancel, applied to the cooldown timer since guns here
 // have no magazines to actually reload - switching away from a weapon
@@ -4014,6 +4227,13 @@ let darts = [];
 function shootProjectile(weapon){
   const origin = getFiringOrigin();
   const dir = getAimedDirection(origin);
+  const spread = currentSpreadFor(weapon);
+  if(spread>0){
+    dir.x += (Math.random()-0.5)*spread;
+    dir.y += (Math.random()-0.5)*spread;
+    dir.z += (Math.random()-0.5)*spread;
+    dir.normalize();
+  }
   spawnMuzzleFlash(getMuzzleOrigin());
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(weapon.radius,6,6),
@@ -4024,6 +4244,8 @@ function shootProjectile(weapon){
   const shotId = multiplayer ? makeShotId() : null;
   darts.push({mesh, dir:dir.clone(), life:0, damage:weapon.damage, speed:weapon.speed, color:weapon.color, shotId, pen:weapon.penetration||0, crateBreakRange:weapon.crateBreakRange, canBreakLeaves:weapon.canBreakLeaves, breakRange:weapon.breakRange, itemType:weapon.itemType});
   sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:weapon.radius, sound:weapon.sound}, origin, dir, shotId);
+  addWeaponBloom(weapon);
+  if(weapon.bloomPerShot) triggerCameraShake(0.015*RECOIL_CAMERA_SHAKE_MULT, 0.08);
   if(weapon.sound==='rifle') sfxShootRifle();
   else if(weapon.sound==='sling') sfxShootSling();
   else if(weapon.sound==='pistol') sfxShootPistol();
@@ -4032,12 +4254,13 @@ function shootProjectile(weapon){
 function fireShotgunPellets(weapon){
   const origin = getFiringOrigin();
   const baseDir = getAimedDirection(origin);
+  const spread = currentSpreadFor(weapon);
   spawnMuzzleFlash(getMuzzleOrigin());
   for(let i=0;i<weapon.pelletCount;i++){
     const dir = baseDir.clone();
-    dir.x += (Math.random()-0.5)*weapon.spread;
-    dir.y += (Math.random()-0.5)*weapon.spread;
-    dir.z += (Math.random()-0.5)*weapon.spread;
+    dir.x += (Math.random()-0.5)*spread;
+    dir.y += (Math.random()-0.5)*spread;
+    dir.z += (Math.random()-0.5)*spread;
     dir.normalize();
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(0.035,5,5),
@@ -4049,6 +4272,8 @@ function fireShotgunPellets(weapon){
     darts.push({mesh, dir, life:0, damage:weapon.pelletDamage, speed:weapon.speed, color:weapon.color, shotId, canBreakDirt:true, breakRange:weapon.breakRange, crateBreakRange:weapon.crateBreakRange, itemType:weapon.itemType});
     sendShotEvent({kind:'projectile', speed:weapon.speed, color:weapon.color, radius:0.035, sound: i===0 ? 'shotgun' : null}, origin, dir, shotId);
   }
+  addWeaponBloom(weapon);
+  if(weapon.bloomPerShot) triggerCameraShake(0.022*RECOIL_CAMERA_SHAKE_MULT, 0.08);
   sfxShotgunBlast();
 }
 function fireShotgunBurst(weapon){
@@ -4357,7 +4582,7 @@ const BLAST_RESISTANCE = {
   [CLEAR_GLASS]: 1.0
 };
 let grenades = [];
-function throwGrenade(weapon){
+function throwGrenade(weapon, speed){
   const origin = getFiringOrigin();
   const dir = getAimedDirection(origin);
   const mesh = buildGrenadeMesh();
@@ -4366,14 +4591,53 @@ function throwGrenade(weapon){
   const shotId = multiplayer ? makeShotId() : null;
   grenades.push({
     mesh,
-    vel: dir.clone().multiplyScalar(weapon.throwSpeed),
+    vel: dir.clone().multiplyScalar(speed),
     life: 0,
     damage: weapon.damage,
     radius: weapon.blastRadius,
     shotId
   });
-  sendShotEvent({kind:'grenade', speed:weapon.throwSpeed, sound:'grenade-throw'}, origin, dir, shotId);
+  sendShotEvent({kind:'grenade', speed, sound:'grenade-throw'}, origin, dir, shotId);
   sfxGrenadeThrow();
+}
+// Charge-throw: holding the mouse button down ramps the throw speed from
+// throwSpeedMin (an instant tap - same distance as before this feature)
+// toward throwSpeedMax over maxChargeTime seconds. The cooldown is applied
+// at the moment of the actual throw (on release), not when charging
+// started - otherwise holding longer would eat into the weapon's own
+// cooldown and effectively let a fully-charged throw come out faster than
+// a quick tap, which is backwards.
+let grenadeChargeStartTime = null;
+function updateGrenadeCharge(){
+  const wrap = document.getElementById('grenadeChargeBarWrap');
+  const bar = document.getElementById('grenadeChargeBar');
+  if(grenadeChargeStartTime===null){
+    wrap.classList.remove('show');
+    return;
+  }
+  // Cancel without throwing if the game no longer allows acting - lost
+  // pointer lock, paused, or a menu opened mid-charge (e.g. Esc, Alt-Tab).
+  if(!pointerLocked || paused || craftOpen || respawnCountdownActive || bandageChannelTimer>0 || armorCraftTimer>0){
+    grenadeChargeStartTime = null;
+    wrap.classList.remove('show');
+    return;
+  }
+  wrap.classList.add('show');
+  const weapon = WEAPON_CONFIG[GRENADE];
+  const held = (performance.now() - grenadeChargeStartTime)/1000;
+  const frac = Math.min(1, held/weapon.maxChargeTime);
+  bar.style.width = (frac*100)+'%';
+}
+function releaseGrenadeThrow(){
+  if(grenadeChargeStartTime===null) return;
+  const weapon = WEAPON_CONFIG[GRENADE];
+  const held = (performance.now() - grenadeChargeStartTime)/1000;
+  grenadeChargeStartTime = null;
+  document.getElementById('grenadeChargeBarWrap').classList.remove('show');
+  const frac = Math.min(1, held/weapon.maxChargeTime);
+  const speed = weapon.throwSpeedMin + frac*(weapon.throwSpeedMax-weapon.throwSpeedMin);
+  lastAttackTime[GRENADE] = performance.now();
+  throwGrenade(weapon, speed);
 }
 function updateGrenades(dt){
   for(let i=grenades.length-1;i>=0;i--){
@@ -4827,7 +5091,27 @@ function triggerCameraShake(mag, duration){
   cameraShakeDuration = duration;
   cameraShakeMag = mag;
 }
-
+// Temporarily disabled (set to 0, not removed) - the recoil system's camera
+// shake was reported as queasy-inducing. Original tuned magnitudes are kept
+// at both call sites below, multiplied by this, so dialing it back in later
+// is a one-line change here rather than re-deriving values from scratch.
+const RECOIL_CAMERA_SHAKE_MULT = 0;
+// Death tilt: the local player never sees their own third-person body (a
+// standard FPS convention), so a body-falls-over animation isn't possible
+// for them the way it is for remote players - this is the equivalent
+// feedback from their own point of view instead. A smooth, sustained tilt
+// (not random shake) simulating collapsing, applied on top of the normal
+// yaw/pitch camera orientation.
+let deathTiltAmount = 0;
+let deathTiltTarget = 0;
+let deathTiltRollSign = 1;
+let deathTiltResetTimeoutId = null;
+function triggerDeathTilt(){
+  deathTiltTarget = 1;
+  deathTiltRollSign = Math.random()<0.5 ? -1 : 1;
+  if(deathTiltResetTimeoutId) clearTimeout(deathTiltResetTimeoutId);
+  deathTiltResetTimeoutId = setTimeout(()=>{ deathTiltTarget = 0; deathTiltResetTimeoutId = null; }, 2500);
+}
 // ---------- Health ----------
 const MAX_HEALTH = 20;
 let health = MAX_HEALTH;
@@ -5019,6 +5303,13 @@ function respawnFromDeath(){
   const killerWeapon = recentHit ? lastAttackerWeapon : null;
   if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
     socket.send(JSON.stringify({type:'died', killerName, killerId, killerWeapon, x:player.x, y:player.y, z:player.z}));
+  } else {
+    // Singleplayer (or a disconnected edge case) - the server-broadcast
+    // 'playerEliminated' path that normally drives these effects never
+    // fires here, so trigger them directly.
+    spawnDeathBloodEffect(player.x, player.y+0.9, player.z);
+    spawnBloodPoolDecal(player.x, player.z);
+    triggerDeathTilt();
   }
   flashMessage(killerName ? ('Eliminated by '+killerName+' - respawning...') : 'You died - respawning...');
   startRespawnCountdown();
@@ -6125,13 +6416,16 @@ canvas.addEventListener('mousedown', (e)=>{
     if(weapon){
       const now = performance.now();
       if(now-(lastAttackTime[equipped]||0) >= weapon.cooldown*1000){
-        lastAttackTime[equipped] = now;
-        if(weapon.kind==='projectile') shootProjectile(weapon);
-        else if(weapon.kind==='melee') meleeAttack(weapon);
-        else if(weapon.kind==='grenade') throwGrenade(weapon);
-        else if(weapon.kind==='rocket') fireRocket(weapon);
-        else if(weapon.kind==='shotgun') fireShotgunBurst(weapon);
-        else if(weapon.kind==='hitscan') fireSniperHitscan(weapon);
+        if(weapon.kind==='grenade'){
+          grenadeChargeStartTime = now;
+        } else {
+          lastAttackTime[equipped] = now;
+          if(weapon.kind==='projectile') shootProjectile(weapon);
+          else if(weapon.kind==='melee') meleeAttack(weapon);
+          else if(weapon.kind==='rocket') fireRocket(weapon);
+          else if(weapon.kind==='shotgun') fireShotgunBurst(weapon);
+          else if(weapon.kind==='hitscan') fireSniperHitscan(weapon);
+        }
       }
       if(weapon.kind==='projectile' && !weapon.semiAuto) attackHeld = true; // hold the mouse down to keep firing (semi-auto weapons fire once per click instead)
     } else {
@@ -6148,7 +6442,7 @@ canvas.addEventListener('mousedown', (e)=>{
   }
 });
 document.addEventListener('mouseup', (e)=>{
-  if(e.button===0){ mouseDown0=false; attackHeld=false; mining=null; updateMiningBar(); updateCrackOverlay(); }
+  if(e.button===0){ mouseDown0=false; attackHeld=false; mining=null; updateMiningBar(); updateCrackOverlay(); releaseGrenadeThrow(); }
   if(e.button===2){ isAiming = false; }
 });
 canvas.addEventListener('contextmenu', (e)=> e.preventDefault());
@@ -6494,6 +6788,7 @@ function buildHotbarDOM(){
     const s = slots[i];
     const el = document.createElement('div');
     el.className='slot'+(i===selectedSlot?' selected':'');
+    el.dataset.slotIndex = i;
     el.innerHTML = `<div class="key">${i+1}</div>${slotInnerHTML(s)}`;
     if(s.type){
       el.addEventListener('mouseenter', (e)=> showItemTooltip(BLOCK_NAMES[s.type], e));
@@ -6501,8 +6796,13 @@ function buildHotbarDOM(){
       el.addEventListener('mouseleave', hideItemTooltip);
       if(craftOpen) attachDragHandlers(el, i);
     }
-    el.addEventListener('click', ()=>{
-      if(craftOpen) onSlotClick(i); else selectSlot(i);
+    el.addEventListener('click', (e)=>{
+      if(craftOpen){
+        if(e.shiftKey && heldSlotIndex===null && slots[i].type!==null) shiftClickTransfer(i);
+        else onSlotClick(i);
+      } else {
+        selectSlot(i);
+      }
     });
     bar.appendChild(el);
   }
@@ -7171,15 +7471,39 @@ function onDragMouseUp(e){
   dragState = null;
   ghostEl.remove();
   if(!moved) return; // a plain click, not a drag - let the normal click handler deal with it
+  const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+  const slotEl = targetEl ? targetEl.closest('[data-slot-index]') : null;
+  if(slotEl){
+    const toIndex = Number(slotEl.dataset.slotIndex);
+    moveOrSwapSlot(fromIndex, toIndex);
+    updateHotbarUI();
+    renderInventoryPanel();
+    return;
+  }
   const panelRect = document.getElementById('craftPanel').getBoundingClientRect();
   const barRect = document.getElementById('hotbar').getBoundingClientRect();
   const inRect = (r)=> e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
   if(!inRect(panelRect) && !inRect(barRect)) dropSlotItemOnGround(fromIndex);
 }
+// A drop position slightly in front of the player (based on camera facing),
+// not directly on top of them - dropping right at the player's own feet
+// means they're already standing on it, so it gets picked back up
+// immediately. Shared by both the Q-keybind drop and dragging an item out
+// of the inventory onto the ground.
+function getDropPositionInFrontOfPlayer(){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  return {
+    x: Math.floor(player.x + dir.x*1.5),
+    y: Math.floor(player.y),
+    z: Math.floor(player.z + dir.z*1.5)
+  };
+}
 function dropSlotItemOnGround(i){
   const s = slots[i];
   if(!s || !s.type || s.count<=0) return;
-  dropItemOnGround(Math.floor(player.x), Math.floor(player.y), Math.floor(player.z), s.type, s.count);
+  const pos = getDropPositionInFrontOfPlayer();
+  dropItemOnGround(pos.x, pos.y, pos.z, s.type, s.count);
   slots[i] = {type:null, count:0};
   updateHotbarUI();
   renderInventoryPanel();
@@ -7188,15 +7512,70 @@ function dropHeldItem(){
   if(respawnCountdownActive || (multiplayer && (myEliminated || inSpectatorBox))) return;
   const s = slots[selectedSlot];
   if(!s || !s.type || s.count<=0){ flashMessage('Nothing to drop'); return; }
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const x = Math.floor(player.x + dir.x*1.5);
-  const y = Math.floor(player.y);
-  const z = Math.floor(player.z + dir.z*1.5);
-  dropItemOnGround(x, y, z, s.type, s.count);
+  const pos = getDropPositionInFrontOfPlayer();
+  dropItemOnGround(pos.x, pos.y, pos.z, s.type, s.count);
   slots[selectedSlot] = {type:null, count:0};
   updateHotbarUI();
   if(craftOpen) renderInventoryPanel();
+}
+// Moves the item in fromIndex into toIndex - merges counts if both slots
+// hold the same item type, swaps places if they hold different types, or
+// just moves it if the target is empty. Shared by both the click-to-pick-up
+// flow (onSlotClick) and drag-and-drop (onDragMouseUp), so the two
+// interaction styles always behave identically.
+function moveOrSwapSlot(fromIndex, toIndex){
+  if(fromIndex===toIndex) return;
+  const from = slots[fromIndex];
+  const to = slots[toIndex];
+  if(to.type===null){
+    slots[toIndex] = {type:from.type, count:from.count};
+    slots[fromIndex] = {type:null, count:0};
+  } else if(to.type===from.type){
+    to.count += from.count;
+    slots[fromIndex] = {type:null, count:0};
+  } else {
+    const tmp = {type:to.type, count:to.count};
+    slots[toIndex] = {type:from.type, count:from.count};
+    slots[fromIndex] = tmp;
+  }
+}
+// Shift-click quick-transfer: hotbar -> backpack, or backpack -> hotbar,
+// whichever the clicked slot isn't already in. Tries to merge into an
+// existing same-type stack in the target area first (matching
+// addToInventory's own "stack onto existing pile first" behavior for
+// stackable items), then falls back to the first empty slot there.
+function shiftClickTransfer(i){
+  const s = slots[i];
+  if(!s || s.type===null || s.count<=0) return;
+  const isFromHotbar = i < HOTBAR_SIZE;
+  const targetIndices = [];
+  if(isFromHotbar){
+    for(let j=HOTBAR_SIZE; j<TOTAL_SLOTS; j++) targetIndices.push(j);
+  } else {
+    for(let j=0; j<HOTBAR_SIZE; j++) targetIndices.push(j);
+  }
+  const isNonStacking = WEAPON_CONFIG[s.type] !== undefined || NON_STACKING_TOOLS.includes(s.type);
+  if(!isNonStacking){
+    for(const j of targetIndices){
+      if(slots[j].type===s.type){
+        slots[j].count += s.count;
+        slots[i] = {type:null, count:0};
+        updateHotbarUI();
+        renderInventoryPanel();
+        return;
+      }
+    }
+  }
+  for(const j of targetIndices){
+    if(slots[j].type===null){
+      slots[j] = {type:s.type, count:s.count};
+      slots[i] = {type:null, count:0};
+      updateHotbarUI();
+      renderInventoryPanel();
+      return;
+    }
+  }
+  flashMessage(isFromHotbar ? 'Backpack is full' : 'Hotbar is full');
 }
 function onSlotClick(i){
   const clicked = slots[i];
@@ -7207,18 +7586,7 @@ function onSlotClick(i){
   } else if(heldSlotIndex===i){
     heldSlotIndex = null; // clicking the same slot again just puts it back down
   } else {
-    const held = slots[heldSlotIndex];
-    if(clicked.type===null){
-      slots[i] = {type:held.type, count:held.count};
-      slots[heldSlotIndex] = {type:null, count:0};
-    } else if(clicked.type===held.type){
-      clicked.count += held.count;
-      slots[heldSlotIndex] = {type:null, count:0};
-    } else {
-      const tmp = {type:clicked.type, count:clicked.count};
-      slots[i] = {type:held.type, count:held.count};
-      slots[heldSlotIndex] = tmp;
-    }
+    moveOrSwapSlot(heldSlotIndex, i);
     heldSlotIndex = null;
   }
   updateHotbarUI();
@@ -7248,6 +7616,7 @@ function renderInventoryPanel(){
     const s = slots[i];
     const el = document.createElement('div');
     el.className='islot';
+    el.dataset.slotIndex = i;
     el.innerHTML = slotInnerHTML(s);
     if(s.type){
       el.addEventListener('mouseenter', (e)=> showItemTooltip(BLOCK_NAMES[s.type], e));
@@ -7255,7 +7624,10 @@ function renderInventoryPanel(){
       el.addEventListener('mouseleave', hideItemTooltip);
       attachDragHandlers(el, i);
     }
-    el.addEventListener('click', ()=>onSlotClick(i));
+    el.addEventListener('click', (e)=>{
+      if(e.shiftKey && heldSlotIndex===null && slots[i].type!==null) shiftClickTransfer(i);
+      else onSlotClick(i);
+    });
     grid.appendChild(el);
   }
   const recipesDiv = document.getElementById('recipes');
@@ -7603,7 +7975,7 @@ function colorForId(id){
   const palette=[0xe05353,0x53a0e0,0x5be07a,0xe0c353,0xb057e0,0xe0834f,0x53d9e0];
   return palette[id % palette.length];
 }
-const NAME_TAG_RANGE = 5; // name only visible this close, and never at all while crouched
+const NAME_TAG_RANGE = 17.5; // 3.5x the original 5 - name visible from much farther, and never at all while crouched
 // Per-weapon-type held-item tilt/position for the player model (remote
 // third-person view). Anything not listed here falls back to the shared
 // default - generalizes what used to be separate hardcoded checks per
@@ -7662,7 +8034,8 @@ function createRemotePlayer(id,name,skinToneIndex){
   scene.add(group);
   return {
     id, group, name, heldAnchor, nameSprite, helmetMesh, chestMesh, legsMesh, heldType:null, crouching:false, targetScaleY:1,
-    target:{x:group.position.x,y:0,z:group.position.z,yaw:0}, flashTimer:0, bumpTimer:0
+    target:{x:group.position.x,y:0,z:group.position.z,yaw:0}, flashTimer:0, bumpTimer:0,
+    deathTiltAmount:0, deathTiltTarget:0, deathTiltRollSign:1, deathTiltResetTimeoutId:null
   };
 }
 function buildRemoteHeldItemMesh(type){
@@ -7785,6 +8158,12 @@ function updateMockPlayerVisual(dt){
   mockPlayer.heldAnchor.rotation.x = -swingArc*swingMult - (idleTiltDeg*Math.PI/180);
   mockPlayer.heldAnchor.rotation.z = 0;
 }
+function triggerRemotePlayerFall(rp){
+  rp.deathTiltTarget = 1;
+  rp.deathTiltRollSign = Math.random()<0.5 ? -1 : 1;
+  if(rp.deathTiltResetTimeoutId) clearTimeout(rp.deathTiltResetTimeoutId);
+  rp.deathTiltResetTimeoutId = setTimeout(()=>{ rp.deathTiltTarget = 0; rp.deathTiltResetTimeoutId = null; }, 2500);
+}
 function updateRemotePlayers(dt){
   const lerp = Math.min(1, dt*10);
   for(const rp of remotePlayers.values()){
@@ -7810,6 +8189,15 @@ function updateRemotePlayers(dt){
     const newScaleY = rp.group.scale.y + (targetScaleY-rp.group.scale.y)*Math.min(1,dt*10);
     rp.group.scale.y = newScaleY;
 
+    rp.deathTiltAmount += (rp.deathTiltTarget-rp.deathTiltAmount)*Math.min(1,dt*5);
+    if(rp.deathTiltAmount>0.001){
+      rp.group.rotation.x = rp.deathTiltAmount*1.3;
+      rp.group.rotation.z = rp.deathTiltAmount*0.3*rp.deathTiltRollSign;
+    } else {
+      rp.group.rotation.x = 0;
+      rp.group.rotation.z = 0;
+    }
+
     // Positional footsteps for other players too, not just yourself - a real
     // multiplayer awareness win, so figured out from how fast their position
     // is actually moving rather than any explicit "I'm walking" flag (there
@@ -7824,7 +8212,7 @@ function updateRemotePlayers(dt){
     if(moveSpeed > 0.6 && !rp.crouching){
       rp.footstepTimer -= dt;
       if(rp.footstepTimer<=0){
-        sfxFootstep(0.75, rp.group.position);
+        sfxFootstep(0.975, rp.group.position);
         rp.footstepTimer = moveSpeed > 5 ? 0.28 : 0.4; // faster steps if they're sprinting
       }
     } else {
@@ -7874,8 +8262,15 @@ const BIOME_LABELS = {
   highlands:'Highlands', plains:'Plains', oasis:'Oasis', ruins:'Ruins',
   snow:'Snow', industrial:'Industrial', graveyard:'Graveyard', tunnels:'Tunnels', test:'Test'
 };
+const BIOME_DESCRIPTIONS = {
+  highlands:'Rolling hills & forest', plains:'Gentle, spread-out hills', oasis:'Desert with water pools',
+  ruins:'Broken walls & rubble', snow:'Frosty hills & forest', industrial:'Dense rooms & corridors',
+  graveyard:'Tombstones & a boss', tunnels:'Dirt maze, shotguns & stims only', test:'Flat, empty, no mobs'
+};
 let myVoteChoice = null;
-function showSeriesEndOverlay(winnerName, standings, voteOpts){
+let voteCountdownIntervalId = null;
+function showSeriesEndOverlay(winnerName, standings, voteOpts, displaySeconds){
+  document.exitPointerLock();
   const el = document.getElementById('seriesEndOverlay');
   document.getElementById('seriesWinnerLine').textContent = winnerName ? (winnerName+' wins the series!') : 'Series ended';
   const body = document.getElementById('seriesEndBody');
@@ -7885,19 +8280,38 @@ function showSeriesEndOverlay(winnerName, standings, voteOpts){
   const voteSection = document.getElementById('mapVoteSection');
   const voteButtons = document.getElementById('mapVoteButtons');
   voteButtons.innerHTML = '';
+  if(voteCountdownIntervalId){ clearInterval(voteCountdownIntervalId); voteCountdownIntervalId = null; }
   if(voteOpts && voteOpts.length===3){
     voteSection.style.display = 'block';
     voteOpts.forEach((opt, i)=>{
       const btn = document.createElement('div');
       btn.className = 'voteBtn';
-      const label = document.createElement('div');
-      label.textContent = opt==='keep' ? 'Keep This Map' : (BIOME_LABELS[opt] || opt);
-      btn.appendChild(label);
+      const thumb = document.createElement('div');
+      thumb.className = 'voteThumb';
+      // "keep" gets a real render of the actual current map; the other two
+      // options don't exist as generated terrain yet, so they get a
+      // stylized preview built from that biome's own noise shape and
+      // color palette instead - a fixed per-biome seed so a given biome
+      // always looks the same across votes, not randomized every time.
+      const thumbUrl = opt==='keep' ? generateCurrentMapThumbnail() : generateBiomeThumbnail(opt, hashStringToSeed(opt));
+      thumb.style.backgroundImage = `url(${thumbUrl})`;
+      btn.appendChild(thumb);
+      const info = document.createElement('div');
+      info.className = 'voteInfo';
+      const title = document.createElement('div');
+      title.className = 'voteTitle';
+      title.textContent = opt==='keep' ? 'Keep This Map' : (BIOME_LABELS[opt] || opt);
+      info.appendChild(title);
+      const desc = document.createElement('div');
+      desc.className = 'voteDesc';
+      desc.textContent = opt==='keep' ? 'Stay on the current map, exactly as it is now' : (BIOME_DESCRIPTIONS[opt] || '');
+      info.appendChild(desc);
       const count = document.createElement('div');
       count.className = 'voteCount';
       count.textContent = '0 votes';
       count.id = 'voteCount'+i;
-      btn.appendChild(count);
+      info.appendChild(count);
+      btn.appendChild(info);
       btn.addEventListener('click', ()=>{
         myVoteChoice = i;
         for(const b of voteButtons.children) b.classList.remove('voted');
@@ -7909,6 +8323,15 @@ function showSeriesEndOverlay(winnerName, standings, voteOpts){
       voteButtons.appendChild(btn);
     });
     document.getElementById('seriesEndSubLine').textContent = 'Vote above - most votes wins, ties broken randomly';
+    let remaining = Math.max(0, Math.round(displaySeconds||15));
+    const countdownEl = document.getElementById('voteCountdown');
+    const renderCountdown = ()=>{ countdownEl.textContent = remaining+'s'; };
+    renderCountdown();
+    voteCountdownIntervalId = setInterval(()=>{
+      remaining = Math.max(0, remaining-1);
+      renderCountdown();
+      if(remaining<=0){ clearInterval(voteCountdownIntervalId); voteCountdownIntervalId = null; }
+    }, 1000);
   } else {
     voteSection.style.display = 'none';
     document.getElementById('seriesEndSubLine').textContent = 'A new map is coming up shortly...';
@@ -7923,6 +8346,7 @@ function updateVoteTally(tally){
 }
 function hideSeriesEndOverlay(){
   document.getElementById('seriesEndOverlay').style.display = 'none';
+  if(started && !paused) requestPointerLockSafe();
 }
 
 function updateMatchUI(){
@@ -8201,7 +8625,7 @@ function handleNetMessage(msg){
   } else if(msg.type==='matchEnd'){
     sfxMatchEnd();
     if(msg.seriesOver){
-      showSeriesEndOverlay(msg.winnerName, msg.standings||[], msg.voteOptions);
+      showSeriesEndOverlay(msg.winnerName, msg.standings||[], msg.voteOptions, msg.displaySeconds);
     } else {
       showTimeWarning(msg.winnerName ? ('\uD83C\uDFC1 Round '+msg.round+' - '+msg.winnerName+' wins!') : ('Round '+msg.round+' ended - no winner'));
     }
@@ -8256,14 +8680,20 @@ function handleNetMessage(msg){
   } else if(msg.type==='playerEliminated'){
     addKillFeedEntry(msg.killerName, msg.victimName, msg.killerWeapon);
     if(msg.killerName && typeof msg.x==='number'){
-      spawnBloodBurst(msg.x, msg.y+0.9, msg.z);
+      spawnDeathBloodEffect(msg.x, msg.y+0.9, msg.z);
+      spawnBloodPoolDecal(msg.x, msg.z);
+      if(msg.victimId===myNetId){
+        triggerDeathTilt();
+      } else if(typeof msg.victimId==='number'){
+        const rp = remotePlayers.get(msg.victimId);
+        if(rp) triggerRemotePlayerFall(rp);
+      }
     }
     if(msg.killerId===myNetId){
       showKillConfirm('KILLED '+msg.victimName.toUpperCase());
     }
   } else if(msg.type==='punchKnockback'){
-    player.x += msg.dx;
-    player.z += msg.dz;
+    tryMove(msg.dx, 0, msg.dz);
   } else if(msg.type==='hitByOther'){
     lastAttackerName = msg.fromName;
     lastAttackerId = msg.from;
@@ -8493,7 +8923,7 @@ function animate(){
   lastTime = now;
 
   if(started){
-    const canAct = !paused && !craftOpen && !respawnCountdownActive;
+    const canAct = !paused && !craftOpen && !respawnCountdownActive && !(multiplayer && matchPhase==='countdown');
     if(canAct && speedBoostTimer>0){
       speedBoostTimer -= dt;
       if(speedBoostTimer<=0){ speedBoostTimer=0; }
@@ -8570,7 +9000,7 @@ function animate(){
     if(canAct && onGround && move.lengthSq()>0){
       footstepTimer -= dt;
       if(footstepTimer<=0){
-        if(!keys.crouch) sfxFootstep(keys.sprint ? 2.0 : 1.0);
+        if(!keys.crouch) sfxFootstep(keys.sprint ? 2.6 : 1.3);
         footstepTimer = keys.sprint ? 0.28 : 0.4;
       }
     } else {
@@ -8658,6 +9088,13 @@ function animate(){
     camera.rotation.order='YXZ';
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
+    deathTiltAmount += (deathTiltTarget-deathTiltAmount)*Math.min(1, dt*4);
+    if(deathTiltAmount>0.001){
+      camera.rotation.x += deathTiltAmount*0.9;
+      camera.rotation.z = deathTiltAmount*0.5*deathTiltRollSign;
+    } else {
+      camera.rotation.z = 0;
+    }
     if(cameraShakeTimer>0){
       cameraShakeTimer = Math.max(0, cameraShakeTimer-dt);
       const frac = cameraShakeTimer/cameraShakeDuration;
@@ -8704,6 +9141,10 @@ function animate(){
   updateRemoteProjectiles(dt);
   updateGroundItems(dt);
   updatePendingBurst(dt);
+  updateWeaponBloom(dt);
+  updateCrosshairSpread();
+  updateGrenadeCharge();
+  updateBloodPoolDecals(dt);
   updateRemotePlayers(dt);
   updateMockPlayerVisual(dt);
   sendNetworkUpdate();
