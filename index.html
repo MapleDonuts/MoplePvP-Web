@@ -321,7 +321,10 @@
   }
   #armorBar {
     position:fixed; bottom:106px; left:50%; transform:translateX(-50%);
-    display:flex; gap:2px; z-index:10;
+    display:flex; flex-direction:column; align-items:center; gap:3px; z-index:10;
+  }
+  #armorBar .armorRow {
+    display:flex; gap:2px;
   }
   #armorBar .shield {
     display:inline-flex; filter: drop-shadow(1px 1px 1px #000) drop-shadow(-1px -1px 1px #000);
@@ -451,6 +454,7 @@
       <option value="snow">Snow - frosty hills &amp; forest</option>
       <option value="graveyard">Graveyard - tombstones &amp; a boss</option>
       <option value="tunnels">Tunnels - dirt maze, shotguns &amp; stims only</option>
+      <option value="test">Test - flat, empty, no mobs</option>
     </select>
   </label>
   <div class="btn" id="btnStart">Start New World</div>
@@ -645,19 +649,22 @@ const STIM_INJECTOR=30;  // consumable - instant full heal (right-click to use)
 const MED_CRATE=31;      // world object only - like a loot crate, but only ever drops Bandage/Stim, rarer than normal crates
 const METAL_ORE=32;      // minable terrain block - spawns underground in deep stone, smelt at a Furnace for Metal Bars
 const METAL_BAR=33;      // smelted resource - inventory item, no direct combat use yet
-const ARMOR_HELMET=34;   // crafted from Metal Bars - reduces damage 40% while it has durability left
+const ARMOR_HELMET=34;   // crafted from Metal Bars - reduces HEADSHOT damage only, 40% while it has durability left
 const METAL_SWORD=35;    // crafted melee weapon - faster, longer reach, less damage-per-hit than the War Club
 const PLANT_FIBER=36;    // crafted from Leaves - inventory item, no direct combat use, intermediate step toward Bandage
 const ADMIN_ROCKET_LAUNCHER=37; // dev-tools-only weapon, never in loot/crafting - same stats as Rocket Launcher but 4x fire rate, gold-colored
+const ARMOR_CHESTPLATE=38; // crafted from Metal Bars - reduces BODY (non-headshot) damage 40%, shares one sequential pool with Armor Legs
+const ARMOR_LEGS=39;       // crafted from Metal Bars - same body-damage reduction as the chestplate, drains after it once the chestplate breaks
+const ELITE_CRATE=40;      // world object only, like the other crates - rarer, guaranteed elite weapon + a stim, only breakable by melee/pickaxe (see MELEE_OR_TOOL_TYPES), much longer break time
 const SOLID_TYPES = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, PLANKS, REEDS, RUBBLE, SNOW, METAL, GLASS, CLEAR_GLASS, METAL_ORE];
-const WORLD_ONLY_TYPES = [LOOT_CRATE, POWERUP_CRATE, MED_CRATE]; // rendered in the world but never held/placed by the player
+const WORLD_ONLY_TYPES = [LOOT_CRATE, POWERUP_CRATE, MED_CRATE, ELITE_CRATE]; // rendered in the world but never held/placed by the player
 const ALL_RENDER_TYPES = [...SOLID_TYPES, ...WORLD_ONLY_TYPES];
 const BLOCK_COLORS = {
   [GRASS]:0x5a9b3c, [DIRT]:0x6b4a2c, [STONE]:0x8a8a8a, [SAND]:0xdccb86,
   [WOOD]:0x6b4423, [LEAVES]:0x3c6b2a, [WATER]:0x3a6fd8, [PLANKS]:0xba8a54,
   [STONE_PICKAXE]:0xb0b0b0, [REEDS]:0x8fae4a, [BLOW_PIPE]:0x9c7a4a,
-  [METAL_ORE]:0x8a8a8a, [METAL_BAR]:0xd9d9d9, [ARMOR_HELMET]:0x8f8f8f, [METAL_SWORD]:0xc9cdd1,
-  [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [GRENADE]:0x3a4a3a,
+  [METAL_ORE]:0x8a8a8a, [METAL_BAR]:0xd9d9d9, [ARMOR_HELMET]:0x8f8f8f, [METAL_SWORD]:0xc9cdd1, [ARMOR_CHESTPLATE]:0x9a9a9a, [ARMOR_LEGS]:0x7a7a7a,
+  [STONE_SLING]:0x9c8a6a, [WAR_CLUB]:0x8a6a4a, [LOOT_CRATE]:0xa9743a, [ELITE_CRATE]:0xb8342a, [GRENADE]:0x3a4a3a,
   [POWERUP_CRATE]:0x2a6f8a, [ROCKET_LAUNCHER]:0x555555, [RUBBLE]:0x9c8570,
   [DOUBLE_BARREL]:0x4a3520, [PUMP_SHOTGUN]:0x333333, [RIFLE]:0xc9a227, [SNOW]:0xf0f5fa, [METAL]:0x5a6570,
   [PISTOL]:0x707070, [CARBINE]:0x8a6a45, [GLASS]:0xbfe0f0, [CLEAR_GLASS]:0xeaf7fb, [SNIPER]:0x2a3a2a, [BANDAGE]:0xe8ddc8, [STIM_INJECTOR]:0x5fd0ff, [PLANT_FIBER]:0x9a8a4a, [ADMIN_ROCKET_LAUNCHER]:0xffd700
@@ -666,7 +673,7 @@ const BLOCK_NAMES = {
   [GRASS]:'Grass', [DIRT]:'Dirt', [STONE]:'Stone', [SAND]:'Sand',
   [WOOD]:'Wood', [LEAVES]:'Leaves', [WATER]:'Water', [PLANKS]:'Planks',
   [STONE_PICKAXE]:'Stone Pickaxe', [REEDS]:'Reeds', [BLOW_PIPE]:'Blow Pipe',
-  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [GRENADE]:'Grenade', [MED_CRATE]:'Med Crate', [-1]:'Fists', [METAL_ORE]:'Metal Ore', [METAL_BAR]:'Metal Bar', [ARMOR_HELMET]:'Armor Helmet', [METAL_SWORD]:'Metal Sword', [PLANT_FIBER]:'Plant Fiber', [ADMIN_ROCKET_LAUNCHER]:'Admin Rocket Launcher',
+  [STONE_SLING]:'Stone Sling', [WAR_CLUB]:'War Club', [LOOT_CRATE]:'Loot Crate', [ELITE_CRATE]:'Elite Loot Crate', [GRENADE]:'Grenade', [MED_CRATE]:'Med Crate', [-1]:'Fists', [METAL_ORE]:'Metal Ore', [METAL_BAR]:'Metal Bar', [ARMOR_HELMET]:'Armor Helmet', [METAL_SWORD]:'Metal Sword', [PLANT_FIBER]:'Plant Fiber', [ADMIN_ROCKET_LAUNCHER]:'Admin Rocket Launcher', [ARMOR_CHESTPLATE]:'Armor Chestplate', [ARMOR_LEGS]:'Armor Legs',
   [POWERUP_CRATE]:'Power Crate', [ROCKET_LAUNCHER]:'Rocket Launcher', [RUBBLE]:'Rubble',
   [DOUBLE_BARREL]:'Double Barrel', [PUMP_SHOTGUN]:'Pump Shotgun', [RIFLE]:'Rifle', [SNOW]:'Snow', [METAL]:'Metal',
   [PISTOL]:'Pistol', [CARBINE]:'Carbine', [GLASS]:'Glass', [CLEAR_GLASS]:'Clear Glass', [SNIPER]:'Sniper Rifle', [BANDAGE]:'Bandage', [STIM_INJECTOR]:'Stim Injector'
@@ -676,7 +683,7 @@ const ITEM_ICON = {
   [GRENADE]:'\u2600', [ROCKET_LAUNCHER]:'\u2191', [DOUBLE_BARREL]:'\u25CF', [PUMP_SHOTGUN]:'\u25CF', [RIFLE]:'\u25CF',
   [PISTOL]:'\u25CF', [CARBINE]:'\u25CF', [SNIPER]:'\u25CF', [BANDAGE]:'\u2795', [STIM_INJECTOR]:'\u2695'
 };
-const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR,METAL_ORE,METAL_BAR,ARMOR_HELMET,METAL_SWORD,PLANT_FIBER,ADMIN_ROCKET_LAUNCHER];
+const ALL_ITEM_TYPES = [GRASS,DIRT,STONE,SAND,WOOD,LEAVES,WATER,PLANKS,REEDS,STONE_PICKAXE,BLOW_PIPE,STONE_SLING,WAR_CLUB,GRENADE,ROCKET_LAUNCHER,RUBBLE,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,SNOW,METAL,PISTOL,CARBINE,GLASS,CLEAR_GLASS,SNIPER,BANDAGE,STIM_INJECTOR,METAL_ORE,METAL_BAR,ARMOR_HELMET,METAL_SWORD,PLANT_FIBER,ADMIN_ROCKET_LAUNCHER,ARMOR_CHESTPLATE,ARMOR_LEGS];
 // Same 32 items as ALL_ITEM_TYPES above, just grouped by category for the
 // dev panel's "Give Items" display instead of one flat list.
 const ITEM_GROUPS = [
@@ -684,7 +691,7 @@ const ITEM_GROUPS = [
   { label:'Tools & Materials', items:[STONE_PICKAXE,METAL_BAR,PLANT_FIBER] },
   { label:'Weapons', items:[BLOW_PIPE,STONE_SLING,WAR_CLUB,METAL_SWORD,GRENADE,ROCKET_LAUNCHER,DOUBLE_BARREL,PUMP_SHOTGUN,RIFLE,PISTOL,CARBINE,SNIPER] },
   { label:'Admin Weapons', items:[ADMIN_ROCKET_LAUNCHER] },
-  { label:'Meds & Armor', items:[BANDAGE,STIM_INJECTOR,ARMOR_HELMET] }
+  { label:'Meds & Armor', items:[BANDAGE,STIM_INJECTOR,ARMOR_HELMET,ARMOR_CHESTPLATE,ARMOR_LEGS] }
 ];
 
 // ---------- Loot table (crate drop rates) ----------
@@ -722,10 +729,28 @@ function pickWeightedLoot(){
   }
   return LOOT_TABLE[LOOT_TABLE.length-1].type; // fallback, shouldn't normally be reached
 }
+// Elite crate's guaranteed weapon pool - equal weight across all three
+// since there's no stated reason to favor one elite weapon over another.
+// Not offered in Tunnels at all (see scatterLootAndPowerCrates) since
+// that biome is deliberately shotgun-only, close-quarters by design -
+// these are all long-range weapons that would work against that.
+const ELITE_LOOT_TABLE = [RIFLE, SNIPER, ROCKET_LAUNCHER];
+function pickEliteLoot(){
+  return ELITE_LOOT_TABLE[Math.floor(Math.random()*ELITE_LOOT_TABLE.length)];
+}
+// Only these can make progress breaking an Elite Crate open (see
+// updateMining) - guns do nothing to it at all, matching the "takes a
+// deliberate, sustained effort to open" feel this crate is going for.
+const MELEE_OR_TOOL_TYPES = [WAR_CLUB, METAL_SWORD, STONE_PICKAXE];
 // Weapons that count as "guns" for the round-reset inventory rule (see
 // resetInventoryForNewRound) - everything except the melee club, which
 // isn't really a "gun" and is craftable from basic materials anyway.
 const GUN_TYPES = [BLOW_PIPE, STONE_SLING, GRENADE, ROCKET_LAUNCHER, DOUBLE_BARREL, PUMP_SHOTGUN, RIFLE, PISTOL, CARBINE, SNIPER];
+// Tools that get equipped/used repeatedly rather than consumed, so a stack
+// count doesn't mean anything meaningful for them - same reasoning as
+// weapons not stacking. Separate from WEAPON_CONFIG since these aren't
+// weapons at all, just other equipment with the same "doesn't stack" need.
+const NON_STACKING_TOOLS = [STONE_PICKAXE];
 
 // ---------- World config ----------
 let WORLD_X=76, WORLD_Y=40, WORLD_Z=76;
@@ -808,7 +833,8 @@ const BIOME_PROFILES = {
   ruins:     { amplitude:4,  octave2Weight:0.1,  treeDensity:0,     baseHeight:10, surfaceBlock:STONE }, // uses its own generator entirely
   industrial:{ amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:8,  surfaceBlock:METAL }, // uses its own generator entirely
   graveyard: { amplitude:5,  octave2Weight:0.1,  treeDensity:0,     baseHeight:9,  surfaceBlock:DIRT },  // uses its own generator entirely
-  tunnels:   { amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:9,  surfaceBlock:DIRT }   // uses its own generator entirely
+  tunnels:   { amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:9,  surfaceBlock:DIRT },  // uses its own generator entirely
+  test:      { amplitude:0,  octave2Weight:0,    treeDensity:0,     baseHeight:11, surfaceBlock:GRASS }  // perfectly flat, empty test field - see generateWorld() for what else gets skipped here
 };
 function applyBiomeProfile(mode){
   biomeMode = BIOME_PROFILES[mode] ? mode : 'highlands';
@@ -1056,6 +1082,42 @@ function scatterLootAndPowerCrates(){
     changes.push({x, y:h+1, z, blockType:MED_CRATE});
     medCratesPlaced++;
   }
+  // Elite crate: deliberately NOT a density-scaled minimum-of-1 like the
+  // other crate types - at this map's actual size, any density constant
+  // still rounds up to exactly 1 every single map under that pattern,
+  // which isn't genuinely rare no matter how low the density is set.
+  // Instead, a real chance of zero appearing at all, and when one does
+  // spawn, it has to clear a minimum distance from every other crate
+  // already placed (loot/power/med, checked via the same `changes` list
+  // those loops already recorded into) so it reads as a standalone find,
+  // not something sitting right next to another crate.
+  const rand6 = mulberry32(seed+741);
+  const ELITE_CRATE_SPAWN_CHANCE = 0.25;
+  const ELITE_CRATE_MIN_DISTANCE = 10;
+  if(rand6() < ELITE_CRATE_SPAWN_CHANCE){
+    const existingCrates = changes.filter(c => c.blockType===LOOT_CRATE || c.blockType===POWERUP_CRATE || c.blockType===MED_CRATE);
+    let eliteAttempts = 0;
+    const eliteAttemptCap = 500;
+    let placed = false;
+    while(!placed && eliteAttempts<eliteAttemptCap){
+      eliteAttempts++;
+      const x = 2+Math.floor(rand6()*(WORLD_X-4));
+      const z = 2+Math.floor(rand6()*(WORLD_Z-4));
+      const h = heightMap[x] ? heightMap[x][z] : undefined;
+      if(h===undefined) continue;
+      const surfaceType = getBlock(x,h,z);
+      if(surfaceType!==GRASS && surfaceType!==SAND && surfaceType!==SNOW && surfaceType!==STONE && surfaceType!==METAL) continue;
+      if(getBlock(x,h+1,z)!==AIR) continue;
+      const tooCloseToAnotherCrate = existingCrates.some(c => {
+        const dx=c.x-x, dz=c.z-z;
+        return Math.sqrt(dx*dx+dz*dz) < ELITE_CRATE_MIN_DISTANCE;
+      });
+      if(tooCloseToAnotherCrate) continue;
+      setBlock(x,h+1,z,ELITE_CRATE);
+      changes.push({x, y:h+1, z, blockType:ELITE_CRATE});
+      placed = true;
+    }
+  }
   return changes;
 }
 function generateWorld(){
@@ -1112,11 +1174,11 @@ function generateWorld(){
       }
     }
   }
-  scatterLootAndPowerCrates();
+  if(biomeMode!=='test') scatterLootAndPowerCrates();
   if(biomeMode==='plains') scatterCoverStructures(7);
-  scatterCaveTunnels(4);
+  if(biomeMode!=='test') scatterCaveTunnels(4);
   buildSpectatorBox();
-  scatterFurnaces();
+  if(biomeMode!=='test') scatterFurnaces();
 }
 // A desert biome: mostly flat sand with a handful of carved-out water oases
 // instead of a general height-based water table, plus greenery around each one.
@@ -1911,6 +1973,15 @@ function sfxMine(type){
   playNoise({duration:0.09, volume:0.22, filterType:'lowpass', filterFreq:pitch});
   playTone({freq:pitch*0.25, duration:0.07, type:'triangle', volume:0.13, attack:0.001});
 }
+function sfxEliteCrateChop(){
+  // Loud, percussive axe-into-wood impact - deliberately harsher and
+  // louder than sfxMine, since this crate is meant to feel like a real,
+  // noisy struggle to break open rather than a quick tap. Plays
+  // repeatedly during the much longer break time (see updateMining).
+  playNoise({duration:0.12, volume:0.35, filterType:'lowpass', filterFreq:450});
+  playTone({freq:110, duration:0.18, type:'triangle', volume:0.3, attack:0.002, decay:0.15});
+  playTone({freq:75, duration:0.22, type:'sine', volume:0.22, attack:0.005, decay:0.2});
+}
 function sfxLeavesRustle(pos){
   // A quick shuffle of several staggered, bright bandpass noise bursts
   // instead of one clean thunk - leaves don't have a single "hit" impact,
@@ -2050,24 +2121,24 @@ function sfxSpeedBoost(){
 // audio engine - no loops or files, still fully procedural.
 const AMBIENT_THEMES = {
   highlands: { kind:'noise', filterType:'lowpass',  filterFreq:600, filterQ:0.7, lfoDepth:200, windVolume:0.0195,
-               scale:[0,2,4,7,9],       root:220, noteInterval:3.5, noteDur:2.2, noteType:'sine',     noteVol:0.045 },
+               scale:[0,2,4,7,9],       root:220, noteInterval:3.5, noteDur:2.2, noteType:'sine',     noteVol:0.0225 },
   plains:    { kind:'noise', filterType:'lowpass',  filterFreq:500, filterQ:0.7, lfoDepth:150, windVolume:0.0175,
-               scale:[0,2,4,7,9],       root:220, noteInterval:4,   noteDur:2.5, noteType:'sine',     noteVol:0.04 },
+               scale:[0,2,4,7,9],       root:220, noteInterval:4,   noteDur:2.5, noteType:'sine',     noteVol:0.02 },
   snow:      { kind:'noise', filterType:'bandpass', filterFreq:900, filterQ:1.2, lfoDepth:250, windVolume:0.0234,
-               scale:[0,2,3,7,8],       root:196, noteInterval:4.5, noteDur:3,   noteType:'sine',     noteVol:0.04 },
+               scale:[0,2,3,7,8],       root:196, noteInterval:4.5, noteDur:3,   noteType:'sine',     noteVol:0.02 },
   oasis:     { kind:'noise', filterType:'lowpass',  filterFreq:350, filterQ:0.5, lfoDepth:100, windVolume:0.0156,
-               scale:[0,1,4,5,7,8,11],  root:207, noteInterval:3.8, noteDur:2,   noteType:'triangle', noteVol:0.045 },
+               scale:[0,1,4,5,7,8,11],  root:207, noteInterval:3.8, noteDur:2,   noteType:'triangle', noteVol:0.0225 },
   ruins:     { kind:'drone', droneFreq:70, droneDetune:6, droneVolume:0.0156,
-               scale:[0,1,3,6,7],       root:110, noteInterval:5,   noteDur:3.5, noteType:'sawtooth', noteVol:0.04 },
+               scale:[0,1,3,6,7],       root:110, noteInterval:5,   noteDur:3.5, noteType:'sawtooth', noteVol:0.02 },
   industrial:{ kind:'drone', droneFreq:58, droneDetune:4, droneVolume:0.0218,
-               scale:[0,3,5,7,10],      root:110, noteInterval:1.6, noteDur:0.4, noteType:'square',   noteVol:0.035 },
+               scale:[0,3,5,7,10],      root:110, noteInterval:1.6, noteDur:0.4, noteType:'square',   noteVol:0.0175 },
   // Deliberately no `kind` here - the noise/drone background texture every
   // biome theme has is what would compete with a melody for attention, and
   // the whole point of this one is being clearly melodic (flute-like), not
   // ambient texture. Higher root and slower, longer notes than any biome
   // theme for a relaxed feel; reuses the same pentatonic family (with the
   // octave added) already established as sounding pleasant elsewhere.
-  menu:      { scale:[0,2,4,7,9,12],    root:330, noteInterval:3.2, noteDur:3,   noteType:'sine',     noteVol:0.06 }
+  menu:      { scale:[0,2,4,7,9,12],    root:330, noteInterval:3.2, noteDur:3,   noteType:'sine',     noteVol:0.03 }
 };
 let ambientNodes = [];
 let ambientMelodyTimeoutId = null;
@@ -2678,6 +2749,7 @@ materials[WATER]  = litMat(TEX.water, {transparent:true, opacity:0.65});
 materials[PLANKS] = litMat(TEX.planks);
 materials[REEDS]  = litMat(TEX.reeds);
 materials[LOOT_CRATE] = litMat(TEX.crate);
+materials[ELITE_CRATE] = litMat(TEX.crate, {color: 0xff5555});
 materials[POWERUP_CRATE] = litMat(TEX.powerCrate);
 materials[MED_CRATE] = litMat(TEX.medCrate);
 materials[RUBBLE] = litMat(TEX.rubble);
@@ -3054,7 +3126,7 @@ function fireSniperHitscan(weapon){
       const zone = resolveRayHitZone(origin, dir, weapon.range, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
       if(zone){
         const dmg = zone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
-        sendHit(id, dmg, weapon.itemType);
+        sendHit(id, dmg, weapon.itemType, zone==='head');
         showHitMarker(zone==='head');
         if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
         triggerHitEffect(rp);
@@ -3492,23 +3564,27 @@ const ARMOR_CRAFT_TIME_AT_FURNACE = 1.5; // quick and direct - meant to feel lik
 function tryInteract(){
   const furnace = findNearbyIdleFurnace();
   if(furnace){
-    if(!hasArmor && countOfType(METAL_BAR)>=5){
-      startArmorCraftAtFurnace();
+    if(!hasHelmet && countOfType(METAL_BAR)>=5){
+      startArmorCraftAtFurnace(ARMOR_HELMET, 5);
+    } else if(!hasChest && countOfType(METAL_BAR)>=6){
+      startArmorCraftAtFurnace(ARMOR_CHESTPLATE, 6);
+    } else if(!hasLegs && countOfType(METAL_BAR)>=4){
+      startArmorCraftAtFurnace(ARMOR_LEGS, 4);
     } else if(countOfType(METAL_ORE)>0){
       startSmelting(furnace);
-    } else if(hasArmor){
-      flashMessage('Already wearing armor');
+    } else if(hasHelmet && hasChest && hasLegs){
+      flashMessage('Already wearing a full set of armor');
     } else {
-      flashMessage('Need Metal Ore to smelt, or 5 Metal Bars for armor');
+      flashMessage('Need Metal Ore to smelt, or Metal Bars for armor (5 helmet / 6 chest / 4 legs)');
     }
   }
 }
-function startArmorCraftAtFurnace(){
+function startArmorCraftAtFurnace(itemType, cost){
   if(armorCraftTimer>0 || bandageChannelTimer>0){ flashMessage('Already busy'); return; }
-  for(let i=0;i<5;i++) removeOneOfType(METAL_BAR);
+  for(let i=0;i<cost;i++) removeOneOfType(METAL_BAR);
   updateHotbarUI();
   armorCraftTimer = ARMOR_CRAFT_TIME_AT_FURNACE;
-  pendingCraftResults = [{type:ARMOR_HELMET, count:1}];
+  pendingCraftResults = [{type:itemType, count:1}];
   flashMessage('Crafting armor...');
 }
 function startSmelting(furnace){
@@ -3698,6 +3774,24 @@ function buildArmorHelmetMesh(){
   group.add(rim);
   return group;
 }
+function buildArmorChestMesh(){
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({color:0x9a9a9a, metalness:0.6, roughness:0.4});
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.34,0.12), mat);
+  group.add(plate);
+  return group;
+}
+function buildArmorLegsMesh(){
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({color:0x7a7a7a, metalness:0.6, roughness:0.4});
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.32,0.12), mat);
+  legL.position.x = -0.08;
+  group.add(legL);
+  const legR = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.32,0.12), mat);
+  legR.position.x = 0.08;
+  group.add(legR);
+  return group;
+}
 function buildStimMesh(){
   const group = new THREE.Group();
   const body = new THREE.Mesh(
@@ -3751,6 +3845,10 @@ function updateHeldItemMesh(){
     itemAnchor.add(buildStimMesh());
   } else if(slot.type===ARMOR_HELMET){
     itemAnchor.add(buildArmorHelmetMesh());
+  } else if(slot.type===ARMOR_CHESTPLATE){
+    itemAnchor.add(buildArmorChestMesh());
+  } else if(slot.type===ARMOR_LEGS){
+    itemAnchor.add(buildArmorLegsMesh());
   } else if(slot.type===METAL_BAR){
     itemAnchor.add(buildMetalBarMesh());
   } else if(slot.type===PLANT_FIBER){
@@ -3772,7 +3870,7 @@ const WEAPON_CONFIG = {
   // it from across the map.
   [BLOW_PIPE]:       { kind:'projectile', damage:1.35, speed:23,   cooldown:0.15, radius:0.045, color:0x4a3520, sound:'light' },
   [STONE_SLING]:     { kind:'projectile', damage:3, speed:34.5, cooldown:0.3,  radius:0.06,  color:0x8a8a8a, sound:'sling' },
-  [PISTOL]:          { kind:'projectile', damage:6, speed:60,   cooldown:0.4,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3, canBreakLeaves:true, breakRange:10 },
+  [PISTOL]:          { kind:'projectile', damage:6, speed:60,   cooldown:0.2,  radius:0.05,  color:0x707070, sound:'pistol', crateBreakRange:3, canBreakLeaves:true, breakRange:10, semiAuto:true },
   [WAR_CLUB]:        { kind:'melee', damage:5, cooldown:0.6, range:2.6, crateBreakRange:3 },
   [METAL_SWORD]:     { kind:'melee', damage:4, cooldown:0.45, range:2.8, crateBreakRange:3 },
   [GRENADE]:         { kind:'grenade', damage:17.5, cooldown:1.2, throwSpeed:11, blastRadius:2.8 },
@@ -3924,7 +4022,7 @@ function updateDarts(dt){
         const zone = resolveSweptHitZone(prevX,prevY,prevZ, d.mesh.position.x,d.mesh.position.y,d.mesh.position.z, pos.x,pos.z, pos.y+PLAYER_HEAD_Y,PLAYER_HEAD_R, pos.y+PLAYER_BODY_Y,PLAYER_BODY_R);
         if(zone){
           const dmg = zone==='head' ? effectiveDamage*HEADSHOT_MULT : effectiveDamage;
-          sendHit(id, dmg, d.itemType);
+          sendHit(id, dmg, d.itemType, zone==='head');
           showHitMarker(zone==='head');
           if(zone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
           triggerHitEffect(rp);
@@ -4109,7 +4207,7 @@ function meleeAttack(weapon){
     spawnBreakParticles(Math.floor(closestTarget.x),Math.floor(closestTarget.y+0.5),Math.floor(closestTarget.z), 0xff5555);
   } else if(closestKind==='player'){
     const dmg = closestZone==='head' ? weapon.damage*HEADSHOT_MULT : weapon.damage;
-    sendHit(closestTarget.id, dmg, weapon.itemType);
+    sendHit(closestTarget.id, dmg, weapon.itemType, closestZone==='head');
     showHitMarker(closestZone==='head');
     if(closestZone==='head'){ flashMessage('Headshot!'); sfxHeadshotDing(); }
     triggerHitEffect(closestTarget.rp);
@@ -4139,6 +4237,11 @@ function meleeAttack(weapon){
       sendBlockChange(hit.x,hit.y,hit.z,AIR);
       spawnBreakParticles(hit.x,hit.y,hit.z,BLOCK_COLORS[t]);
       if(t===LEAVES) sfxLeavesRustle({x:hit.x+0.5, y:hit.y+0.5, z:hit.z+0.5});
+    } else if(hit && t===ELITE_CRATE){
+      // Doesn't break in one hit like a regular crate - the actual break
+      // progress is handled by updateMining's hold-to-mine system, which
+      // already gives its own feedback, so a single swing here should
+      // just do nothing rather than falsely claiming it missed.
     } else {
       flashMessage('Swing missed');
     }
@@ -4502,6 +4605,8 @@ function buildGroundItemMesh(type){
     case BANDAGE: return buildBandageMesh();
     case STIM_INJECTOR: return buildStimMesh();
     case ARMOR_HELMET: return buildArmorHelmetMesh();
+    case ARMOR_CHESTPLATE: return buildArmorChestMesh();
+    case ARMOR_LEGS: return buildArmorLegsMesh();
     case METAL_BAR: return buildMetalBarMesh();
     case PLANT_FIBER: return buildPlantFiberMesh();
     case POWERUP_CRATE: return new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), materials[POWERUP_CRATE]);
@@ -4531,6 +4636,7 @@ function makeCountSprite(count){
 }
 function spawnGroundItemVisual(id, x, y, z, type, count){
   if(groundItems.has(id)) return;
+  if(typeof y !== 'number') y = findSurfaceY(Math.floor(x), Math.floor(z)); // server has no real height data for some drop sources (e.g. enemy deaths) - recompute locally instead of trusting a fabricated value
   const group = new THREE.Group();
   const icon = buildGroundItemMesh(type);
   icon.scale.multiplyScalar(0.8);
@@ -4655,14 +4761,12 @@ function updateCooldownRing(){
   ring.setAttribute('stroke-dashoffset', COOLDOWN_RING_CIRCUMFERENCE*(1-progress));
   ring.setAttribute('stroke', progress>=1 ? '#5fe07a' : '#ffdd55');
 }
-function updateArmorUI(){
-  const wrap = document.getElementById('armorBar');
-  wrap.innerHTML = '';
-  if(!hasArmor || armorHealth<=0){ wrap.style.display='none'; return; }
-  wrap.style.display='flex';
-  const shieldCount = 5, perShield = ARMOR_MAX_HEALTH/shieldCount; // 4 armor HP per shield
-  const fullShields = Math.floor(armorHealth/perShield);
-  const partial = (armorHealth%perShield)/perShield;
+function renderShieldRow(container, current, max){
+  const row = document.createElement('div');
+  row.className = 'armorRow';
+  const shieldCount = 5, perShield = max/shieldCount;
+  const fullShields = Math.floor(current/perShield);
+  const partial = (current%perShield)/perShield;
   for(let i=0;i<shieldCount;i++){
     let fillOpacity;
     if(i<fullShields) fillOpacity = 1;
@@ -4673,8 +4777,21 @@ function updateArmorUI(){
     span.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20">'
       + '<path d="M12 2 L4 5 V11 C4 16.5 7.5 20 12 22 C16.5 20 20 16.5 20 11 V5 Z" '
       + 'fill="rgba(200,206,212,'+fillOpacity+')" stroke="#1c1c1c" stroke-width="1.3"/></svg>';
-    wrap.appendChild(span);
+    row.appendChild(span);
   }
+  container.appendChild(row);
+}
+function updateArmorUI(){
+  const wrap = document.getElementById('armorBar');
+  wrap.innerHTML = '';
+  const bodyMax = (hasChest ? ARMOR_MAX_HEALTH : 0) + (hasLegs ? ARMOR_MAX_HEALTH : 0);
+  const bodyCurrent = (hasChest ? chestHealth : 0) + (hasLegs ? legsHealth : 0);
+  const showHead = hasHelmet && helmetHealth>0;
+  const showBody = bodyMax>0 && bodyCurrent>0;
+  if(!showHead && !showBody){ wrap.style.display='none'; return; }
+  wrap.style.display='flex';
+  if(showHead) renderShieldRow(wrap, helmetHealth, ARMOR_MAX_HEALTH);
+  if(showBody) renderShieldRow(wrap, bodyCurrent, bodyMax);
 }
 function updateLowHealthVignette(){
   const el = document.getElementById('lowHealthVignette');
@@ -4714,27 +4831,54 @@ function flashDamageOverlay(){
 }
 function sendArmorStateIfMultiplayer(){
   if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
-    socket.send(JSON.stringify({type:'armorState', hasArmor}));
+    socket.send(JSON.stringify({type:'armorState', hasHelmet, hasChest, hasLegs}));
   }
 }
 const ARMOR_MAX_HEALTH = 20;
 const ARMOR_DAMAGE_REDUCTION = 0.4;
-let hasArmor = false;
-let armorHealth = 0;
+let hasHelmet = false;
+let helmetHealth = 0;
+let hasChest = false;
+let chestHealth = 0;
+let hasLegs = false;
+let legsHealth = 0;
 let godMode = false;
 let flyMode = false;
 const FLY_SPEED = 8;
-function takeDamage(amount){
+function takeDamage(amount, isHeadshot){
   if(godMode) return;
   if(amount<=0 || health<=0) return;
   if(respawnCountdownActive) return; // invulnerable while waiting to respawn
   if(multiplayer && (myEliminated || inSpectatorBox)) return; // already out of the match - no more damage until reset
-  if(hasArmor && armorHealth>0){
-    armorHealth = Math.max(0, armorHealth - amount); // the hit hurts the armor at full force, not the reduced amount
+  if(isHeadshot){
+    if(hasHelmet && helmetHealth>0){
+      helmetHealth = Math.max(0, helmetHealth - amount); // the hit hurts the armor at full force, not the reduced amount
+      amount = amount * (1-ARMOR_DAMAGE_REDUCTION);
+      if(helmetHealth<=0){
+        hasHelmet = false;
+        flashMessage('Your helmet broke!');
+        sendArmorStateIfMultiplayer();
+      }
+      updateArmorUI();
+    }
+  } else if(hasChest && chestHealth>0){
+    // chest absorbs body damage first; legs take over once it breaks (see
+    // the else-if below) - both apply the same reduction, so wearing both
+    // means more total durability, not a stronger reduction
+    chestHealth = Math.max(0, chestHealth - amount);
     amount = amount * (1-ARMOR_DAMAGE_REDUCTION);
-    if(armorHealth<=0){
-      hasArmor = false;
-      flashMessage('Your armor broke!');
+    if(chestHealth<=0){
+      hasChest = false;
+      flashMessage('Your chestplate broke!');
+      sendArmorStateIfMultiplayer();
+    }
+    updateArmorUI();
+  } else if(hasLegs && legsHealth>0){
+    legsHealth = Math.max(0, legsHealth - amount);
+    amount = amount * (1-ARMOR_DAMAGE_REDUCTION);
+    if(legsHealth<=0){
+      hasLegs = false;
+      flashMessage('Your leg armor broke!');
       sendArmorStateIfMultiplayer();
     }
     updateArmorUI();
@@ -4752,6 +4896,8 @@ let lastAttackerWeapon = null;
 let lastAttackerTime = 0;
 const RESPAWN_COUNTDOWN_SECONDS = 3;
 let respawnCountdownActive = false;
+const SPAWN_PROTECTION_MS = 3000; // brief grace window after respawning before enemies/the boss can target the player again
+let spawnProtectedUntil = 0;
 let respawnCountdownRemaining = 0;
 let respawnCountdownTimerId = null;
 function dropHalfInventoryOnDeath(){
@@ -4813,9 +4959,13 @@ function startRespawnCountdown(){
         teleportToSpectatorBox();
       } else {
         spawnPlayer();
+        spawnProtectedUntil = performance.now() + SPAWN_PROTECTION_MS;
+        if(multiplayer && socket && socket.readyState===WebSocket.OPEN){
+          socket.send(JSON.stringify({type:'respawned'}));
+        }
       }
       health = MAX_HEALTH;
-      hasArmor = false; armorHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
+      hasHelmet = false; helmetHealth = 0; hasChest = false; chestHealth = 0; hasLegs = false; legsHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
       updateHealthUI();
     } else {
       updateRespawnCountdownUI();
@@ -4911,7 +5061,6 @@ function spawnPlayer(){
 }
 
 // ---------- Simple enemies (to test the weapons on) ----------
-let ENEMY_MAX_HEALTH = 8; // now server-authoritative on connect (see welcome handler)
 // How many enemies are on the map at once (singleplayer default, and the
 // starting count before any respawns). Same idea as LOOT_TABLE above - this
 // is the one place to edit to change the spawn rate, nothing else needs to
@@ -4919,35 +5068,127 @@ let ENEMY_MAX_HEALTH = 8; // now server-authoritative on connect (see welcome ha
 // constant near the top of server.js and should be kept in step with this
 // if you want singleplayer and multiplayer to feel the same.
 const ENEMY_SPAWN_COUNT = 18;
-const ENEMY_TOUCH_DAMAGE = 3;
-const ZOMBIE_TOUCH_DAMAGE = 4.5;
 const ENEMY_TOUCH_INTERVAL = 1.2;
 const ENEMY_TOUCH_KNOCKBACK = 0.9; // a physical shove away from whatever hit you, horizontal only
 const ENEMY_RESPAWN_DELAY = [15000, 25000]; // ms range
 const ENEMY_HALF_W = 0.28, ENEMY_HEIGHT = 0.9;
 const ENEMY_GRAVITY = -24, ENEMY_JUMP_SPEED = JUMP_SPEED*1.15;
-let ENEMY_SPEED = 1.3; // now server-authoritative on connect (see welcome handler) - gravity/jump above are purely client-side physics with no server equivalent, so those stay const
+// Real max jump height from kinematics (v^2/2g), not a guess - this is
+// what actually decides whether attempting a jump is even worth it (see
+// the blocked-movement handling below), rather than just checking for
+// open sky above, which is true of almost every wall regardless of how
+// tall it is. 0.85 margin accounts for movement happening in discrete
+// frame steps rather than the continuous physics the formula assumes.
+const ENEMY_MAX_JUMP_HEIGHT = (ENEMY_JUMP_SPEED*ENEMY_JUMP_SPEED) / (2*Math.abs(ENEMY_GRAVITY)) * 0.85;
+let ENEMY_SPEED = 1.3; // shared base speed - now server-authoritative on connect (see welcome handler). gravity/jump above are purely client-side physics with no server equivalent, so those stay const
 let ENEMY_AGGRO_RANGE = 10; // within this distance, an enemy stops wandering and chases the player - now server-authoritative on connect
-const ZOMBIE_CHANCE = 0.25;
-let ZOMBIE_MAX_HEALTH = 20; // set directly rather than as a multiplier, for exact tuning - now server-authoritative on connect
-let ZOMBIE_SPEED_MULT = 1.3; // now server-authoritative on connect
+
+// Per-type enemy stats, replacing what used to be separate flat constants
+// (ENEMY_MAX_HEALTH, ZOMBIE_MAX_HEALTH, ZOMBIE_SPEED_MULT, ZOMBIE_CHANCE,
+// ENEMY_TOUCH_DAMAGE, ZOMBIE_TOUCH_DAMAGE, plus each type's mesh colors,
+// which used to be inline ternaries in makeEnemyMesh). Adding a third type
+// later means adding a third entry here, not touching spawn/combat/
+// rendering logic - that's the whole point of this table. maxHealth and
+// speedMult get overwritten from the server on connect in multiplayer,
+// same as before, just landing in table entries now instead of loose
+// variables. spawnWeight values across all types should sum to 1 - note
+// this client copy uses 0.25/0.75 where the server uses 0.35/0.65, a
+// pre-existing discrepancy between singleplayer and multiplayer that
+// already existed before this refactor and is preserved as-is here
+// rather than silently "fixed" as a side effect of reorganizing this.
+const ENEMY_TYPES = {
+  normal: {
+    maxHealth: 8, speedMult: 1, touchDamage: 3, spawnWeight: 0.53,
+    bodyColor: 0x5a3d5c, headColor: 0x7a5c7a, eyeColor: 0xff3333,
+  },
+  zombie: {
+    maxHealth: 20, speedMult: 1.3, touchDamage: 4.5, spawnWeight: 0.25,
+    bodyColor: 0x3d5c3a, headColor: 0x5c7a5c, eyeColor: 0xaaff33,
+  },
+  fastZombie: {
+    maxHealth: 6, speedMult: 1.8, touchDamage: 4.5, spawnWeight: 0.10,
+    bodyColor: 0x6b7a2a, headColor: 0x8a9a3a, eyeColor: 0xff8800,
+  },
+  swordZombie: {
+    maxHealth: 24, speedMult: 0.9, touchDamage: 8, spawnWeight: 0.12,
+    bodyColor: 0x4a1f1f, headColor: 0x6b2f2f, eyeColor: 0xff2200,
+    dropChance: 0.75, dropItem: METAL_SWORD,
+  },
+};
+const ENEMY_TYPE_LABELS = {
+  normal: 'Normal', zombie: 'Zombie', fastZombie: 'Fast Zombie', swordZombie: 'Sword Zombie'
+};
+// Picks a type key at random, respecting each type's spawnWeight -
+// mirrors the server's own pickRandomEnemyType(), replacing the old
+// single `Math.random() < ZOMBIE_CHANCE` boolean roll used here too.
+function pickRandomEnemyType(){
+  const roll = Math.random();
+  let cumulative = 0;
+  for(const key in ENEMY_TYPES){
+    cumulative += ENEMY_TYPES[key].spawnWeight;
+    if(roll < cumulative) return key;
+  }
+  return Object.keys(ENEMY_TYPES)[0]; // fallback if weights don't sum to exactly 1
+}
 let enemies = [];
 let enemyIdCounter = 1;
 
-function makeEnemyMesh(isZombie){
+// Enemies rotate using the OPPOSITE forward convention from players:
+// the player's rotation.y comes from camera yaw, where Three.js's default
+// camera forward is local -Z (see rp.group.rotation.y = t.yaw). Enemies
+// instead rotate to face their own movement direction via
+// Math.atan2(dx,dz)/wanderDir, which makes their forward local +Z instead.
+// Both conventions are internally consistent and correct on their own -
+// this is just a fact about how these two rotation systems were each
+// built, not a bug - but it means directly copying a player's held-item
+// position or tilt math onto an enemy silently puts it on the wrong side
+// and swings it the wrong way (this happened once already, with the sword
+// zombie). These two helpers take the SAME semantic values you'd use for
+// a player-style held item (how far right/up/forward, and the same
+// swingArc/idleTilt swing math) and apply the sign flip enemies need
+// internally, so this doesn't need to be re-derived by hand again.
+function enemyHeldOffset(right, up, forward){
+  return { x: -right, y: up, z: forward };
+}
+function enemyHeldTiltX(swingArc, idleTilt){
+  return swingArc*1.0 + idleTilt;
+}
+// Dev-tools-only live tuning for held-item position/tilt on enemies (see
+// the Weapon Tuner section of the dev panel). Defaults exactly match the
+// sword zombie's current hardcoded values, so opening the tuner shows the
+// real current state, not an arbitrary starting point. Purely visual and
+// in-session - no persistence, no gameplay effect - the intended workflow
+// is dial in numbers here, read them off, report them back for a real
+// code change.
+let weaponTunerEnabled = false;
+let weaponTunerValues = { right: 0.32, up: 1.02, forward: 0.15, idleTiltDeg: 63, swingMult: 1.0 };
+const WEAPON_TUNER_DEFAULTS = { right: 0.32, up: 1.02, forward: 0.15, idleTiltDeg: 63, swingMult: 1.0 };
+
+function makeEnemyMesh(type){
   const group = new THREE.Group();
-  const bodyColor = isZombie ? 0x3d5c3a : 0x5a3d5c;
-  const headColor = isZombie ? 0x5c7a5c : 0x7a5c7a;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.9,0.35), new THREE.MeshLambertMaterial({color:bodyColor}));
+  const colors = ENEMY_TYPES[type] || ENEMY_TYPES.normal;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.9,0.35), new THREE.MeshLambertMaterial({color:colors.bodyColor}));
   body.position.y=0.55;
   group.add(body);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), new THREE.MeshLambertMaterial({color:headColor}));
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), new THREE.MeshLambertMaterial({color:colors.headColor}));
   head.position.y=1.15;
   group.add(head);
   const eyeGeo = new THREE.BoxGeometry(0.06,0.06,0.03);
-  const eyeMat = new THREE.MeshBasicMaterial({color: isZombie ? 0xaaff33 : 0xff3333});
+  const eyeMat = new THREE.MeshBasicMaterial({color: colors.eyeColor});
   const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.09,1.18,0.2); group.add(eyeL);
   const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.09,1.18,0.2); group.add(eyeR);
+  if(type==='swordZombie'){
+    // Same sword model as players use (buildSwordMesh), positioned via
+    // enemyHeldOffset (see its comment above) using the same semantic
+    // right/up/forward values as the player's own sword position -
+    // 0.32 right, 1.02 up, 0.15 forward.
+    const heldAnchor = new THREE.Group();
+    const offset = enemyHeldOffset(0.32, 1.02, 0.15);
+    heldAnchor.position.set(offset.x, offset.y, offset.z);
+    heldAnchor.add(buildSwordMesh());
+    group.add(heldAnchor);
+    group.heldAnchor = heldAnchor;
+  }
   return group;
 }
 // ---------- Boss (Graveyard biome) ----------
@@ -5112,10 +5353,11 @@ function spawnLocalBoss(){
 }
 function updateLocalBoss(dt){
   if(multiplayer || !bossState || !bossState.alive) return;
+  const spawnProtected = performance.now() < spawnProtectedUntil;
   const dxp = player.x-bossState.x, dzp = player.z-bossState.z;
   const distToPlayer = Math.sqrt(dxp*dxp+dzp*dzp);
   const approachRange = 5; // stops closing once this near - keeps a little hover distance
-  if(distToPlayer > approachRange){
+  if(!spawnProtected && distToPlayer > approachRange){
     bossState.x += (dxp/distToPlayer)*2.6*dt;
     bossState.z += (dzp/distToPlayer)*2.6*dt;
   }
@@ -5126,7 +5368,7 @@ function updateLocalBoss(dt){
   bossState.z = Math.max(2, Math.min(WORLD_Z-2, bossState.z));
   if(bossMesh) bossMesh.position.set(bossState.x, bossState.y, bossState.z);
   localBossAttackCooldown -= dt;
-  if(localBossAttackCooldown<=0){
+  if(!spawnProtected && localBossAttackCooldown<=0){
     const dx=player.x-bossState.x, dz=player.z-bossState.z;
     const dist = Math.sqrt(dx*dx+dz*dz);
     if(dist < 9){
@@ -5228,20 +5470,20 @@ function updateHitEffect(entity, dt){
   }
 }
 
-function spawnEnemyAt(x,z,forceZombie){
+function spawnEnemyAt(x,z,forceType){
   const y = findSurfaceY(Math.floor(x), Math.floor(z));
-  const isZombie = forceZombie!==undefined ? forceZombie : (Math.random()<ZOMBIE_CHANCE);
-  const group = makeEnemyMesh(isZombie);
+  const type = forceType || pickRandomEnemyType();
+  const group = makeEnemyMesh(type);
   group.position.set(x,y,z);
   scene.add(group);
-  const maxHealth = isZombie ? ZOMBIE_MAX_HEALTH : ENEMY_MAX_HEALTH;
+  const maxHealth = ENEMY_TYPES[type].maxHealth;
   const enemy = {
     id: enemyIdCounter++, group, x, y, z,
     velY: 0, onGround: true,
-    health: maxHealth, maxHealth, alive:true, isZombie,
+    health: maxHealth, maxHealth, alive:true, type,
     wanderDir: Math.random()*Math.PI*2, wanderTimer: 1+Math.random()*2,
     stuckDeflectDir: 0, stuckDeflectTimer: 0,
-    touchCooldown: 0
+    touchCooldown: 0, swingTimer: 0
   };
   enemies.push(enemy);
   return enemy;
@@ -5249,7 +5491,7 @@ function spawnEnemyAt(x,z,forceZombie){
 function spawnInitialEnemies(count){
   for(const en of enemies) scene.remove(en.group);
   enemies = [];
-  if(biomeMode==='graveyard') return; // no starting mobs here - only the boss's swarm phase spawns any
+  if(biomeMode==='graveyard' || biomeMode==='test') return; // no starting mobs here - graveyard's only enemies come from the boss's swarm phase, test is meant to be an empty field for manually spawning whatever you want to test
   let spawned=0, attempts=0;
   const target = count || ENEMY_SPAWN_COUNT;
   while(spawned<target && attempts<300){
@@ -5273,6 +5515,10 @@ function damageEnemy(enemy, amount){
     scene.remove(enemy.group);
     showKillConfirm('ENEMY DEFEATED');
     sfxEnemyDeath();
+    const typeInfo = ENEMY_TYPES[enemy.type];
+    if(typeInfo && typeInfo.dropChance && Math.random()<typeInfo.dropChance){
+      dropItemOnGround(enemy.x, enemy.y, enemy.z, typeInfo.dropItem, 1);
+    }
     const delay = ENEMY_RESPAWN_DELAY[0] + Math.random()*(ENEMY_RESPAWN_DELAY[1]-ENEMY_RESPAWN_DELAY[0]);
     setTimeout(()=>respawnEnemy(enemy), delay);
   }
@@ -5317,7 +5563,7 @@ function damageBoss(amount, weaponType){
     for(let i=0;i<10;i++){
       const ex = bossState.x+(Math.random()-0.5)*8, ez = bossState.z+(Math.random()-0.5)*8;
       if(checkFurnaceCollision(ex,findSurfaceY(Math.floor(ex),Math.floor(ez)),ez,ENEMY_HALF_W,ENEMY_HEIGHT)) continue;
-      const en = spawnEnemyAt(ex, ez, true);
+      const en = spawnEnemyAt(ex, ez, 'zombie');
       en.swarmMode = true;
       spawnGroundRiseEffect(ex, ez);
     }
@@ -5326,7 +5572,7 @@ function damageBoss(amount, weaponType){
     for(let i=0;i<8;i++){
       const ex = 4+Math.random()*(WORLD_X-8), ez = 4+Math.random()*(WORLD_Z-8);
       if(checkFurnaceCollision(ex,findSurfaceY(Math.floor(ex),Math.floor(ez)),ez,ENEMY_HALF_W,ENEMY_HEIGHT)) continue;
-      const en = spawnEnemyAt(ex, ez, true);
+      const en = spawnEnemyAt(ex, ez, 'zombie');
       en.swarmMode = true;
       spawnGroundRiseEffect(ex, ez);
     }
@@ -5350,17 +5596,18 @@ function respawnEnemy(enemy){
   if(checkFurnaceCollision(x+0.5,y,z+0.5,ENEMY_HALF_W,ENEMY_HEIGHT)){ setTimeout(()=>respawnEnemy(enemy), 3000); return; }
   enemy.x=x+0.5; enemy.z=z+0.5; enemy.y=y;
   enemy.velY=0; enemy.onGround=true;
-  enemy.isZombie = Math.random()<ZOMBIE_CHANCE;
-  enemy.maxHealth = enemy.isZombie ? ZOMBIE_MAX_HEALTH : ENEMY_MAX_HEALTH;
+  enemy.type = pickRandomEnemyType();
+  enemy.maxHealth = ENEMY_TYPES[enemy.type].maxHealth;
   enemy.health = enemy.maxHealth;
   enemy.alive = true;
   enemy.touchCooldown = 0.5;
+  enemy.swingTimer = 0;
   enemy.stuckDeflectTimer = 0;
   enemy.flashTimer = 0; enemy.bumpTimer = 0;
   enemy.group.scale.set(1,1,1);
-  // rebuild the mesh so a re-rolled zombie/normal status is reflected visually
+  // rebuild the mesh so a re-rolled enemy type is reflected visually
   scene.remove(enemy.group);
-  enemy.group = makeEnemyMesh(enemy.isZombie);
+  enemy.group = makeEnemyMesh(enemy.type);
   enemy.group.position.set(enemy.x,enemy.y,enemy.z);
   scene.add(enemy.group);
 }
@@ -5372,15 +5619,17 @@ function syncEnemiesFromServer(list){
   if(!list) return;
   for(const e of list){
     const y = findSurfaceY(Math.floor(e.x), Math.floor(e.z));
-    const group = makeEnemyMesh(e.isZombie);
+    const type = e.type || 'normal';
+    const group = makeEnemyMesh(type);
     group.position.set(e.x, y, e.z);
     scene.add(group);
     enemies.push({
       id: e.id, group,
       x: e.x, y, z: e.z,
       serverX: e.x, serverZ: e.z,
-      health: e.health, alive: e.alive, isZombie: !!e.isZombie,
-      flashTimer: 0, bumpTimer: 0, touchCooldown: 0,
+      health: e.health, alive: e.alive, type,
+      flashTimer: 0, bumpTimer: 0, touchCooldown: 0, swingTimer: 0,
+      stuckDeflectDir: 0, stuckDeflectTimer: 0,
       velY: 0, onGround: true, wanderDir: 0, wanderTimer: 0
     });
   }
@@ -5388,7 +5637,7 @@ function syncEnemiesFromServer(list){
 function updateEnemyTick(list){
   for(const e of list){
     const en = enemies.find(x=>x.id===e.id);
-    if(en){ en.serverX = e.x; en.serverZ = e.z; en.alive = e.alive; en.isZombie = !!e.isZombie; }
+    if(en){ en.serverX = e.x; en.serverZ = e.z; en.alive = e.alive; en.type = e.type || en.type; }
   }
 }
 function applyServerEnemyHealth(id, health, alive){
@@ -5408,16 +5657,16 @@ function applyServerEnemyHealth(id, health, alive){
     }
   }
 }
-function applyServerEnemyRespawn(id, x, z, isZombie){
+function applyServerEnemyRespawn(id, x, z, type){
   const en = enemies.find(e=>e.id===id);
   if(!en) return;
   const y = findSurfaceY(Math.floor(x), Math.floor(z));
   en.x=x; en.y=y; en.z=z; en.serverX=x; en.serverZ=z;
-  en.isZombie = !!isZombie;
-  en.health = en.isZombie ? ZOMBIE_MAX_HEALTH : ENEMY_MAX_HEALTH;
+  en.type = type || 'normal';
+  en.health = ENEMY_TYPES[en.type].maxHealth;
   en.alive = true;
   scene.remove(en.group);
-  en.group = makeEnemyMesh(en.isZombie);
+  en.group = makeEnemyMesh(en.type);
   en.group.position.set(x,y,z);
   en.group.scale.set(1,1,1);
   scene.add(en.group);
@@ -5438,8 +5687,21 @@ function updateEnemies(dt){
       updateHitEffect(en, dt);
       if(!en.alive) continue;
       const posLerp = Math.min(1, dt*4);
-      const targetX = en.x + (en.serverX-en.x)*posLerp;
-      const targetZ = en.z + (en.serverZ-en.z)*posLerp;
+      let targetX = en.x + (en.serverX-en.x)*posLerp;
+      let targetZ = en.z + (en.serverZ-en.z)*posLerp;
+      // If currently sliding along an obstacle (set below), temporarily
+      // override the lerp-toward-server-position target with the
+      // deflection direction instead - the server's own target doesn't
+      // know walls exist at all, so this local deviation is what
+      // actually gets the enemy moving again. Once the timer runs out,
+      // normal lerp-toward-server resumes, picking up wherever the
+      // server's own (wall-blind) position has drifted to by then.
+      if(en.stuckDeflectTimer > 0){
+        en.stuckDeflectTimer -= dt;
+        const speed = ENEMY_SPEED * ENEMY_TYPES[en.type].speedMult;
+        targetX = en.x + Math.sin(en.stuckDeflectDir)*speed*dt;
+        targetZ = en.z + Math.cos(en.stuckDeflectDir)*speed*dt;
+      }
       // Horizontal position still comes from the server (it owns the AI
       // decision of where to go), but vertical movement is local, real jump
       // physics now - the same collision-based approach singleplayer already
@@ -5452,8 +5714,18 @@ function updateEnemies(dt){
       const blockedAhead = checkCollisionBox(targetX, en.y, targetZ, ENEMY_HALF_W, ENEMY_HEIGHT);
       if(blockedAhead){
         if(en.onGround){
-          const canJump = !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
+          // Only worth jumping if it would actually clear the obstacle -
+          // checking for open sky above isn't enough, since that's true
+          // of almost every wall no matter how tall it is.
+          const hasHeadroom = !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
+          const wouldClearObstacle = !checkCollisionBox(targetX, en.y+ENEMY_MAX_JUMP_HEIGHT, targetZ, ENEMY_HALF_W, ENEMY_HEIGHT);
+          const canJump = hasHeadroom && wouldClearObstacle;
           if(canJump){ en.velY = ENEMY_JUMP_SPEED; en.onGround = false; }
+          else if(en.stuckDeflectTimer<=0){
+            const towardServerDir = Math.atan2(en.serverX-en.x, en.serverZ-en.z);
+            en.stuckDeflectDir = towardServerDir + (Math.random()<0.5 ? 1 : -1)*Math.PI/2;
+            en.stuckDeflectTimer = 0.6+Math.random()*0.5;
+          }
         }
       } else {
         en.x = targetX;
@@ -5472,13 +5744,31 @@ function updateEnemies(dt){
       const dx=en.serverX-en.x, dz=en.serverZ-en.z;
       if(Math.abs(dx)>0.02 || Math.abs(dz)>0.02) en.group.rotation.y = Math.atan2(dx,dz);
       en.group.position.set(en.x, en.y, en.z);
+      if(en.group.heldAnchor){
+        if(en.swingTimer===undefined) en.swingTimer = 0;
+        let swingArc = 0;
+        if(en.swingTimer>0){
+          en.swingTimer = Math.max(0, en.swingTimer-dt);
+          const swingFrac = 1-(en.swingTimer/0.35);
+          swingArc = Math.sin(swingFrac*Math.PI);
+        }
+        const tv = weaponTunerEnabled ? weaponTunerValues : WEAPON_TUNER_DEFAULTS;
+        const heldOffset = enemyHeldOffset(tv.right, tv.up, tv.forward);
+        en.group.heldAnchor.position.set(heldOffset.x, heldOffset.y, heldOffset.z);
+        en.group.heldAnchor.rotation.x = enemyHeldTiltX(swingArc*tv.swingMult, tv.idleTiltDeg*Math.PI/180);
+        en.group.heldAnchor.rotation.z = 0;
+      }
 
       en.touchCooldown -= dt;
       const tdx=en.x-player.x, tdy=(en.y+0.5)-(player.y+0.9), tdz=en.z-player.z;
       const dist = Math.sqrt(tdx*tdx+tdy*tdy+tdz*tdz);
       if(dist<0.9 && en.touchCooldown<=0){
-        takeDamage(en.isZombie ? ZOMBIE_TOUCH_DAMAGE : ENEMY_TOUCH_DAMAGE);
+        takeDamage(ENEMY_TYPES[en.type].touchDamage);
         en.touchCooldown = ENEMY_TOUCH_INTERVAL;
+        if(en.group.heldAnchor){
+          en.swingTimer = 0.35;
+          if(socket && socket.readyState===WebSocket.OPEN) socket.send(JSON.stringify({type:'enemySwing', enemyId: en.id}));
+        }
         const pushDist = Math.sqrt(tdx*tdx+tdz*tdz) || 1;
         tryMove(-(tdx/pushDist)*ENEMY_TOUCH_KNOCKBACK, 0, -(tdz/pushDist)*ENEMY_TOUCH_KNOCKBACK);
       }
@@ -5491,7 +5781,7 @@ function updateEnemies(dt){
 
     const pdx = player.x-en.x, pdz = player.z-en.z;
     const distToPlayer = Math.sqrt(pdx*pdx+pdz*pdz);
-    const aggroed = !godMode && (en.swarmMode || distToPlayer < ENEMY_AGGRO_RANGE);
+    const aggroed = !godMode && performance.now()>=spawnProtectedUntil && (en.swarmMode || distToPlayer < ENEMY_AGGRO_RANGE);
 
     if(en.stuckDeflectTimer>0){
       // Temporarily overrides the aggro direction below - lets a stuck
@@ -5502,6 +5792,13 @@ function updateEnemies(dt){
       en.wanderDir = en.stuckDeflectDir;
     } else if(aggroed){
       en.wanderDir = Math.atan2(pdx, pdz);
+    } else if(en.wasAggroed){
+      // just lost aggro this frame (spawn protection, god mode, etc.) -
+      // pick a fresh random direction immediately instead of continuing
+      // to coast toward wherever the player last was until the wander
+      // timer happens to expire naturally
+      en.wanderDir = Math.random()*Math.PI*2;
+      en.wanderTimer = 2+Math.random()*3;
     } else {
       en.wanderTimer -= dt;
       if(en.wanderTimer<=0){
@@ -5509,8 +5806,9 @@ function updateEnemies(dt){
         en.wanderTimer = 2+Math.random()*3;
       }
     }
+    en.wasAggroed = aggroed;
 
-    const speed = ENEMY_SPEED * (en.isZombie ? ZOMBIE_SPEED_MULT : 1);
+    const speed = ENEMY_SPEED * ENEMY_TYPES[en.type].speedMult;
     const dx = Math.sin(en.wanderDir)*speed*dt;
     const dz = Math.cos(en.wanderDir)*speed*dt;
     const nx = en.x+dx, nz = en.z+dz;
@@ -5522,8 +5820,15 @@ function updateEnemies(dt){
     if(!blockedZ) en.z = nz;
 
     if(blockedX || blockedZ){
-      // try to jump over whatever's in the way if there's headroom above
-      const canJump = en.onGround && !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
+      // Only worth jumping if it would actually clear the obstacle ahead
+      // - checking for open sky above isn't enough, since that's true of
+      // almost every wall no matter how tall it is. Also check whether
+      // the target spot is clear at the enemy's real jump apex height;
+      // if a wall is still in the way up there, jumping just repeats the
+      // same failed attempt forever instead of ever finding another way.
+      const hasHeadroom = en.onGround && !checkCollisionBox(en.x, en.y+1.05, en.z, ENEMY_HALF_W, ENEMY_HEIGHT);
+      const wouldClearObstacle = !checkCollisionBox(nx, en.y+ENEMY_MAX_JUMP_HEIGHT, nz, ENEMY_HALF_W, ENEMY_HEIGHT);
+      const canJump = hasHeadroom && wouldClearObstacle;
       if(canJump){ en.velY = ENEMY_JUMP_SPEED; en.onGround = false; }
       else if(aggroed){
         // can't jump over it and still want to reach the player - slide
@@ -5549,13 +5854,28 @@ function updateEnemies(dt){
 
     en.group.position.set(en.x, en.y, en.z);
     en.group.rotation.y = en.wanderDir;
+    if(en.group.heldAnchor){
+      if(en.swingTimer===undefined) en.swingTimer = 0;
+      let swingArc = 0;
+      if(en.swingTimer>0){
+        en.swingTimer = Math.max(0, en.swingTimer-dt);
+        const swingFrac = 1-(en.swingTimer/0.35);
+        swingArc = Math.sin(swingFrac*Math.PI);
+      }
+      const tv = weaponTunerEnabled ? weaponTunerValues : WEAPON_TUNER_DEFAULTS;
+      const heldOffset = enemyHeldOffset(tv.right, tv.up, tv.forward);
+      en.group.heldAnchor.position.set(heldOffset.x, heldOffset.y, heldOffset.z);
+      en.group.heldAnchor.rotation.x = enemyHeldTiltX(swingArc*tv.swingMult, tv.idleTiltDeg*Math.PI/180);
+      en.group.heldAnchor.rotation.z = 0;
+    }
 
     en.touchCooldown -= dt;
     const tdx=en.x-player.x, tdy=(en.y+0.5)-(player.y+0.9), tdz=en.z-player.z;
     const dist = Math.sqrt(tdx*tdx+tdy*tdy+tdz*tdz);
     if(dist<0.9 && en.touchCooldown<=0){
-      takeDamage(en.isZombie ? ZOMBIE_TOUCH_DAMAGE : ENEMY_TOUCH_DAMAGE);
+      takeDamage(ENEMY_TYPES[en.type].touchDamage);
       en.touchCooldown = ENEMY_TOUCH_INTERVAL;
+      if(en.group.heldAnchor) en.swingTimer = 0.35;
       const pushDist = Math.sqrt(tdx*tdx+tdz*tdz) || 1;
       tryMove(-(tdx/pushDist)*ENEMY_TOUCH_KNOCKBACK, 0, -(tdz/pushDist)*ENEMY_TOUCH_KNOCKBACK);
     }
@@ -5616,6 +5936,8 @@ let paused=false, craftOpen=false;
 
 document.addEventListener('keydown', (e)=>{
   if(chatOpen) return; // the chat input handles its own keys and stops propagation
+  const activeTag = document.activeElement && document.activeElement.tagName;
+  if(activeTag==='INPUT' || activeTag==='TEXTAREA') return; // typing into any text field (admin password, name, etc.) shouldn't trigger game hotkeys
   if(e.code==='Escape'){
     if(devOpen){ toggleDev(); e.preventDefault(); return; }
     if(craftOpen){ toggleCraft(); e.preventDefault(); return; }
@@ -5642,7 +5964,7 @@ document.addEventListener('keydown', (e)=>{
     case 'KeyF': tryInteract(); break;
     case 'KeyQ': dropHeldItem(); break;
     case 'Backquote': toggleDev(); break;
-    case 'KeyT': openChat(); break;
+    case 'KeyT': openChat(); e.preventDefault(); break;
     case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
     case 'Digit5': case 'Digit6': case 'Digit7': case 'Digit8': case 'Digit9':
       selectSlot(parseInt(e.code.slice(5))-1); break;
@@ -5702,7 +6024,7 @@ canvas.addEventListener('mousedown', (e)=>{
         else if(weapon.kind==='shotgun') fireShotgunBurst(weapon);
         else if(weapon.kind==='hitscan') fireSniperHitscan(weapon);
       }
-      if(weapon.kind==='projectile') attackHeld = true; // hold the mouse down to keep firing
+      if(weapon.kind==='projectile' && !weapon.semiAuto) attackHeld = true; // hold the mouse down to keep firing (semi-auto weapons fire once per click instead)
     } else {
       if(!tryPunchAttack()) mouseDown0=true;
     }
@@ -5736,13 +6058,13 @@ let selectedSlot = 0;
 let heldSlotIndex = null; // index of slot currently "picked up" with the mouse in the inventory screen
 
 function addToInventory(type){
-  // Weapons don't stack - picking up a second one of the same gun/melee
-  // weapon should occupy its own slot, not just bump a count that
-  // doesn't mean anything meaningful for a weapon the way it does for
-  // materials or meds. Anything not in WEAPON_CONFIG (meds, materials,
-  // blocks) keeps stacking exactly as before.
-  const isWeapon = WEAPON_CONFIG[type] !== undefined;
-  if(!isWeapon){
+  // Weapons and certain tools (like the pickaxe) don't stack - picking up
+  // a second one should occupy its own slot, not just bump a count that
+  // doesn't mean anything meaningful for equipment the way it does for
+  // materials or meds. Anything not in WEAPON_CONFIG or NON_STACKING_TOOLS
+  // (meds, materials, blocks) keeps stacking exactly as before.
+  const isNonStacking = WEAPON_CONFIG[type] !== undefined || NON_STACKING_TOOLS.includes(type);
+  if(!isNonStacking){
     // stack onto an existing pile of the same type first, anywhere
     for(const s of slots){
       if(s.type===type){ s.count++; updateHotbarUI(); if(craftOpen) renderInventoryPanel(); return; }
@@ -5776,6 +6098,13 @@ function openLootCrate(x,y,z){
   const weapon = pickWeightedLoot();
   dropItemOnGround(x,y,z,weapon,1);
   flashMessage('Loot crate! A '+BLOCK_NAMES[weapon]+' dropped');
+  sfxCrateOpen();
+}
+function openEliteLootCrate(x,y,z){
+  const weapon = pickEliteLoot();
+  dropItemOnGround(x,y,z,weapon,1);
+  dropItemOnGround(x+0.3,y,z+0.3,STIM_INJECTOR,1); // small offset so it doesn't visually stack with the weapon
+  flashMessage('Elite crate! A '+BLOCK_NAMES[weapon]+' and a Stim Injector dropped');
   sfxCrateOpen();
 }
 function openMedCrate(x,y,z){
@@ -5823,6 +6152,32 @@ function spawnCrateNearPlayer(){
   rebuildMeshes();
   flashMessage('Spawned a loot crate nearby');
 }
+function spawnEliteCrateNearPlayer(){
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const x = Math.floor(player.x + dir.x*2.5);
+  const z = Math.floor(player.z + dir.z*2.5);
+  const y = findSurfaceY(x,z);
+  if(getBlock(x,y,z)!==AIR){ flashMessage('No room to spawn a crate there'); return; }
+  setBlock(x,y,z,ELITE_CRATE);
+  sendBlockChange(x,y,z,ELITE_CRATE);
+  rebuildMeshes();
+  flashMessage('Spawned an elite crate nearby');
+}
+function printMapStats(){
+  if(!blocks){ flashMessage('No map loaded yet'); return; }
+  const aliveEnemies = enemies.filter(e=>e.alive).length;
+  let lootCrates=0, medCrates=0, eliteCrates=0, powerCrates=0, ores=0;
+  for(let i=0;i<blocks.length;i++){
+    const t = blocks[i];
+    if(t===LOOT_CRATE) lootCrates++;
+    else if(t===MED_CRATE) medCrates++;
+    else if(t===ELITE_CRATE) eliteCrates++;
+    else if(t===POWERUP_CRATE) powerCrates++;
+    else if(t===METAL_ORE) ores++;
+  }
+  addChatMessage('Map Stats', `Enemies: ${aliveEnemies} | Loot Crates: ${lootCrates} | Elite Crates: ${eliteCrates} | Power Crates: ${powerCrates} | Med Crates: ${medCrates} | Metal Ore: ${ores}`);
+}
 function spawnPowerCrateNearPlayer(){
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
@@ -5835,7 +6190,7 @@ function spawnPowerCrateNearPlayer(){
   rebuildMeshes();
   flashMessage('Spawned a power crate nearby');
 }
-function spawnEnemyNearPlayer(){
+function spawnEnemyNearPlayer(type){
   if(multiplayer){
     flashMessage('Enemies are server-controlled in multiplayer - spawn extra ones from server.js instead');
     return;
@@ -5844,8 +6199,8 @@ function spawnEnemyNearPlayer(){
   camera.getWorldDirection(dir);
   const x = player.x + dir.x*3;
   const z = player.z + dir.z*3;
-  spawnEnemyAt(x,z);
-  flashMessage('Spawned an enemy nearby');
+  const en = spawnEnemyAt(x,z,type);
+  flashMessage('Spawned '+(ENEMY_TYPE_LABELS[en.type]||en.type)+' nearby');
 }
 function spawnFurnaceNearPlayer(){
   const dir = new THREE.Vector3();
@@ -5920,6 +6275,8 @@ const ITEM_MESH_BUILDERS = {
   [BANDAGE]: buildBandageMesh,
   [STIM_INJECTOR]: buildStimMesh,
   [ARMOR_HELMET]: buildArmorHelmetMesh,
+  [ARMOR_CHESTPLATE]: buildArmorChestMesh,
+  [ARMOR_LEGS]: buildArmorLegsMesh,
 };
 let iconRenderer=null, iconScene=null, iconCamera=null;
 function initIconRenderer(){
@@ -6059,7 +6416,7 @@ function resetInventoryForNewRound(){
 // ---------- Mining (hold left click, speed depends on block type & equipped tool) ----------
 const MINE_TIME = {
   [GRASS]:0.3, [DIRT]:0.25, [SAND]:0.25, [LEAVES]:0.2,
-  [WOOD]:0.6, [PLANKS]:0.5, [STONE]:1.1, [REEDS]:0.15, [WATER]:0.2, [LOOT_CRATE]:0.6, [POWERUP_CRATE]:0.4, [MED_CRATE]:0.4,
+  [WOOD]:0.6, [PLANKS]:0.5, [STONE]:1.1, [REEDS]:0.15, [WATER]:0.2, [LOOT_CRATE]:0.6, [POWERUP_CRATE]:0.4, [MED_CRATE]:0.4, [ELITE_CRATE]:4.0,
   [RUBBLE]:0.5, [SNOW]:0.2, [METAL]:1.4, [GLASS]:0.2, [CLEAR_GLASS]:0.2, [METAL_ORE]:1.6
 };
 const PICKAXE_SPEED_MULT = 1.75; // was 2.5 - gather rate reduced 30%
@@ -6113,17 +6470,30 @@ function updateMining(dt){
     updateEmptySwing(dt);
     return;
   }
+  if(t===ELITE_CRATE && !MELEE_OR_TOOL_TYPES.includes(equipped)){
+    if(mining){ mining=null; updateMiningBar(); updateCrackOverlay(); }
+    flashMessage('Need a melee weapon or pickaxe to break this open');
+    updateEmptySwing(dt);
+    return;
+  }
   resetEmptySwing(); // actively mining something valid now, not swinging at nothing
   if(!mining || mining.x!==hit.x || mining.y!==hit.y || mining.z!==hit.z){
-    mining = {x:hit.x, y:hit.y, z:hit.z, type:t, progress:0};
+    mining = {x:hit.x, y:hit.y, z:hit.z, type:t, progress:0, nextChopSfx:0};
   } else {
     mining.progress += dt;
     broadcastSwingThrottled();
+    if(mining.type===ELITE_CRATE && mining.progress>=mining.nextChopSfx){
+      sfxEliteCrateChop();
+      mining.nextChopSfx = mining.progress + 0.5;
+    }
     const req = effectiveMineTime(mining.type);
     if(mining.progress>=req){
       if(mining.type===LOOT_CRATE){
         openLootCrate(mining.x, mining.y, mining.z);
         spawnBreakParticles(mining.x, mining.y, mining.z, 0xe8c94a);
+      } else if(mining.type===ELITE_CRATE){
+        openEliteLootCrate(mining.x, mining.y, mining.z);
+        spawnBreakParticles(mining.x, mining.y, mining.z, 0xff5555);
       } else if(mining.type===POWERUP_CRATE){
         spawnPowerupPickup(mining.x, mining.y, mining.z);
         spawnBreakParticles(mining.x, mining.y, mining.z, 0x5fd0ff);
@@ -6191,13 +6561,37 @@ function useConsumable(){
     return true;
   }
   if(slot.type===ARMOR_HELMET){
-    if(hasArmor){ flashMessage('Already wearing armor'); return true; }
-    hasArmor = true;
-    armorHealth = ARMOR_MAX_HEALTH;
+    if(hasHelmet){ flashMessage('Already wearing a helmet'); return true; }
+    hasHelmet = true;
+    helmetHealth = ARMOR_MAX_HEALTH;
     updateArmorUI();
     sendArmorStateIfMultiplayer();
     sfxCraftSuccess();
-    flashMessage('Armor equipped!');
+    flashMessage('Helmet equipped!');
+    slot.count--; if(slot.count===0) slot.type=null;
+    updateHotbarUI();
+    return true;
+  }
+  if(slot.type===ARMOR_CHESTPLATE){
+    if(hasChest){ flashMessage('Already wearing a chestplate'); return true; }
+    hasChest = true;
+    chestHealth = ARMOR_MAX_HEALTH;
+    updateArmorUI();
+    sendArmorStateIfMultiplayer();
+    sfxCraftSuccess();
+    flashMessage('Chestplate equipped!');
+    slot.count--; if(slot.count===0) slot.type=null;
+    updateHotbarUI();
+    return true;
+  }
+  if(slot.type===ARMOR_LEGS){
+    if(hasLegs){ flashMessage('Already wearing leg armor'); return true; }
+    hasLegs = true;
+    legsHealth = ARMOR_MAX_HEALTH;
+    updateArmorUI();
+    sendArmorStateIfMultiplayer();
+    sfxCraftSuccess();
+    flashMessage('Leg armor equipped!');
     slot.count--; if(slot.count===0) slot.type=null;
     updateHotbarUI();
     return true;
@@ -6224,7 +6618,7 @@ function updateBandageChannel(dt){
 }
 function placeBlock(){
   const slot = slots[selectedSlot];
-  if(slot.type===BANDAGE || slot.type===STIM_INJECTOR || slot.type===ARMOR_HELMET){ useConsumable(); return; }
+  if(slot.type===BANDAGE || slot.type===STIM_INJECTOR || slot.type===ARMOR_HELMET || slot.type===ARMOR_CHESTPLATE || slot.type===ARMOR_LEGS){ useConsumable(); return; }
   const hit = raycastVoxel();
   if(!hit || !hit.prev) return;
   if(!slot.type || slot.count<=0) return;
@@ -6437,15 +6831,158 @@ function renderDevPanel(){
   spawnBtns.className='btns';
   const crateBtn = document.createElement('div'); crateBtn.className='btn'; crateBtn.textContent='Loot Crate';
   crateBtn.addEventListener('click', ()=>{ spawnCrateNearPlayer(); });
+  const eliteCrateBtn = document.createElement('div'); eliteCrateBtn.className='btn'; eliteCrateBtn.textContent='Elite Crate';
+  eliteCrateBtn.addEventListener('click', ()=>{ spawnEliteCrateNearPlayer(); });
   const powerBtn = document.createElement('div'); powerBtn.className='btn'; powerBtn.textContent='Power Crate';
   powerBtn.addEventListener('click', ()=>{ spawnPowerCrateNearPlayer(); });
-  const enemyBtn = document.createElement('div'); enemyBtn.className='btn'; enemyBtn.textContent='Enemy';
-  enemyBtn.addEventListener('click', ()=>{ spawnEnemyNearPlayer(); });
   const furnaceBtn = document.createElement('div'); furnaceBtn.className='btn'; furnaceBtn.textContent='Furnace';
   furnaceBtn.addEventListener('click', ()=>{ spawnFurnaceNearPlayer(); });
-  spawnBtns.appendChild(crateBtn); spawnBtns.appendChild(powerBtn); spawnBtns.appendChild(enemyBtn); spawnBtns.appendChild(furnaceBtn);
+  spawnBtns.appendChild(crateBtn); spawnBtns.appendChild(eliteCrateBtn); spawnBtns.appendChild(powerBtn); spawnBtns.appendChild(furnaceBtn);
   spawnRow.appendChild(spawnBtns);
   list.appendChild(spawnRow);
+
+  const statsRow = document.createElement('div');
+  statsRow.className='devRow';
+  statsRow.innerHTML = `<div class="desc">Map Stats</div>`;
+  const statsBtns = document.createElement('div');
+  statsBtns.className='btns';
+  const statsBtn = document.createElement('div'); statsBtn.className='btn'; statsBtn.textContent='Print to Chat';
+  statsBtn.addEventListener('click', ()=>{ printMapStats(); });
+  statsBtns.appendChild(statsBtn);
+  statsRow.appendChild(statsBtns);
+  list.appendChild(statsRow);
+
+  const enemyRow = document.createElement('div');
+  enemyRow.className='devRow';
+  enemyRow.innerHTML = `<div class="desc">Enemy</div>`;
+  const enemyBtns = document.createElement('div');
+  enemyBtns.className='btns';
+  const enemyTypeSelect = document.createElement('select');
+  enemyTypeSelect.style.cssText = 'padding:4px; border-radius:4px; border:1px solid #555; background:#111; color:#fff; margin-right:4px;';
+  const randomTypeOpt = document.createElement('option'); randomTypeOpt.value=''; randomTypeOpt.textContent='Random';
+  enemyTypeSelect.appendChild(randomTypeOpt);
+  for(const t of Object.keys(ENEMY_TYPES)){
+    const opt = document.createElement('option'); opt.value=t; opt.textContent=ENEMY_TYPE_LABELS[t]||t;
+    enemyTypeSelect.appendChild(opt);
+  }
+  const enemyBtn = document.createElement('div'); enemyBtn.className='btn'; enemyBtn.textContent='Spawn';
+  enemyBtn.addEventListener('click', ()=>{ spawnEnemyNearPlayer(enemyTypeSelect.value||undefined); });
+  enemyBtns.appendChild(enemyTypeSelect); enemyBtns.appendChild(enemyBtn);
+  enemyRow.appendChild(enemyBtns);
+  list.appendChild(enemyRow);
+
+  addDevSectionTitle(list, 'Weapon Tuner');
+
+  function currentTunerValues(){ return weaponTunerTarget==='enemy' ? weaponTunerValues : playerTunerValues; }
+
+  const tunerTargetRow = document.createElement('div');
+  tunerTargetRow.className='devRow';
+  tunerTargetRow.innerHTML = `<div class="desc">Target</div>`;
+  const tunerTargetBtns = document.createElement('div');
+  tunerTargetBtns.className='btns';
+  const tunerTargetBtn = document.createElement('div'); tunerTargetBtn.className='btn';
+  tunerTargetBtn.textContent = weaponTunerTarget==='enemy' ? 'Target: Enemy Sword' : 'Target: Player Model';
+  tunerTargetBtn.addEventListener('click', ()=>{ weaponTunerTarget = weaponTunerTarget==='enemy' ? 'player' : 'enemy'; renderDevPanel(); });
+  tunerTargetBtns.appendChild(tunerTargetBtn);
+  tunerTargetRow.appendChild(tunerTargetBtns);
+  list.appendChild(tunerTargetRow);
+
+  const tunerHintRow = document.createElement('div');
+  tunerHintRow.className='devRow';
+  const tunerHintText = weaponTunerTarget==='enemy'
+    ? "Spawn a Sword Zombie nearby to see changes live. Only affects its held sword."
+    : "Spawn a mock player below, pick a weapon, then tune. Only affects the mock player - real players are untouched.";
+  tunerHintRow.innerHTML = `<div class="desc" style="font-size:11px; opacity:0.8; line-height:1.4;">${tunerHintText} Values are session-only, read them off and report back once you're happy.</div>`;
+  list.appendChild(tunerHintRow);
+
+  if(weaponTunerTarget==='player'){
+    const mockRow = document.createElement('div');
+    mockRow.className='devRow';
+    mockRow.innerHTML = `<div class="desc">Mock Player</div>`;
+    const mockBtns = document.createElement('div');
+    mockBtns.className='btns';
+    const mockSpawnBtn = document.createElement('div'); mockSpawnBtn.className='btn';
+    mockSpawnBtn.textContent = mockPlayer ? 'Respawn Nearby' : 'Spawn Nearby';
+    mockSpawnBtn.addEventListener('click', ()=>{ removeMockPlayer(); spawnMockPlayer(); renderDevPanel(); });
+    const mockRemoveBtn = document.createElement('div'); mockRemoveBtn.className='btn'; mockRemoveBtn.textContent='Remove';
+    mockRemoveBtn.addEventListener('click', ()=>{ removeMockPlayer(); renderDevPanel(); });
+    const mockSwingBtn = document.createElement('div'); mockSwingBtn.className='btn'; mockSwingBtn.textContent='Preview Swing';
+    mockSwingBtn.addEventListener('click', ()=>{ previewMockPlayerSwing(); });
+    mockBtns.appendChild(mockSpawnBtn); mockBtns.appendChild(mockRemoveBtn); mockBtns.appendChild(mockSwingBtn);
+    mockRow.appendChild(mockBtns);
+    list.appendChild(mockRow);
+
+    const weaponRow = document.createElement('div');
+    weaponRow.className='devRow';
+    weaponRow.innerHTML = `<div class="desc">Weapon</div>`;
+    const weaponBtns = document.createElement('div');
+    weaponBtns.className='btns';
+    const weaponSelect = document.createElement('select');
+    weaponSelect.style.cssText = 'padding:4px; border-radius:4px; border:1px solid #555; background:#111; color:#fff;';
+    weaponSelect.disabled = !mockPlayer;
+    for(const t of TUNER_WEAPON_TYPES){
+      const opt = document.createElement('option'); opt.value=t; opt.textContent=BLOCK_NAMES[t]||('Type '+t);
+      if(mockPlayer && mockPlayer.heldType===t) opt.selected = true;
+      weaponSelect.appendChild(opt);
+    }
+    weaponSelect.addEventListener('change', ()=>{ setMockPlayerWeapon(parseInt(weaponSelect.value)); renderDevPanel(); });
+    weaponBtns.appendChild(weaponSelect);
+    weaponRow.appendChild(weaponBtns);
+    list.appendChild(weaponRow);
+  }
+
+  const tunerToggleRow = document.createElement('div');
+  tunerToggleRow.className='devRow';
+  tunerToggleRow.innerHTML = `<div class="desc">Tuner</div>`;
+  const tunerToggleBtns = document.createElement('div');
+  tunerToggleBtns.className='btns';
+  const tunerToggleBtn = document.createElement('div'); tunerToggleBtn.className='btn';
+  tunerToggleBtn.textContent = 'Tuner: ' + (weaponTunerEnabled ? 'ON' : 'OFF');
+  tunerToggleBtn.addEventListener('click', ()=>{ weaponTunerEnabled = !weaponTunerEnabled; renderDevPanel(); });
+  const tunerResetBtn = document.createElement('div'); tunerResetBtn.className='btn'; tunerResetBtn.textContent='Reset to Current Defaults';
+  tunerResetBtn.addEventListener('click', ()=>{
+    if(weaponTunerTarget==='enemy'){
+      weaponTunerValues = Object.assign({}, WEAPON_TUNER_DEFAULTS);
+    } else if(mockPlayer){
+      setMockPlayerWeapon(mockPlayer.heldType); // reloads this weapon's real current values
+    }
+    renderDevPanel();
+  });
+  tunerToggleBtns.appendChild(tunerToggleBtn); tunerToggleBtns.appendChild(tunerResetBtn);
+  tunerToggleRow.appendChild(tunerToggleBtns);
+  list.appendChild(tunerToggleRow);
+
+  function tunerReadoutText(){
+    const v = currentTunerValues();
+    return `right: ${v.right.toFixed(2)}, up: ${v.up.toFixed(2)}, forward: ${v.forward.toFixed(2)}, idleTiltDeg: ${v.idleTiltDeg}, swingMult: ${v.swingMult.toFixed(2)}`;
+  }
+  const tunerReadoutRow = document.createElement('div');
+  tunerReadoutRow.className='devRow';
+  tunerReadoutRow.innerHTML = `<div class="desc" style="font-family:monospace; font-size:11px;" id="tunerReadoutText">${tunerReadoutText()}</div>`;
+  list.appendChild(tunerReadoutRow);
+
+  function addTunerSlider(labelText, key, min, max, step){
+    const values = currentTunerValues();
+    const row = document.createElement('div');
+    row.className='devRow';
+    row.innerHTML = `<div class="desc">${labelText}: <span id="tunerVal_${key}">${values[key]}</span></div>`;
+    const slider = document.createElement('input');
+    slider.type='range'; slider.min=min; slider.max=max; slider.step=step; slider.value=values[key];
+    slider.style.cssText='width:100%;';
+    slider.addEventListener('input', (e)=>{
+      currentTunerValues()[key] = parseFloat(e.target.value);
+      document.getElementById('tunerVal_'+key).textContent = currentTunerValues()[key];
+      document.getElementById('tunerReadoutText').textContent = tunerReadoutText();
+    });
+    row.appendChild(slider);
+    list.appendChild(row);
+  }
+  addTunerSlider('Right', 'right', -1, 1, 0.01);
+  addTunerSlider('Up', 'up', 0, 2, 0.01);
+  addTunerSlider('Forward', 'forward', -1, 1, 0.01);
+  addTunerSlider('Idle Tilt (degrees)', 'idleTiltDeg', -180, 180, 1);
+  addTunerSlider('Swing Multiplier', 'swingMult', 0, 3, 0.05);
+
 
   addDevSectionTitle(list, 'Give Items');
   const itemsGrid = document.createElement('div');
@@ -6873,7 +7410,7 @@ function newWorld(){
   spawnPlayer();
   slots.forEach(s=>{ s.type=null; s.count=0; });
   health = MAX_HEALTH;
-  hasArmor = false; armorHealth = 0; updateArmorUI();
+  hasHelmet = false; helmetHealth = 0; hasChest = false; chestHealth = 0; hasLegs = false; legsHealth = 0; updateArmorUI();
   noDamageTimer=0; regenTimer=0;
   for(const id of Array.from(groundItems.keys())) removeGroundItem(id);
   spawnInitialEnemies();
@@ -6947,6 +7484,18 @@ function colorForId(id){
   return palette[id % palette.length];
 }
 const NAME_TAG_RANGE = 5; // name only visible this close, and never at all while crouched
+// Per-weapon-type held-item tilt/position for the player model (remote
+// third-person view). Anything not listed here falls back to the shared
+// default - generalizes what used to be separate hardcoded checks per
+// weapon (pickaxe, sword) into a lookup any weapon can get its own entry
+// in, without touching this code again. Also used by the dev-tools
+// Weapon Tuner's mock player to show/adjust a given weapon's real values.
+const PLAYER_HELD_TILT = {
+  [STONE_PICKAXE]: Math.PI/2 - Math.PI/12, // brought back 15 degrees from 90 - same pivot/axis the swing already uses
+  [METAL_SWORD]: Math.PI/2 * 0.7,          // brought back 30% from 90 degrees (63)
+};
+const PLAYER_HELD_POSITION_DEFAULT = { right: 0.32, up: 1.02, forward: -0.15 };
+const PLAYER_HELD_POSITION = {}; // per-weapon-type position overrides - empty until something actually needs a different position than the shared default
 function createRemotePlayer(id,name,skinToneIndex){
   const group = new THREE.Group();
   const body = new THREE.Mesh(
@@ -6968,6 +7517,23 @@ function createRemotePlayer(id,name,skinToneIndex){
   helmetMesh.position.y = 0.28; // relative to the head, sits on top of it
   helmetMesh.visible = false;
   head.add(helmetMesh);
+  // body is one single box (no separate legs group on this low-poly
+  // model), so both chest and leg armor attach to it as upper/lower
+  // overlays rather than their own dedicated body parts.
+  const chestMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.56,0.5,0.36),
+    new THREE.MeshLambertMaterial({color:0x9a9a9a})
+  );
+  chestMesh.position.y = 0.25; // upper portion of the body box
+  chestMesh.visible = false;
+  body.add(chestMesh);
+  const legsMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.56,0.45,0.36),
+    new THREE.MeshLambertMaterial({color:0x7a7a7a})
+  );
+  legsMesh.position.y = -0.35; // lower portion of the body box
+  legsMesh.visible = false;
+  body.add(legsMesh);
   const heldAnchor = new THREE.Group();
   heldAnchor.position.set(0.32, 1.02, -0.15);
   group.add(heldAnchor);
@@ -6975,7 +7541,7 @@ function createRemotePlayer(id,name,skinToneIndex){
   group.add(nameSprite);
   scene.add(group);
   return {
-    id, group, name, heldAnchor, nameSprite, helmetMesh, heldType:null, crouching:false, targetScaleY:1,
+    id, group, name, heldAnchor, nameSprite, helmetMesh, chestMesh, legsMesh, heldType:null, crouching:false, targetScaleY:1,
     target:{x:group.position.x,y:0,z:group.position.z,yaw:0}, flashTimer:0, bumpTimer:0
   };
 }
@@ -6998,6 +7564,8 @@ function buildRemoteHeldItemMesh(type){
     case BANDAGE: return buildBandageMesh();
     case STIM_INJECTOR: return buildStimMesh();
     case ARMOR_HELMET: return buildArmorHelmetMesh();
+    case ARMOR_CHESTPLATE: return buildArmorChestMesh();
+    case ARMOR_LEGS: return buildArmorLegsMesh();
     case METAL_BAR: return buildMetalBarMesh();
     case PLANT_FIBER: return buildPlantFiberMesh();
     case REEDS: return new THREE.Mesh(new THREE.BoxGeometry(0.1,0.4,0.1), materials[REEDS]);
@@ -7027,6 +7595,76 @@ function removeRemotePlayer(id){
   scene.remove(rp.group);
   remotePlayers.delete(id);
 }
+// Held items meaningfully worth tiling/position-tuning - guns, melee
+// weapons, and the pickaxe. Deliberately excludes consumables/materials
+// (bandage, armor, metal bar, etc.) since "does this look right when
+// held" isn't really a question for those the way it is for a weapon.
+const TUNER_WEAPON_TYPES = [...GUN_TYPES, WAR_CLUB, METAL_SWORD, STONE_PICKAXE];
+// Separate tuner target for the player-model side of the Weapon Tuner -
+// keeps its own value set independent from the enemy tuner's, since the
+// two systems use different underlying position/tilt tables entirely.
+let weaponTunerTarget = 'enemy'; // 'enemy' or 'player'
+let playerTunerValues = { right: 0.32, up: 1.02, forward: -0.15, idleTiltDeg: 0, swingMult: 1.0 };
+// Standalone visual-only stand-in for a real player - built with the same
+// createRemotePlayer used for actual connected players, but deliberately
+// never added to the remotePlayers map, so it can't be touched by any
+// network-driven logic (disconnect cleanup, real player updates, etc).
+// Needs its own dedicated visual update below since updateRemotePlayers
+// only ever iterates the real map.
+let mockPlayer = null;
+function spawnMockPlayer(){
+  if(mockPlayer) return;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const x = player.x + dir.x*3, z = player.z + dir.z*3;
+  const y = findSurfaceY(Math.floor(x), Math.floor(z));
+  mockPlayer = createRemotePlayer(-9999, 'Mock', 0); // reserved id, well outside any real server-assigned range
+  mockPlayer.group.position.set(x, y, z);
+  mockPlayer.target = {x, y, z, yaw:0, pitch:0}; // static - never updated again, so it never drifts
+  setMockPlayerWeapon(TUNER_WEAPON_TYPES[0]);
+}
+function removeMockPlayer(){
+  if(!mockPlayer) return;
+  scene.remove(mockPlayer.group);
+  mockPlayer = null;
+}
+function setMockPlayerWeapon(type){
+  if(!mockPlayer) return;
+  updateRemoteHeldItem(mockPlayer, type);
+  // Load this weapon's REAL current tilt/position into the tuner sliders,
+  // so switching weapons shows what's actually hardcoded for it right now
+  // rather than leaving whatever the previous weapon's values were on screen.
+  const pos = PLAYER_HELD_POSITION[type] || PLAYER_HELD_POSITION_DEFAULT;
+  const tiltDeg = Math.round((PLAYER_HELD_TILT[type]||0) * 180/Math.PI);
+  playerTunerValues = { right: pos.right, up: pos.up, forward: pos.forward, idleTiltDeg: tiltDeg, swingMult: 1.0 };
+}
+function previewMockPlayerSwing(){
+  if(!mockPlayer) return;
+  if(mockPlayer.swingTimer===undefined) mockPlayer.swingTimer = 0;
+  mockPlayer.swingTimer = 0.35;
+}
+function updateMockPlayerVisual(dt){
+  if(!mockPlayer) return;
+  if(mockPlayer.swingTimer===undefined) mockPlayer.swingTimer = 0;
+  let swingArc = 0;
+  if(mockPlayer.swingTimer>0){
+    mockPlayer.swingTimer = Math.max(0, mockPlayer.swingTimer-dt);
+    const swingFrac = 1-(mockPlayer.swingTimer/0.35);
+    swingArc = Math.sin(swingFrac*Math.PI);
+  }
+  let right, up, forward, idleTiltDeg, swingMult;
+  if(weaponTunerEnabled && weaponTunerTarget==='player'){
+    ({right, up, forward, idleTiltDeg, swingMult} = playerTunerValues);
+  } else {
+    const pos = PLAYER_HELD_POSITION[mockPlayer.heldType] || PLAYER_HELD_POSITION_DEFAULT;
+    right = pos.right; up = pos.up; forward = pos.forward;
+    idleTiltDeg = (PLAYER_HELD_TILT[mockPlayer.heldType]||0) * 180/Math.PI;
+    swingMult = 1.0;
+  }
+  mockPlayer.heldAnchor.position.set(right, up, forward);
+  mockPlayer.heldAnchor.rotation.x = -swingArc*swingMult - (idleTiltDeg*Math.PI/180);
+  mockPlayer.heldAnchor.rotation.z = 0;
+}
 function updateRemotePlayers(dt){
   const lerp = Math.min(1, dt*10);
   for(const rp of remotePlayers.values()){
@@ -7042,9 +7680,10 @@ function updateRemotePlayers(dt){
       const swingFrac = 1-(rp.swingTimer/0.35);
       swingArc = Math.sin(swingFrac*Math.PI);
     }
-    const pickaxeTiltOffset = rp.heldType===STONE_PICKAXE ? (Math.PI/2 - Math.PI/12) : 0; // pickaxe-specific default forward tilt, brought back 15 degrees from 90 - same pivot/axis the swing already uses
-    const swordTiltOffset = rp.heldType===METAL_SWORD ? (Math.PI/2 * 0.7) : 0; // sword-specific default forward tilt, brought back 30% from 90 degrees (now 63)
-    rp.heldAnchor.rotation.x = (t.pitch||0) - swingArc*1.0 - pickaxeTiltOffset - swordTiltOffset;
+    const heldPos = PLAYER_HELD_POSITION[rp.heldType] || PLAYER_HELD_POSITION_DEFAULT;
+    rp.heldAnchor.position.set(heldPos.right, heldPos.up, heldPos.forward);
+    const tiltOffset = PLAYER_HELD_TILT[rp.heldType] || 0;
+    rp.heldAnchor.rotation.x = (t.pitch||0) - swingArc*1.0 - tiltOffset;
     rp.heldAnchor.rotation.z = 0;
     updateHitEffect(rp, dt);
     const targetScaleY = rp.crouching ? 0.72 : 1;
@@ -7113,7 +7752,7 @@ function updateLiveScoreboard(){
 }
 const BIOME_LABELS = {
   highlands:'Highlands', plains:'Plains', oasis:'Oasis', ruins:'Ruins',
-  snow:'Snow', industrial:'Industrial', graveyard:'Graveyard', tunnels:'Tunnels'
+  snow:'Snow', industrial:'Industrial', graveyard:'Graveyard', tunnels:'Tunnels', test:'Test'
 };
 let myVoteChoice = null;
 function showSeriesEndOverlay(winnerName, standings, voteOpts){
@@ -7250,11 +7889,11 @@ function handleNetMessage(msg){
       // if an older server doesn't send this field.
       if(msg.sharedConstants){
         const sc = msg.sharedConstants;
-        if(typeof sc.enemyMaxHealth==='number') ENEMY_MAX_HEALTH = sc.enemyMaxHealth;
+        if(typeof sc.enemyMaxHealth==='number') ENEMY_TYPES.normal.maxHealth = sc.enemyMaxHealth;
         if(typeof sc.enemySpeed==='number') ENEMY_SPEED = sc.enemySpeed;
         if(typeof sc.enemyAggroRange==='number') ENEMY_AGGRO_RANGE = sc.enemyAggroRange;
-        if(typeof sc.zombieMaxHealth==='number') ZOMBIE_MAX_HEALTH = sc.zombieMaxHealth;
-        if(typeof sc.zombieSpeedMult==='number') ZOMBIE_SPEED_MULT = sc.zombieSpeedMult;
+        if(typeof sc.zombieMaxHealth==='number') ENEMY_TYPES.zombie.maxHealth = sc.zombieMaxHealth;
+        if(typeof sc.zombieSpeedMult==='number') ENEMY_TYPES.zombie.speedMult = sc.zombieSpeedMult;
         if(typeof sc.furnaceSmeltTime==='number') FURNACE_SMELT_TIME = sc.furnaceSmeltTime;
         if(typeof sc.pickaxeSpawnerRespawnTime==='number') PICKAXE_SPAWNER_RESPAWN_TIME = sc.pickaxeSpawnerRespawnTime;
         if(typeof sc.beaconZoneRadius==='number') BEACON_ZONE_RADIUS = sc.beaconZoneRadius;
@@ -7300,7 +7939,9 @@ function handleNetMessage(msg){
         rp.target = {x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch||0};
         updateRemoteHeldItem(rp, p.heldType);
         rp.crouching = !!p.crouching;
-        if(rp.helmetMesh) rp.helmetMesh.visible = !!p.hasArmor;
+        if(rp.helmetMesh) rp.helmetMesh.visible = !!p.hasHelmet;
+        if(rp.chestMesh) rp.chestMesh.visible = !!p.hasChest;
+        if(rp.legsMesh) rp.legsMesh.visible = !!p.hasLegs;
         remotePlayers.set(p.id, rp);
       }
       socket.send(JSON.stringify({type:'setName', name:myPlayerName, persistentId:myPersistentId}));
@@ -7335,9 +7976,16 @@ function handleNetMessage(msg){
   } else if(msg.type==='swing'){
     const rp = remotePlayers.get(msg.id);
     if(rp) rp.swingTimer = 0.35;
+  } else if(msg.type==='enemySwing'){
+    const en = enemies.find(e=>e.id===msg.enemyId);
+    if(en && en.group.heldAnchor) en.swingTimer = 0.35;
   } else if(msg.type==='armorState'){
     const rp = remotePlayers.get(msg.id);
-    if(rp && rp.helmetMesh) rp.helmetMesh.visible = !!msg.hasArmor;
+    if(rp){
+      if(rp.helmetMesh) rp.helmetMesh.visible = !!msg.hasHelmet;
+      if(rp.chestMesh) rp.chestMesh.visible = !!msg.hasChest;
+      if(rp.legsMesh) rp.legsMesh.visible = !!msg.hasLegs;
+    }
   } else if(msg.type==='devAuthResult'){
     devAuthenticated = !!msg.success;
     flashMessage(devAuthenticated ? 'Admin authenticated' : 'Wrong password');
@@ -7410,7 +8058,7 @@ function handleNetMessage(msg){
     flashMessage('Round '+matchRound+' of '+matchRoundsPerSeries+' - good luck!');
     spawnPlayer();
     health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
-    hasArmor = false; armorHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
+    hasHelmet = false; helmetHealth = 0; hasChest = false; chestHealth = 0; hasLegs = false; legsHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
     updateHealthUI();
     resetInventoryForNewRound();
     // Safe to compute independently on every client, no extra network
@@ -7450,7 +8098,7 @@ function handleNetMessage(msg){
     setBossState(msg.boss || null);
     spawnPlayer();
     health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
-    hasArmor = false; armorHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
+    hasHelmet = false; helmetHealth = 0; hasChest = false; chestHealth = 0; hasLegs = false; legsHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
     slots.forEach(s=>{ s.type=null; s.count=0; });
     rebuildMeshes(); updateHotbarUI(); updateHealthUI();
     flashMessage('Keeping this map - same destruction, fresh round!');
@@ -7480,7 +8128,7 @@ function handleNetMessage(msg){
     setBossState(msg.boss || null);
     spawnPlayer();
     health = MAX_HEALTH; noDamageTimer=0; regenTimer=0;
-    hasArmor = false; armorHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
+    hasHelmet = false; helmetHealth = 0; hasChest = false; chestHealth = 0; hasLegs = false; legsHealth = 0; updateArmorUI(); sendArmorStateIfMultiplayer();
     slots.forEach(s=>{ s.type=null; s.count=0; });
     rebuildMeshes();
     updateHotbarUI(); updateHealthUI();
@@ -7501,7 +8149,7 @@ function handleNetMessage(msg){
     lastAttackerId = msg.from;
     lastAttackerWeapon = msg.weaponType;
     lastAttackerTime = performance.now();
-    takeDamage(msg.damage);
+    takeDamage(msg.damage, msg.isHeadshot);
     flashMessage('Hit by '+msg.fromName+'!');
   } else if(msg.type==='shot'){
     spawnRemoteProjectile(msg);
@@ -7520,7 +8168,7 @@ function handleNetMessage(msg){
   } else if(msg.type==='enemyHealth'){
     applyServerEnemyHealth(msg.id, msg.health, msg.alive);
   } else if(msg.type==='enemyRespawned'){
-    applyServerEnemyRespawn(msg.id, msg.x, msg.z, msg.isZombie);
+    applyServerEnemyRespawn(msg.id, msg.x, msg.z, msg.enemyType);
   } else if(msg.type==='zombiesRising'){
     for(const p of (msg.positions||[])) spawnGroundRiseEffect(p.x, p.z);
   } else if(msg.type==='bossAttack'){
@@ -7550,10 +8198,10 @@ function sendNetworkUpdate(){
   const heldType = slots[selectedSlot] ? slots[selectedSlot].type : null;
   socket.send(JSON.stringify({type:'move', x:player.x, y:player.y, z:player.z, yaw, pitch, heldType, crouching:keys.crouch}));
 }
-function sendHit(targetId, damage, weaponType){
+function sendHit(targetId, damage, weaponType, isHeadshot){
   if(!multiplayer || matchPhase!=='active' || myEliminated || inSpectatorBox) return;
   if(!socket || socket.readyState!==WebSocket.OPEN) return;
-  socket.send(JSON.stringify({type:'hit', targetId, damage, weaponType}));
+  socket.send(JSON.stringify({type:'hit', targetId, damage, weaponType, isHeadshot: !!isHeadshot}));
 }
 let nextShotId = 1;
 function makeShotId(){ return (myNetId||0)+'-'+(nextShotId++); }
@@ -7933,6 +8581,7 @@ function animate(){
   updateGroundItems(dt);
   updatePendingBurst(dt);
   updateRemotePlayers(dt);
+  updateMockPlayerVisual(dt);
   sendNetworkUpdate();
   renderer.render(scene, camera);
 }
